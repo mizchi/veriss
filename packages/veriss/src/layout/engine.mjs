@@ -1211,7 +1211,54 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       }
       return st === child.style ? child : { ...child, style: st };
     };
-    for (const state of collect(region)) {
+    // Issue #6: a column item that is not stretched, with an auto width, shrink-wraps its content (fit-content):
+    // min(max-content, max(min-content, available)), raised to a px min-width. The state is split where the available
+    // width (the content width less the item's margins) crosses the two content widths: at or above the max-content
+    // width the item is that px width, at or below the min-content width that px width (and may overflow, aligned as
+    // a px width is), and between them as wide as the available width, which is what stretch gives. Measured in
+    // Chromium, Firefox and WebKit. Content whose widths are not known stays Unknown (its probe says why).
+    const pxLength = /^\d+(?:\.\d+)?px$/;
+    const exactPx = v => { const text = String(number(v)); return /^\d+(?:\.\d{1,6})?$/.test(text) && cmp(q(text), v) === 0 ? `${text}px` : null; };
+    const fitColumnItems = state => {
+      if (main !== 'block') return [state];
+      let states = [state];
+      state.children.forEach((child, index) => {
+        const st = child.style;
+        let align; try { align = crossAlignment(style['align-items'], st['align-self']); } catch { return; }
+        if (align === 'stretch' || st['inline-size'] !== 'auto' || String(st['aspect-ratio'] ?? 'auto') !== 'auto' || !['visible', 'clip'].includes(st['overflow-x']) || ['inline-size', 'size'].includes(st['container-type'])) return;
+        if (!['auto', '0', '0px'].includes(String(st['min-inline-size'])) && !pxLength.test(String(st['min-inline-size']))) return;
+        const margin = side => ['0', '0px'].includes(String(st[`margin-${side}`])) ? zero : pxLength.test(String(st[`margin-${side}`])) ? px(st[`margin-${side}`]) : null;
+        const left = margin('left'), right = margin('right');
+        if (left === null || right === null) return;
+        const edges = ['left', 'right'].map(side => add(px(st[`padding-${side}`]), px(st[`border-${side}`]))).reduce(add, zero);
+        const contentBox = st['box-sizing'] === 'content-box';
+        let min, max;
+        try { ({ min, max } = frAutoMinimums(child.box, st, state.region, [...parents, { box, style }], true)); }
+        catch (error) { if (error.code === 'U_LAYOUT_FLEX') error.message = `A column item that is not stretched (align) shrink-wraps its content, and ${error.message.replace(/ \(give it a px width or flex-basis\)$/, ' (give it a px width)')}`; throw error; }
+        if (pxLength.test(String(st['min-inline-size']))) {
+          const floor = add(px(st['min-inline-size']), contentBox ? edges : zero);
+          if (cmp(floor, min) > 0) min = floor;
+          if (cmp(floor, max) > 0) max = floor;
+        }
+        const widthOf = v => exactPx(contentBox ? add(v, mul(edges, q(-1))) : v);
+        const atMax = widthOf(max), atMin = widthOf(min);
+        if (!atMax || !atMin) return;
+        const availableWidth = diff(contentInline, scalar(add(left, right)));
+        // (The min-width and max-width are folded into the two widths: inert in every part.) solve() resolves the item's
+        // style again, so the change travels to it with the available size ($fitContent).
+        const rewrite = (s, r, change) => { const fit = { ...change, 'min-inline-size': 'auto', 'max-inline-size': 'none' };
+          return { ...s, region: r, children: s.children.map((c, j) => j === index ? { ...c, style: { ...c.style, ...fit }, fitContent: fit } : c) }; };
+        states = bounded(states.flatMap(s => {
+          const wide = partition(s.region, diff(availableWidth, scalar(max)), '>=');
+          return [...wide.yes.map(r => rewrite(s, r, { 'inline-size': atMax })), ...wide.no.flatMap(r => {
+            const between = partition(r, diff(availableWidth, scalar(min)), '>');
+            return [...between.yes.map(r2 => rewrite(s, r2, { 'align-self': 'stretch' })), ...between.no.map(r2 => rewrite(s, r2, { 'inline-size': atMin }))];
+          })];
+        }));
+      });
+      return states;
+    };
+    for (const state of collect(region).flatMap(fitColumnItems)) {
       if (state.children.some(child => child.style.position === 'absolute')) throw flexUnknown('Absolute children of a flex container use flex static positions');
       if (columnBasis) state.children = state.children.map(columnShares);
       const model = state.children.map(child => {
@@ -1248,7 +1295,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // A percentage height resolves against the container's definite height, not the area left after the item's
         // margins (measured: height: 50% with margin-top: 10px in a 100px row is 50px).
         ...(knownBlock ? { percentBlock: knownBlock } : {}),
-        flexItem: { main }, ...(main === 'block' ? { flexBlockMinimum: true } : {}),
+        flexItem: { main }, ...(main === 'block' ? { flexBlockMinimum: true } : {}), ...(entry.child.fitContent ? { $fitContent: entry.child.fitContent } : {}),
         // Checklist D2: the item's height is definite — stretched in a single-line row of a definite height, or flexed
         // in a column of a definite height — so its children's percentage heights resolve against it (measured in
         // Chromium, Firefox and WebKit).
@@ -2918,6 +2965,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const same = own && given && cmp(given.x, zero) === 0 && cmp(given.y, zero) === 0 && cmp(evaluate(given, { x: zero, y: zero }), own) === 0;
           if (style[size] !== 'auto' && given && !same) style = { ...style, [size]: 'auto', $flexMain: style[size] };
         }
+        // A column item's shrink-to-fit width, resolved by its container (fitColumnItems).
+        if (available.$fitContent && style.position !== 'absolute') style = { ...style, ...available.$fitContent };
         if (box.tag === 'html' && !parents.length && /^\d+(?:\.\d{1,6})?px$/.test(style['font-size'])) { rootFontSize = px(style['font-size']); unitContext.rootFontSize = rootFontSize; setRootFontSize(rootFontSize); }
         // defaultFontSize (the user's default font size, an assumption the caller states): the root's medium, %, em
         // or rem font-size resolves against it, so rem lengths do too.
