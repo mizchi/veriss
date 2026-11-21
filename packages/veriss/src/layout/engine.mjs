@@ -1227,8 +1227,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           // are its flex base size and automatic minimum.
           // (A px basis with min-width auto too: its automatic minimum is the min-content width, §4.5.)
           const pxBasis = /^\d+(?:\.\d+)?px$/.test(String(child.style['flex-basis'])) && child.style['min-inline-size'] === 'auto';
-          const contentSized = main === 'inline' && (['auto', 'content'].includes(String(child.style['flex-basis'])) || /%$/.test(String(child.style['flex-basis'])) || pxBasis) && child.style['inline-size'] === 'auto'
-            && ['auto', '0', '0px'].includes(String(child.style['min-inline-size'])) && ['visible', 'clip'].includes(child.style['overflow-x']) && !['inline-size', 'size'].includes(child.style['container-type']);
+          // (An auto basis with a px min-width: the base is still the content size; the min-width only clamps the
+          // hypothetical size, issue #7. Measured in Chromium, Firefox and WebKit.)
+          const autoBasis = ['auto', 'content'].includes(String(child.style['flex-basis']));
+          const contentSized = main === 'inline' && (autoBasis || /%$/.test(String(child.style['flex-basis'])) || pxBasis) && child.style['inline-size'] === 'auto'
+            && (['auto', '0', '0px'].includes(String(child.style['min-inline-size'])) || (autoBasis && /^\d+(?:\.\d+)?px$/.test(String(child.style['min-inline-size'])))) && ['visible', 'clip'].includes(child.style['overflow-x']) && !['inline-size', 'size'].includes(child.style['container-type']);
           const contentSizes = contentSized ? frAutoMinimums(child.box, child.style, state.region, [...parents, { box, style }], /%$/.test(String(child.style['flex-basis'])) || pxBasis ? 'min' : true) : null;
           let item = flexItem(child.style, { empty: !child.box.text && !child.box.children.length, axis: main, ...(contentSizes ? { contentSizes } : {}) });
           const marginMain = main === 'inline' ? add(margins.left, margins.right) : add(margins.top, margins.bottom);

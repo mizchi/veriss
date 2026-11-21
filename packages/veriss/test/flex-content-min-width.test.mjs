@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {analyzeHTML} from '../src/html.mjs';
+
+// Issue #7: a row item with flex-basis auto, an auto width and a px min-width. Its flex base size is still its content
+// size (0 plus its padding when it is empty) — the min-width clamps only the hypothetical size (Flexbox §9.2, §9.7).
+// Expected values were measured in Chromium, Firefox and WebKit (all three agree).
+const run = (css, html, boxes) => analyzeHTML(`<main class="row">${html}</main>`, {name: 'P', css: `*{box-sizing:border-box;margin:0;padding:0}.row{display:flex}${css}`, viewport: {min: 100, max: 600, height: {min: 200, max: 800}}, ...(boxes ? {boxes} : {})});
+const at = (r, vw) => { const v = a => Number(String(a.coefficient).split('/').reduce((p, c) => p / c)) * vw + Number(String(a.constant).split('/').reduce((p, c) => p / c)); return r.sizes.filter(s => /^\.[fgb]$/.test(s.box) && s.rect && s.range.min <= vw && vw <= s.range.max).filter((s, i, all) => all.findIndex(o => o.box === s.box) === i).map(s => [Math.round(v(s.rect.inlineStart) * 1000) / 1000, Math.round(v(s.rect.inlineSize) * 1000) / 1000]); };
+const empty = '<div class="f"></div>', input = '<div class="f"></div><div class="b"></div>', two = '<div class="f"></div><div class="g"></div>';
+const cases = {
+  'grow': ['.f{flex:1 0 auto;min-width:160px;height:32px}', empty, {150: [[0, 160]], 200: [[0, 200]], 400: [[0, 400]]}],
+  'no grow': ['.f{flex:0 0 auto;min-width:160px;height:32px}', empty, {150: [[0, 160]], 400: [[0, 160]]}],
+  'input + button': ['.f{flex:1 0 auto;min-width:160px;height:32px}.b{flex:none;width:80px;height:32px}', input, {200: [[0, 160], [160, 80]], 250: [[0, 170], [170, 80]], 600: [[0, 520], [520, 80]]}],
+  'shrinking input + button': ['.f{flex:1 1 auto;min-width:160px;height:32px}.b{flex:none;width:80px;height:32px}', input, {200: [[0, 160], [160, 80]], 300: [[0, 220], [220, 80]]}],
+  // The base is 0, not the min-width: at 600px the free space splits 1:2 from 0 (200 / 400), not from 160.
+  'two growing': ['.f{flex:1 0 auto;min-width:160px;height:32px}.g{flex:2 0 auto;min-width:40px;height:32px}', two, {200: [[0, 160], [160, 40]], 400: [[0, 160], [160, 240]], 600: [[0, 200], [200, 400]]}],
+  'padded': ['.f{flex:1 0 auto;min-width:60px;padding:0 50px;height:32px}.g{flex:1 0 auto;min-width:10px;height:32px}', two, {100: [[0, 100], [100, 10]], 300: [[0, 200], [200, 100]], 600: [[0, 350], [350, 250]]}],
+};
+for (const [name, [css, html, widths]] of Object.entries(cases)) test(name, () => {
+  const r = run(css, html);
+  assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.map(d => d.message)));
+  for (const [vw, expected] of Object.entries(widths)) assert.deepEqual(at(r, Number(vw)), expected, `${name} at ${vw}px`);
+});
+
+test('text with a max-content contract: the base is the max-content width, not the min-width', () => {
+  const r = run('.f{flex:1 0 auto;min-width:100px;height:32px;font:400 14px/20px Arial;white-space:nowrap}.g{flex:1 0 auto;height:32px}', '<div class="f">hello world</div><div class="g"></div>', {'.f': {minInlineSize: 66.5, maxInlineSize: 66.5, intrinsicBlockSize: 20, wrap: 'nowrap'}});
+  assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.map(d => d.message)));
+  assert.deepEqual(at(r, 600), [[0, 333.25], [333.25, 266.75]]);
+  assert.deepEqual(at(r, 100), [[0, 100], [100, 0]]);
+});
+
+test('text without a max-content width stays Unknown', () => {
+  assert.equal(run('.f{flex:1 0 auto;min-width:100px;height:32px}', '<div class="f">hello</div>').status, 'unknown');
+});
