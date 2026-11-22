@@ -207,7 +207,9 @@ engine から独立した Z3 の仕様で、engine(範囲全体で UNSAT)と 3 �
 - [x] 壊れた状態変化(12)と正しい版(6)を `models/layout/shift-cases.mjs` に。2 つの状態を同じ幅で Z3 に解かせ、動く幅を探す
   (`models/layout/shift.mjs`)。3 ブラウザーで反例の幅の動きと Chromium の layout-shift を確かめ、engine の `E_LAYOUT_HOVER_SHIFT` とも一致
 - [x] クリティカル CSS の抽出(`packages/veriss/src/critical.mjs`、[docs/critical-css.md](docs/critical-css.md))。3 ブラウザーでファーストビューが同じ
-- [ ] Lean: L1 の定義と性質の証明、Lean の実行形を oracle にした engine との差分テスト(この環境で Lean を入れる操作が止められた。利用者の判断待ち)
+- [x] Lean: L1 の定義(Flex は §9.7 の凍結の手順)と性質の証明(`models/lean/`)、oracle にした Z3 の仕様・engine との差分テスト
+- [ ] Lean: 凍結の手順と「共通の水位」の式が同じ結果になることを証明する(今は差分テストで確かめている)
+- [ ] Lean の oracle を CI で回す(elan を入れる手順を workflow に)
 - [x] クリティカル CSS の文字: フォントで測った大きさで配置し、自由な文字列は空(いくらでも伸びうる)として配置する
 - [ ] クリティカル CSS: 文字と要素が混ざった段落、`%` の長さで Unknown にならないように
 - [x] 文字幅の型(ADR-0019、`models/text/`): OS × ブラウザーのフォントの組み合わせの区間。L1 の Flex の項目の自動の最小幅に入れ、
@@ -258,6 +260,7 @@ engine から独立した Z3 の仕様で、engine(範囲全体で UNSAT)と 3 �
 
 ## 実装済み(最近)
 
+- L1 の Lean による定義と証明、oracle による差分テスト。ランダムな設定の乱数の不具合(Flex がすべて 1 項目、Grid がすべて 1 列)を直した
 - クリティカル CSS の抽出(`@mizchi/veriss/critical`)
 - 壊れた状態変化の CLS を L1 の仕様の上で Z3 が検出(SAT の反例)、正しい版は UNSAT
 - 座標計算サブセット L1 の参照仕様(ADR-0018、`models/layout/`): engine と幅の範囲全体で一致、3 ブラウザーとランダムな設定で一致
