@@ -1257,6 +1257,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const contentSized = main === 'inline' && (['auto', 'content'].includes(String(child.style['flex-basis'])) || /%$/.test(String(child.style['flex-basis'])) || pxBasis) && child.style['inline-size'] === 'auto'
             && ['auto', '0', '0px'].includes(String(child.style['min-inline-size'])) && ['visible', 'clip'].includes(child.style['overflow-x']) && !['inline-size', 'size'].includes(child.style['container-type']);
           const contentSizes = contentSized ? frAutoMinimums(child.box, child.style, state.region, [...parents, { box, style }], /%$/.test(String(child.style['flex-basis'])) || pxBasis ? 'min' : true) : null;
+          // A vw max-width that flex.mjs treats as never capping (maxNeverCaps): the max-content width must fit that
+          // fraction of the narrowest viewport. Checked here, on the measured max-content width itself, so it does not
+          // depend on whether the measurement was capped by max-width.
+          const vwMax = /^(\d+(?:\.\d+)?)vw$/.exec(String(child.style['max-inline-size']));
+          if (vwMax && contentSizes?.max) {
+            const edgeOf = key => ['ua', undefined, '0', '0px'].includes(child.style[key]) ? zero : px(child.style[key]);
+            const edges = ['padding-left', 'padding-right', 'border-left', 'border-right'].map(edgeOf).reduce(add, zero);
+            const cap = add(mul(domain.min, div(q(vwMax[1]), q(100))), child.style['box-sizing'] === 'content-box' ? edges : zero);
+            if (cmp(contentSizes.max, cap) > 0) throw flexUnknown(`${child.box.label}: max-width ${child.style['max-inline-size']} may cap its content width at the narrowest viewports`);
+          }
           let item = flexItem(child.style, { empty: !child.box.text && !child.box.children.length, axis: main, ...(contentSizes ? { contentSizes } : {}) });
           const marginMain = main === 'inline' ? add(margins.left, margins.right) : add(margins.top, margins.bottom);
           if (cmp(add(add(margins.left, margins.right), add(margins.top, margins.bottom)), zero) !== 0) {
