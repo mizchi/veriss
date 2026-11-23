@@ -1708,6 +1708,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const shift = o => o ? (delta ? { inline: o.inline, block: sum(o.block, delta) } : null) : o;
         for (const row of geometry.slice(box.$starts.geometry).filter(row => inside(row) && !kept(row.path))) {
           row.origin = shift(row.origin); row.clipOrigin = shift(row.clipOrigin);
+          // A focused position (a :focus rule that moves it) was placed from the start edge too; unknown with the height.
+          if (row.focusStates) row.focusStates = row.focusStates.map(state => !state.origin ? state : delta ? { ...state, origin: shift(state.origin) } : (({ origin, inline, block, ...rest }) => ({ ...rest, originUnknown: true }))(state));
           if (row.bounds) row.bounds = delta ? row.bounds.map(piece => ({ ...piece, outer: piece.outer && { ...piece.outer, origin: shift(piece.outer.origin) }, inner: piece.inner && { ...piece.inner, origin: shift(piece.inner.origin) } })) : null;
         }
         for (const row of sizes.slice(box.$starts.sizes).filter(row => row.$shown && isDescendant(box.path, row.path) && intersectRegions(row.$shown.region, region) && !kept(row.path))) {
