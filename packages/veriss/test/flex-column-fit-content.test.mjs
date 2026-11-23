@@ -82,6 +82,10 @@ test('inline phrasing children are measured as the folded line (browsers: the su
   assert.equal(r.status, 'violated', status(r));
   assert.ok(errors.length > 0, status(r));
   assert.ok(errors.every(d => d.range.max <= 120), status(r));
+  // ...and together the error ranges cover the whole overflow range, from the narrowest viewport (50px) up to 120px.
+  let covered = 50;
+  for (const d of [...errors].sort((x, y) => x.range.min - y.range.min)) { assert.ok(d.range.min <= covered, `gap below ${d.range.min}: ${status(r)}`); covered = Math.max(covered, d.range.max); }
+  assert.equal(covered, 120, status(r));
 });
 
 test('max-width below the padding: the border box is the padding (browsers: 20px)', () => {
