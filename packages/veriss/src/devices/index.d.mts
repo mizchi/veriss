@@ -7,16 +7,19 @@ export interface DeviceProfile {
   portrait: DeviceSize; landscape?: DeviceSize; spanned?: DeviceSize & { hinge: { left: number; top: number; width: number; height: number } };
   /** Market share (percent) of this screen size, shared by the profiles of the same size. */
   screenShare: { jp: number; worldwide: number };
-  safeArea?: { cutout: 'notch' | 'dynamic-island' | 'none'; measured: boolean; browser: Record<'portrait' | 'landscape', DeviceInsets>; fullscreen: Record<'portrait' | 'landscape', DeviceInsets> } | null;
+  /** Insets per mode; `measured` says per mode whether they were read in the iOS Simulator or are published figures. null: an iPhone whose safe area is unknown. */
+  safeArea?: { cutout: 'notch' | 'dynamic-island' | 'none'; measured: { browser: boolean; fullscreen: boolean }; browser: Record<'portrait' | 'landscape', DeviceInsets>; fullscreen: Record<'portrait' | 'landscape', DeviceInsets> } | null;
 }
 export interface DeviceCheck {
   id: string; profile: string; devices: string[]; kind: DeviceProfile['kind']; orientation: 'portrait' | 'landscape' | 'spanned';
   screenShare: number; viewport: { min: number; max: number; height: { min: number; max: number } };
-  safeArea?: DeviceInsets; safeAreaMeasured?: boolean; cutout?: string; hinge?: { left: number; top: number; width: number; height: number };
+  /** The device's own insets in the chosen mode; absent when it has none or they are unknown. */
+  safeArea?: DeviceInsets; /** Whether safeArea was measured in this mode. */ safeAreaMeasured?: boolean; cutout?: string; hinge?: { left: number; top: number; width: number; height: number };
 }
 export declare const deviceData: { month: string; sources: Record<string, unknown>; resolutions: Record<'jp' | 'worldwide', Record<'mobile' | 'tablet' | 'desktop', { width: number; height: number; share: number }[]>>; profiles: DeviceProfile[] };
 export declare function deviceChecks(options?: { region?: 'jp' | 'worldwide'; kinds?: DeviceProfile['kind'][]; minShare?: number; orientations?: ('portrait' | 'landscape')[]; mode?: 'browser' | 'fullscreen'; special?: boolean }): DeviceCheck[];
-export declare function analyzeDevices(html: string, options: Omit<LayoutOptions, 'viewport'>, checks?: DeviceCheck[]): {
+/** The viewport, safe area and hinge come from each check: options.safeArea and options.hinge are not accepted (a check without its own gets none). */
+export declare function analyzeDevices(html: string, options: Omit<LayoutOptions, 'viewport' | 'safeArea' | 'hinge'>, checks?: DeviceCheck[]): {
   results: { check: DeviceCheck; report: LayoutSummary }[];
   findings: { code: string; severity: string; box?: string; message: string; checks: string[] }[];
 };

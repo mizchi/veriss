@@ -1,5 +1,5 @@
 {
-  "$comment": "Hand-kept device facts that no machine-readable source carries. Safe-area insets are CSS px in portrait (top, bottom) and landscape (side = the notch or Dynamic Island side and its mirror, bottom = the home indicator). 'measured' turns true once tools/devices/measure-safe-area.mjs has read them from the iOS Simulator (env(safe-area-inset-*) in a viewport-fit=cover page). Until then they are public figures and may be off by a few px. Groups are looked up by model name (Playwright's device names); 'screen' is the portrait screen in CSS px, for reference. A model missing here (iPhone Air) has no known safe area: a viewport-fit=cover page on it is Unknown.",
+  "$comment": "Hand-kept device facts that no machine-readable source carries. Safe-area insets are CSS px in portrait (top, bottom) and landscape (side = the notch or Dynamic Island side and its mirror, bottom = the home indicator). 'measured' is per mode: 'browser' turns true once tools/devices/measure-safe-area.mjs has read the insets in Mobile Safari in the iOS Simulator (env(safe-area-inset-*) in a viewport-fit=cover page); 'fullscreen' stays false until they are read in a full-screen web view (Safari cannot report the portrait top inset, which its bars cover). Until then they are public figures and may be off by a few px. Groups are looked up by model name (Playwright's device names); a measured model is split into a group of its own. 'screen' is the portrait screen in CSS px, for reference. A model missing here (iPhone Air) has no known safe area: its checks carry no safeArea, so the safe-area-target rule does not run on them, and a viewport-fit=cover page that reads env(safe-area-inset-*) is Unknown there.",
   "safeAreas": [
     {
       "screen": "375x812",
@@ -17,7 +17,10 @@
         "side": 44,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "375x812",
@@ -34,7 +37,10 @@
         "side": 50,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "414x896",
@@ -52,7 +58,10 @@
         "side": 48,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "390x844",
@@ -74,7 +83,10 @@
         "side": 47,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "428x926",
@@ -92,7 +104,10 @@
         "side": 47,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "393x852",
@@ -111,7 +126,10 @@
         "side": 59,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "430x932",
@@ -130,7 +148,10 @@
         "side": 59,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "402x874",
@@ -148,7 +169,10 @@
         "side": 62,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "440x956",
@@ -165,7 +189,10 @@
         "side": 62,
         "bottom": 21
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     },
     {
       "screen": "375x667",
@@ -185,7 +212,10 @@
         "side": 0,
         "bottom": 0
       },
-      "measured": false
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
     }
   ],
   "safeAreaSources": [
