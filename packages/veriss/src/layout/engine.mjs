@@ -1241,7 +1241,64 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       }
       return st === child.style ? child : { ...child, style: st };
     };
-    for (const state of collect(region)) {
+    // Issue #6: a column item that is not stretched, with an auto width, shrink-wraps its content (fit-content):
+    // min(max-content, max(min-content, available)), raised to a px min-width. The state is split where the available
+    // width (the content width less the item's margins) crosses the two content widths: at or above the max-content
+    // width the item is that px width, at or below the min-content width that px width (and may overflow, aligned as
+    // a px width is), and between them as wide as the available width, which is what stretch gives. Measured in
+    // Chromium, Firefox and WebKit. Content whose widths are not known stays Unknown (its probe says why).
+    const pxLength = /^\d+(?:\.\d+)?px$/;
+    // (A non-negative width with an exact decimal text, which may hold more digits than a double; null otherwise.)
+    const exactPx = v => { const text = cmp(v, zero) >= 0 ? decimal(v) : null; return text === null ? null : `${text}px`; };
+    const fitColumnItems = state => {
+      if (main !== 'block') return [state];
+      let states = [state];
+      state.children.forEach((child, index) => {
+        const st = child.style;
+        let align; try { align = crossAlignment(style['align-items'], st['align-self']); } catch { return; }
+        if (align === 'stretch' || st['inline-size'] !== 'auto' || String(st['aspect-ratio'] ?? 'auto') !== 'auto' || !['visible', 'clip'].includes(st['overflow-x']) || ['inline-size', 'size'].includes(st['container-type'])) return;
+        if (!['auto', '0', '0px'].includes(String(st['min-inline-size'])) && !pxLength.test(String(st['min-inline-size']))) return;
+        const margin = side => ['0', '0px'].includes(String(st[`margin-${side}`])) ? zero : pxLength.test(String(st[`margin-${side}`])) ? px(st[`margin-${side}`]) : null;
+        const left = margin('left'), right = margin('right');
+        if (left === null || right === null) return;
+        const edges = ['left', 'right'].map(side => add(px(st[`padding-${side}`]), px(st[`border-${side}`]))).reduce(add, zero);
+        const contentBox = st['box-sizing'] === 'content-box';
+        let min, max;
+        try { ({ min, max } = frAutoMinimums(child.box, st, state.region, [...parents, { box, style }], true)); }
+        catch (error) { if (error.code === 'U_LAYOUT_FLEX') error.message = `A column item that is not stretched (align) shrink-wraps its content, and ${error.message.replace(/ \(give it a px width or flex-basis\)$/, ' (give it a px width)')}`; throw error; }
+        // The measured max-content width is not capped by the item's own max-width (a flex base size ignores it): the
+        // max-width caps it here, never below the padding and border (px only; other values leave the item Unknown).
+        const capText = String(st['max-inline-size'] ?? 'none');
+        if (capText !== 'none') {
+          if (!pxLength.test(capText)) return;
+          let cap = add(px(capText), contentBox ? edges : zero);
+          if (cmp(cap, edges) < 0) cap = edges;
+          if (cmp(max, cap) > 0) max = cap;
+        }
+        if (pxLength.test(String(st['min-inline-size']))) {
+          const floor = add(px(st['min-inline-size']), contentBox ? edges : zero);
+          if (cmp(floor, min) > 0) min = floor;
+          if (cmp(floor, max) > 0) max = floor;
+        }
+        const widthOf = v => exactPx(contentBox ? add(v, mul(edges, q(-1))) : v);
+        const atMax = widthOf(max), atMin = widthOf(min);
+        if (!atMax || !atMin) return;
+        const availableWidth = diff(contentInline, scalar(add(left, right)));
+        // (The min-width and max-width are folded into the two widths: inert in every part.) solve() resolves the item's
+        // style again, so the change travels to it with the available size ($fitContent).
+        const rewrite = (s, r, change) => { const fit = { ...change, 'min-inline-size': 'auto', 'max-inline-size': 'none' };
+          return { ...s, region: r, children: s.children.map((c, j) => j === index ? { ...c, style: { ...c.style, ...fit }, fitContent: fit } : c) }; };
+        states = bounded(states.flatMap(s => {
+          const wide = partition(s.region, diff(availableWidth, scalar(max)), '>=');
+          return [...wide.yes.map(r => rewrite(s, r, { 'inline-size': atMax })), ...wide.no.flatMap(r => {
+            const between = partition(r, diff(availableWidth, scalar(min)), '>');
+            return [...between.yes.map(r2 => rewrite(s, r2, { 'align-self': 'stretch' })), ...between.no.map(r2 => rewrite(s, r2, { 'inline-size': atMin }))];
+          })];
+        }));
+      });
+      return states;
+    };
+    for (const state of collect(region).flatMap(fitColumnItems)) {
       if (state.children.some(child => child.style.position === 'absolute')) throw flexUnknown('Absolute children of a flex container use flex static positions');
       if (columnBasis) state.children = state.children.map(columnShares);
       const model = state.children.map(child => {
@@ -1295,7 +1352,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // A percentage height resolves against the container's definite height, not the area left after the item's
         // margins (measured: height: 50% with margin-top: 10px in a 100px row is 50px).
         ...(knownBlock ? { percentBlock: knownBlock } : {}),
-        flexItem: { main, ...(entry.item.maxNeverCaps ? { maxNeverCaps: true } : {}) }, ...(main === 'block' ? { flexBlockMinimum: true } : {}),
+        flexItem: { main, ...(entry.item.maxNeverCaps ? { maxNeverCaps: true } : {}) }, ...(main === 'block' ? { flexBlockMinimum: true } : {}), ...(entry.child.fitContent ? { $fitContent: entry.child.fitContent } : {}),
         // Checklist D2: the item's height is definite — stretched in a single-line row of a definite height, or flexed
         // in a column of a definite height — so its children's percentage heights resolve against it (measured in
         // Chromium, Firefox and WebKit).
@@ -2737,22 +2794,25 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const kinds = tokens.map(kindOf);
     if (!bare.some(Boolean) && !kinds.some(Boolean)) return style;
     const ancestors = [...parents, { box, style }];
-    const single = (target, at, inherited) => { const list = styles(target, region, at, inherited, false, true); const keys = new Set(list.map(x => JSON.stringify(x.style))); if (keys.size !== 1) unknown(`has an item whose styles change across the viewport range (${target.label})`); return list[0].style; };
+    // (gridItem: the style of a grid or flex item, blockified; false: in flow, as written.)
+    const single = (target, at, inherited, gridItem = true) => { const list = styles(target, region, at, inherited, false, gridItem); const keys = new Set(list.map(x => JSON.stringify(x.style))); if (keys.size !== 1) unknown(`has an item whose styles change across the viewport range (${target.label})`); return list[0].style; };
     const length = (value, what) => { if (value === 'ua') unknown(`has an item with UA ${what}`); if (['0', '0px'].includes(String(value))) return zero; if (!/^\d+(?:\.\d+)?px$/.test(String(value))) unknown(`has an item whose ${what} is ${value}`); return px(value); };
     const edges = st => ['left', 'right'].map(side => add(length(st[`padding-${side}`], 'padding'), length(st[`border-${side}`], 'border'))).reduce(add, zero);
     const margins = st => ['left', 'right'].map(side => st[`margin-${side}`] === 'auto' ? zero : length(st[`margin-${side}`], 'margin')).reduce(add, zero);
     const borderBox = (st, value) => st['box-sizing'] === 'content-box' ? add(value, edges(st)) : value;
     // A vw max-width caps only where the viewport is narrow enough: no wider content than that fraction of the narrowest
     // viewport is never capped (measured in Chromium, Firefox and WebKit); one that may be stays Unknown.
+    // (A max-width below the padding and border does not shrink the border box under them: measured in Chromium,
+    // Firefox and WebKit, padding 0 10px with max-width 10px is 20px wide.)
     const clampMax = (st, value) => {
       const m = st['max-inline-size']; if (m === 'none') return value;
       const vw = /^(\d+(?:\.\d+)?)vw$/.exec(String(m));
       if (vw) { if (cmp(value, borderBox(st, mul(domain.min, div(q(vw[1]), q(100))))) <= 0) return value; unknown(`has an item whose max-width ${m} may cap its content width at the narrowest viewports`); }
-      const v = borderBox(st, length(m, 'max-width')); return cmp(value, v) > 0 ? v : value;
+      let v = borderBox(st, length(m, 'max-width')); if (cmp(v, edges(st)) < 0) v = edges(st); return cmp(value, v) > 0 ? v : value;
     };
-    // A ::before / ::after generated in flow adds its content to the box's (measured: a 100px generated item in a
-    // content-sized flex item makes a 300px row 210 / 90 in Chromium, Firefox and WebKit); its width is not counted
-    // here, so such a box is Unknown. Out of flow it adds nothing. (Same check as the column fit-content probe.)
+    // A ::before / ::after generated in flow adds its content to the box's (measured: an empty item with ::before
+    // "Hello" is as wide as the text in Chromium, Firefox and WebKit); its width is not known here. Out of flow it adds
+    // nothing. (A text leaf's measured contract may hold its generated text; the final layout checks that.)
     const generatesInFlow = (target, st, at) => ['before', 'after'].some(kind => styles({ ...target, path: `${target.path}/${kind === 'before' ? -1 : (target.children ?? []).length}`, label: `${target.label}::${kind}`, children: [], pseudo: kind }, region, at, st, false, false, new Set([`::${kind}`]))
       .some(c => !['none', 'normal', undefined].includes(c.style.content) && c.style.display !== 'none' && !['absolute', 'fixed'].includes(c.style.position)));
     // (A button is not replaced: its content is laid out like a block's.)
@@ -2774,12 +2834,36 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // height:40px; aspect-ratio:2 child makes its content-sized flex item 80px wide in Chromium, Firefox and WebKit),
       // which is not derived here.
       if ((st['aspect-ratio'] ?? 'auto') !== 'auto' && st['inline-size'] === 'auto') unknown(`has a box with an aspect-ratio (${target.label}) whose width follows its height`);
-      const kids = (target.children ?? []).filter(k => !k.pseudo);
+      let kids = (target.children ?? []).filter(k => !k.pseudo);
+      // A details renders its first summary, and the rest only when open (as the final layout does); without a summary
+      // the UA generates one, which is not modeled.
+      if (target.tag === 'details') {
+        const summary = kids.find(k => k.tag === 'summary');
+        if (target.detailsOpen === 'dynamic') unknown(`has a details (${target.label}) whose open state is decided at run time`);
+        if (!summary) unknown(`has a details (${target.label}) without a summary (the UA generates one)`);
+        if (target.detailsOpen !== true) kids = [summary];
+      }
       const inner = [...at, { box: target, style: st }];
       if (!kids.length && st.display !== 'grid') return edges(st);
+      // A block whose children are all inline phrasing elements is folded into one text leaf by the final layout: one
+      // element brings its own contract, several are sized by the block's contract. Measured the same way here.
+      if (st.display === 'block' && !target.pseudo && kids.every(k => phrasingTags.has(k.tag) && k.tag !== 'img' && !(k.children ?? []).length)) {
+        const kss = kids.map(k => single(k, inner, st, false)), textual = k => k.text || k.inline?.length;
+        if (kss.every(ks => ks.display === 'inline' && ks.position === 'static' && ks.float === 'none')) {
+          if (kids.length === 1 && textual(kids[0]) && kids[0].contract && !target.contract) return minContent({ ...target, text: true, inline: kids, children: [], contract: kids[0].contract }, st, at, max);
+          if (kids.length > 1 && kids.some(textual) && target.contract) return minContent({ ...target, text: true, inline: kids, children: [] }, st, at, max);
+        }
+      }
       if (['block', 'list-item'].includes(st.display)) {
-        let widest = zero;
-        for (const kid of kids) { const ks = single(kid, inner, st); if (ks.display === 'none' || ['absolute', 'fixed'].includes(ks.position)) continue; const c = intrinsic(kid, ks, inner, max); if (cmp(c, widest) > 0) widest = c; }
+        let widest = zero, inlineBefore = null;
+        for (const kid of kids) {
+          const ks = single(kid, inner, st); if (ks.display === 'none' || ['absolute', 'fixed'].includes(ks.position)) continue;
+          // Inline-level siblings share a line: their widths add up, which is not modeled.
+          const flow = single(kid, inner, st, false), inlineLevel = String(flow.display).startsWith('inline') && flow.float === 'none' && flow.position === 'static';
+          if (inlineLevel && inlineBefore) unknown(`has inline-level children that share a line (${inlineBefore.label}, ${kid.label})`);
+          inlineBefore = inlineLevel ? kid : null;
+          const c = intrinsic(kid, ks, inner, max); if (cmp(c, widest) > 0) widest = c;
+        }
         return add(widest, edges(st));
       }
       // A flex row: single-line, the sum of its items' contributions; wrapping, the widest (min-content) or the sum
@@ -3013,6 +3097,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const same = own && given && cmp(given.x, zero) === 0 && cmp(given.y, zero) === 0 && cmp(evaluate(given, { x: zero, y: zero }), own) === 0;
           if (style[size] !== 'auto' && given && !same) style = { ...style, [size]: 'auto', $flexMain: style[size] };
         }
+        // A column item's shrink-to-fit width, resolved by its container (fitColumnItems).
+        if (available.$fitContent && style.position !== 'absolute') style = { ...style, ...available.$fitContent };
         if (box.tag === 'html' && !parents.length && /^\d+(?:\.\d{1,20})?px$/.test(style['font-size'])) { rootFontSize = px(style['font-size']); unitContext.rootFontSize = rootFontSize; setRootFontSize(rootFontSize); }
         // defaultFontSize (the user's default font size, an assumption the caller states): the root's medium, %, em
         // or rem font-size resolves against it, so rem lengths do too.
