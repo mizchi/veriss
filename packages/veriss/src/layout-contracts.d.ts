@@ -27,12 +27,20 @@ export interface LayoutOptions {
   hinge?: { left: number; top: number; width: number; height: number };
 }
 export interface LayoutBoxContract {
-  /** Trusted sufficient content-width bound for every allowed input/font. */
+  /** Trusted sufficient content-width bound for every allowed input/font (the min-content width). */
   minInlineSize?: number;
+  /**
+   * Trusted max-content width: the content laid out on one unbroken line. Needs a `minInlineSize` no larger than it.
+   * Sizes boxes that shrink-wrap their content (automatic table columns, flex items with an auto basis or width).
+   */
+  maxInlineSize?: number;
+  /** Width of a text field's placeholder measured with its font; wider than the field's content box is W_A11Y_PLACEHOLDER_CLIPPED. */
+  placeholderInlineSize?: number;
   minBlockSize?: number;
   /** Trusted exact auto content height, or an ascending inline-width profile. */
   intrinsicBlockSize?: number | readonly { atLeastInlineSize: number; blockSize: number }[];
-  wrap?: 'normal' | 'anywhere' | 'nowrap';
+  /** `'one-line'`: CSS may wrap, but the text is expected on one line; narrower widths are E_LAYOUT_CONTENT. */
+  wrap?: 'normal' | 'anywhere' | 'nowrap' | 'one-line';
   overflow?: 'fit' | 'scroll' | 'clip' | 'visible';
   overflowBlock?: 'fit' | 'scroll' | 'clip' | 'visible';
   /** Font the size bounds were measured with (`/text`); the computed CSS font must match or the box is Unknown. */
@@ -41,6 +49,8 @@ export interface LayoutBoxContract {
   textMetrics?: { kind: 'content'; text: string; width: number; font?: object; allowance?: string }
     | { kind: 'domain'; characters: string; maxLength: number; perCharacter: number; pairAdjustment: number; widest: string; bounds: number[]; font?: object; allowance?: string }
     | { kind: 'lines'; text: string; width: number; minContent: number; overflowWrap: 'normal' | 'anywhere' | 'break-word'; profile: { atLeastInlineSize: number; lines: number | null }[]; lang?: string; font?: object; allowance?: string };
+  /** A table cell's anonymous text blocks, in DOM order: one contract per text run. */
+  textRuns?: readonly Omit<LayoutBoxContract, 'textRuns'>[];
 }
 export interface CheckedLayoutBoxContract extends Omit<LayoutBoxContract, 'overflow' | 'overflowBlock'> {
   overflow?: 'fit' | 'clip' | 'scroll';
