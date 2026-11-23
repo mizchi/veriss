@@ -16,7 +16,7 @@ import { selectorScope } from './selector-scope.mjs';
 import { viewportFont, zoomShortfall } from './zoom-font.mjs';
 import { gapSize, trackArea, trackSlice, inheritTracks } from './subgrid.mjs';
 import { scrollbarFrames } from './scrollbars.mjs';
-import {absoluteOrigin} from './positioned.mjs';
+import {absoluteOrigin, insetLength} from './positioned.mjs';
 import {easedFrames} from './animation-extremes.mjs';
 import {textFontMismatch, textBrowserMismatch, textLinesMismatch, textLangMismatch, fittingLength, fittingLines} from './text-font.mjs';
 import {validateFlexContainer, flexItem, crossAlignment, distribution, flexUnknown} from './flex.mjs';
@@ -914,7 +914,6 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (style.position === 'relative' && style.direction === 'rtl' && ['left','right'].some(key=>!['auto','0','0px'].includes(String(style[key])))) throw new Error('A relative inline offset in an rtl box is not modeled');
     // An absolute box with an auto height is as tall as its content; a min or max height on top of that is not applied
     // to a content height here (Unknown).
-    if (style.position === 'absolute' && style['block-size'] === 'auto' && [style['min-block-size'], style['max-block-size']].some(v => !['auto', 'none', '0', '0px', undefined].includes(v))) throw new Error('An absolute box with an auto height and a min or max height is not modeled');
     if (style.position === 'absolute' && (!block || style['inline-size']==='auto' || style['grid-column']!=='auto' || style['grid-row']!=='auto')) throw new Error('Absolute boxes require both explicit sizes, both-axis analysis and auto Grid placement');
     if (!['border-box', 'content-box'].includes(style['box-sizing'])) throw new Error('Unsupported box-sizing');
     if (!['normal', 'inline-size', 'size'].includes(style['container-type'])) throw new Error('Unsupported container-type');
@@ -943,7 +942,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // container with children is not modeled.
       // A vh max-height on an auto height is checked once the height is known (finish): where the height never exceeds
       // it, the clamp does nothing; where it may, Unknown.
-      const vhLater = axis === 'block' && block && style['block-size'] === 'auto' && /^\d+(?:\.\d+)?vh$/.test(String(style['max-block-size']));
+      const vhLater = axis === 'block' && block && style['block-size'] === 'auto' && (/^\d+(?:\.\d+)?vh$/.test(String(style['max-block-size'])) || style.position === 'absolute');
       if (axis === 'block' && !vhLater && style['max-block-size'] !== 'none' && !(/^\d+(?:\.\d+)?px$/.test(style['max-block-size']) && !available.flexItem && style.display !== 'table' && (style['block-size'] !== 'auto' || !(box.children ?? []).length || (available.block && available.alignBlock === undefined && !available.root)))) throw new Error('CSS max size clamping is not modeled');
       if (style[`max-${axis}-size`] !== 'none' && axis === 'inline' && !available.flexItem?.maxNeverCaps && !( ((/^\d+(?:\.\d+)?px$/.test(style['max-inline-size'])) || (!/px$/.test(style['max-inline-size']) && available.inline && !available.flexItem)) && (!available.flexItem || available.flexItem.main === 'inline') && style.display !== 'table')) throw new Error('CSS max size clamping is not modeled');
       if (axis === 'inline') {
@@ -1613,7 +1612,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   function finish(box, style, region, inline, contentInline, blockSize, contentBlock, available, parents, emit) {
     const contract = box.contract ?? {};
     {
-      const vh = style['block-size'] === 'auto' && /^(\d+(?:\.\d+)?)vh$/.exec(String(style['max-block-size']));
+      const vh = style['block-size'] === 'auto' && style.position !== 'absolute' && /^(\d+(?:\.\d+)?)vh$/.exec(String(style['max-block-size']));
       if (vh && blockSize) {
         const measured = style['box-sizing'] === 'border-box' ? blockSize : contentBlock;
         if (!measured || clip(region, diff(measured, times(height, div(q(vh[1]), q(100)))), true)) throw Object.assign(new Error(`${box.label}: max-height ${style['max-block-size']} may cap its height in this viewport range; that clamp is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
@@ -3014,6 +3013,46 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
             }
           }
           continue;
+        }
+        // An absolute box with an auto height is its content's, raised to its min-height and capped by its max-height
+        // (the minimum wins): its content is laid out once at its natural height, and where that falls outside the
+        // bounds the box is laid out again at the bound.
+        const boundOf = key => !['auto', 'none', '0', '0px', undefined].includes(style[key] === undefined ? undefined : String(style[key]));
+        if (block && style.position === 'absolute' && style['block-size'] === 'auto' && !available.$minNatural && !available.$minRaised && (boundOf('min-block-size') || boundOf('max-block-size'))) {
+          const edge = key => style[key] === 'ua' ? zero : px(style[key]);
+          const edges = scalar(['padding-top', 'padding-bottom', 'border-top', 'border-bottom'].map(edge).reduce(add, zero));
+          const outer = value => style['box-sizing'] === 'content-box' ? sum(value, edges) : value;
+          const basis = available.percentBlock ?? available.containingBlock?.block ?? available.block;
+          for (const natural of solve(box, { ...available, $minNatural: true }, state.region, parents, inherited, false)) {
+            if (!natural.block) throw new Error('An absolute box with an auto height and a min or max height, whose content height is not known, is not modeled');
+            let parts = [{ region: natural.region, size: null }];
+            if (boundOf('max-block-size')) parts = parts.flatMap(part => lengthPieces(style['max-block-size'], basis, part.region, style).flatMap(m => {
+              const split = partition(m.region, diff(outer(m.value), natural.block), '>=');
+              return [...split.yes.map(r => ({ region: r, size: null })), ...split.no.map(r => ({ region: r, size: outer(m.value) }))];
+            }));
+            if (boundOf('min-block-size')) parts = parts.flatMap(part => lengthPieces(style['min-block-size'], basis, part.region, style).flatMap(m => {
+              const split = partition(m.region, diff(part.size ?? natural.block, outer(m.value)), '>=');
+              return [...split.yes.map(r => ({ region: r, size: part.size })), ...split.no.map(r => ({ region: r, size: outer(m.value) }))];
+            }));
+            for (const part of parts) results.push(...solve(box, part.size ? { ...available, $raisedBlock: part.size, $minRaised: true, $minNatural: true } : { ...available, $minNatural: true }, part.region, parents, inherited, emit));
+          }
+          continue;
+        }
+        // Shrink-to-fit (CSS 2 §10.3.7): an absolute or fixed box with one inline inset and an auto width is its
+        // max-content width (clamped by its max- and min-width) where that fits the room the inset leaves; where it may
+        // not, Unknown. (Measured in Chromium, Firefox and WebKit.)
+        if (style.position === 'absolute' && style['inline-size'] === 'auto' && available.containingBlock && !box.pseudo
+          && ['left', 'right'].filter(side => style[side] !== undefined && style[side] !== 'auto').length === 1) {
+          const sizes = frAutoMinimums(box, style, state.region, parents, true);
+          const set = ['left', 'right'].find(side => style[side] !== undefined && style[side] !== 'auto');
+          const room = diff(available.containingBlock.inline, insetLength(style[set], available.containingBlock.inline));
+          if (clip(state.region, diff(scalar(sizes.max), room), true)) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width (max-content ${number(sizes.max)}px) may not fit the room its inset leaves; that is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+          const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
+          let used = sizes.max;
+          if (!['auto', '0', '0px'].includes(String(style['min-inline-size']))) { const m = px(style['min-inline-size']); const outer = style['box-sizing'] === 'content-box' ? add(m, edges) : m; if (cmp(outer, used) > 0) used = outer; }
+          const text = String(number(used));
+          if (cmp(q(text), used) !== 0) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+          style = { ...style, 'inline-size': `${text}px`, 'box-sizing': 'border-box', 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
         }
         if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null)) continue;
         // A fieldset's first legend is rendered in its block-start border (HTML §15.3.13): it is not a

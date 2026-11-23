@@ -131,13 +131,14 @@ export function paintFacts(style) {
   const hiddenVisually = style['clip-path'] === 'empty' || style.clip === 'empty' || (['hidden', 'clip'].includes(style['overflow-x']) && /^\d+(?:\.\d+)?px$/.test(String(style['block-size'])) && Number(String(style['block-size']).slice(0, -2)) <= 1);
   return { ...(style.$iconPaint !== undefined ? { iconPaint: style.$iconPaint } : {}), ...(hiddenVisually ? { hiddenVisually: true } : {}), caretColor: style['caret-color'], objectFit: style['object-fit'], scrollBehavior: style['scroll-behavior'], touchAction: style['touch-action'], color: style.color, backgroundColor: style['background-color'], backgroundImage: style['background-image'], opacity: style.opacity,
     visibility: style.visibility, pointerEvents: style['pointer-events'], fontSize: style['font-size'], fontStyle: style['font-style'], fontWeight: style['font-weight'], position: style.position, decoration: style['text-decoration-line'],
-    isolation: style.isolation, transform: style.transform, ...(style['transform-style'] === 'preserve-3d' && style.display !== 'inline' ? { preserve3d: true } : {}), backdropFilter: style['backdrop-filter'] ?? 'none', ...(style.$stacks ? { stacks: true } : {}), willChange: style['will-change'] ?? 'auto', scrollMargin: { top: style['scroll-margin-top'], bottom: style['scroll-margin-bottom'] }, scrollPadding: { top: style['scroll-padding-top'], bottom: style['scroll-padding-bottom'] }, outlineStyle: style['outline-style'], outlineWidth: style['outline-width'], outlineColor: style['outline-color'], outlineOffset: style['outline-offset'], clippedAway: style['clip-path'] === 'empty' || (style.clip === 'empty' && ['absolute', 'fixed'].includes(style.$fixed ? 'fixed' : style.position)), borderColors: { top: style['border-top-color'], right: style['border-right-color'], bottom: style['border-bottom-color'], left: style['border-left-color'] }, boxShadow: style['box-shadow'], cursor: style.cursor, listStyleType: style['list-style-type'],
+    isolation: style.isolation, transform: style.transform, ...(style['transform-style'] === 'preserve-3d' && style.display !== 'inline' ? { preserve3d: true } : {}), backdropFilter: style['backdrop-filter'] ?? 'none', filter: style.filter ?? 'none', ...(style.$stacks ? { stacks: true } : {}), willChange: style['will-change'] ?? 'auto', scrollMargin: { top: style['scroll-margin-top'], bottom: style['scroll-margin-bottom'] }, scrollPadding: { top: style['scroll-padding-top'], bottom: style['scroll-padding-bottom'] }, outlineStyle: style['outline-style'], outlineWidth: style['outline-width'], outlineColor: style['outline-color'], outlineOffset: style['outline-offset'], clippedAway: style['clip-path'] === 'empty' || (style.clip === 'empty' && ['absolute', 'fixed'].includes(style.$fixed ? 'fixed' : style.position)), borderColors: { top: style['border-top-color'], right: style['border-right-color'], bottom: style['border-bottom-color'], left: style['border-left-color'] }, boxShadow: style['box-shadow'], cursor: style.cursor, listStyleType: style['list-style-type'],
     animations: animationsOf(style).map(a => ({ name: a.name, duration: a.duration, count: a.count, playState: a.playState, direction: a.direction })),
     transitions: transitionsOf(style).map(t => ({ property: t.property, duration: t.duration })) };
 }
 // defaultColors (a caller-stated assumption, judgeAccessibility sets it): the UA canvas and its text color; see color/.
 let uaColors = null;
-const backdrop = chain => backdropOf(chain, uaColors);
+// A filter on the box or an ancestor repaints its colors (brightness, invert, a drop shadow behind the glyphs): not modeled.
+const backdrop = chain => chain.some(layer => (layer?.filter ?? 'none') !== 'none') ? { unknown: 'a filter on it or an ancestor changes the painted colors, which is not modeled' } : backdropOf(chain, uaColors);
 const px = value => { const m = /^(\d+(?:\.\d+)?)px$/.exec(String(value)); return m ? Number(m[1]) : undefined; };
 const weight = value => value === 'bold' ? 700 : /^\d+$/.test(String(value)) ? Number(value) : 400;
 // Large text: at least 18pt (24px), or 14pt (56/3 px) bold. An unknown size is not large (the stricter ratio).
@@ -391,7 +392,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // a property that would make one: a descendant's z-index does not escape them.
   const willStack = /(?:^|,\s*)(?:transform|translate|rotate|scale|opacity|filter|backdrop-filter|perspective|isolation|mix-blend-mode|clip-path|mask|contain)(?:\s*,|$)/;
   const createsContext = r => (r.zIndex !== null && r.zIndex !== undefined) || !opaqueValue(r.paint.opacity) || r.paint.isolation === 'isolate' || Boolean(r.paint.preserve3d) || (r.paint.transform ?? 'none') !== 'none'
-    || r.position === 'fixed' || Boolean(r.sticky) || Boolean(r.paint.stacks) || (r.paint.backdropFilter ?? 'none') !== 'none' || willStack.test(r.paint.willChange ?? 'auto');
+    || r.position === 'fixed' || Boolean(r.sticky) || Boolean(r.paint.stacks) || (r.paint.backdropFilter ?? 'none') !== 'none' || (r.paint.filter ?? 'none') !== 'none' || willStack.test(r.paint.willChange ?? 'auto');
   const contexts = row => { const out = []; for (let p = row.path; p; p = parentPath(p)) { const r = p === row.path ? row : rowAt(p); if (r && createsContext(r)) out.unshift(r); } return out; };
   // The nearest positioned ancestor-or-self strictly inside `within` (a context path, or '' for the root).
   const layerIn = (row, within) => { for (let p = row.path; p && p !== within; p = parentPath(p)) { const r = rowAt(p); if (r && r.position !== 'static') return p; } return null; };
@@ -418,7 +419,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   const contextReasons = r => [
     ...(r.zIndex !== null && r.zIndex !== undefined ? [`z-index ${r.zIndex}`] : []), ...(r.position === 'fixed' ? ['position: fixed'] : []), ...(r.sticky ? ['position: sticky'] : []),
     ...((r.paint.transform ?? 'none') !== 'none' ? ['transform'] : []), ...(!opaqueValue(r.paint.opacity) ? [`opacity ${r.paint.opacity}`] : []), ...(r.paint.isolation === 'isolate' ? ['isolation: isolate'] : []),
-    ...(r.paint.preserve3d ? ['transform-style: preserve-3d'] : []), ...((r.paint.backdropFilter ?? 'none') !== 'none' ? ['backdrop-filter'] : []), ...(willStack.test(r.paint.willChange ?? 'auto') ? [`will-change: ${r.paint.willChange}`] : []),
+    ...(r.paint.preserve3d ? ['transform-style: preserve-3d'] : []), ...((r.paint.backdropFilter ?? 'none') !== 'none' ? ['backdrop-filter'] : []), ...((r.paint.filter ?? 'none') !== 'none' ? [`filter: ${r.paint.filter}`] : []), ...(willStack.test(r.paint.willChange ?? 'auto') ? [`will-change: ${r.paint.willChange}`] : []),
   ];
   const occludedMessage = (target, cover) => {
     const base = `${target.box.label} is covered by ${cover.box.label}, which is painted later and receives the pointer`;

@@ -457,6 +457,14 @@
 - [x] **H10. 中身の高さで寄せる flex アイテムの子の位置**: `align-items: center` などで寄せる箱の高さが中身で決まるとき、子は上端から並べ、高さが決まったら子孫を
   寄せの量だけずらす(高さが決まらなければ子孫の位置を出さない)。中央寄せのダイアログの中の閉じるボタンが覆われるかを判定できる。3 ブラウザーで 3 つの大きさで照合
 - [x] **H11. 小数の桁**: px の値は小数点以下 20 桁まで正確な有理数として読む(スクリプトが書く `26.666666666666668px`)。今までは 6 桁を超えると Unknown
+- [x] **H12. `filter`**: `none` 以外は、スタッキングコンテキスト(中の z-index 99 の子が外の z-index 2 の兄弟の下になる)と、fixed の子孫の包含ブロック
+  (`brightness(1)` でも)を作る。ヒットテストの範囲と配置は変えない(`drop-shadow` の影はクリックを受けない)。Chromium・Firefox・WebKit で実測し、
+  e2e `filter traps a z-index` で 5 通りをヒットテストと照合。色は変わるので、filter の下のコントラストは Unknown。`url()` の filter は Unknown のまま
+- [x] **H13. 幅が auto の絶対配置・fixed の箱(shrink-to-fit)**: 横の inset が片方だけのとき、中身の max-content 幅を `max-width` / `min-width` で挟んだ値
+  (CSS 2 §10.3.7)。max-content 幅が inset の残す幅を超えうる範囲があれば Unknown。3 ブラウザーで 2 つの幅と 6 通りを照合
+  (中身が絶対配置の子だけで `min-width: 180px` → 180、`content-box` の padding を含めて 60 など)
+- [x] **H14. 高さが auto の絶対配置の箱の `min-height` / `max-height`**: 中身の高さで一度解き、範囲を分けて、下回るところは最小、上回るところは最大の高さで
+  解き直す(最小が勝つ)。H7 で Unknown にしていた組
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、`inert` の部分木をヒットテストから外すこと、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 

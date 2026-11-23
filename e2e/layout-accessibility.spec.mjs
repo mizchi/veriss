@@ -1179,6 +1179,26 @@ test('what covers a dialog close button decides occlusion as hit testing does', 
   }
 });
 
+// filter: a stacking context (a z-index 99 child stays under a z-index 2 sibling), the same hit area (the drop shadow
+// takes no pointer). The static occlusion verdict matches hit testing for each filter and the none control.
+test('filter traps a z-index and keeps the hit area, as hit testing does', async ({page}) => {
+  const html = '<main class="page"><div class="a"><button class="b" aria-label="B"></button></div><div class="s"></div><button class="c" aria-label="C"></button></main>';
+  const base = `${reset}.page{display:grid;grid-template-columns:200px;grid-auto-rows:40px;position:relative;background:#fff}.a{display:grid;grid-template-columns:minmax(0,1fr);position:relative}.b,.c{${button}}.b{position:relative;z-index:99}.s{position:absolute;left:0;top:0;inline-size:120px;block-size:30px;z-index:2;background:#eee}.c{inline-size:40px}`;
+  for (const [filter, covered] of [['none', false], ['drop-shadow(30px 30px 4px black)', true], ['blur(3px)', true], ['brightness(1)', true], ['opacity(.5) saturate(2)', true]]) {
+    const css = `${base}.a{filter:${filter}}`;
+    const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
+    expect(report.status === 'unknown', `${filter}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
+    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))].sort();
+    await page.setViewportSize({width: 800, height: 800});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
+    const blocked = await page.evaluate(() => ['.b', '.c'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
+    expect(blocked.includes('.b'), filter).toBe(covered);
+    // The drop shadow of .a reaches .c (30px down) but takes no pointer.
+    expect(blocked.includes('.c'), filter).toBe(false);
+    expect(statics, filter).toEqual(blocked.sort());
+  }
+});
+
 // dir=auto follows the first strong character in DOM order (text and children interleaved), as Chromium does.
 test('dir=auto resolves in DOM order like Chromium', async ({page}) => {
   const cases = ['hello <span>שלום</span>', '<span>שלום</span> hello', '123 <span>abc</span> שלום', '<span dir="ltr">abc</span> שלום x', '<b>12</b> <i>مرحبا</i> abc', '123 !'];

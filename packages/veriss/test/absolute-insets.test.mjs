@@ -51,7 +51,7 @@ test('left and right auto: the static position in a grid and in a block containi
 });
 
 // An auto height on an absolute box is its content's, not its containing block's (CSS 2 §10.6.4; measured in
-// Chromium, Firefox and WebKit). A min or max height on it stays Unknown.
+// Chromium, Firefox and WebKit), raised to its min-height and capped by its max-height.
 test('an absolute box with an auto height is as tall as its content', () => {
   const html = '<html lang="en"><body><main class="page"><div class="card"><div class="o"><div class="k1"></div><div class="k2"></div></div></div></main></body></html>';
   const run = o => analyzeHTML(html, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page,.card{${g}}.card{position:relative;height:200px}.o{position:absolute;${g};${o}}.k1{height:30px}.k2{height:12px}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
@@ -59,7 +59,14 @@ test('an absolute box with an auto height is as tall as its content', () => {
   assert.deepEqual(at('top:0;width:50px'), ['0', '42']);
   assert.deepEqual(at('bottom:0;width:50px'), ['158', '42']);
   assert.deepEqual(at('top:0;width:50px;padding:3px 0'), ['0', '48']);
-  for (const o of ['top:0;width:50px;min-height:60px', 'top:0;width:50px;max-height:20px']) assert.equal(run(o).status, 'unknown', o);
+  // Raised to min-height, capped by max-height (the content stays 42px; measured in three browsers).
+  assert.deepEqual(at('top:0;width:50px;min-height:60px'), ['0', '60']);
+  // (Its 42px content overflows the 20px box: reported, so only the box's height is read here.)
+  const capped = run('top:0;width:50px;max-height:20px;overflow:hidden');
+  assert.notEqual(capped.status, 'unknown');
+  assert.deepEqual(capped.sizes.filter(s => s.box === '.o').map(s => s.blockSize.constant), ['20']);
+  assert.deepEqual(at('bottom:5px;width:50px;min-height:60px'), ['135', '60']);
+  assert.deepEqual(at('top:0;width:50px;min-height:30px'), ['0', '42']);
 });
 
 // A scroll lock (body { position: fixed; left: 0; right: 0 }) leaves top auto: the body sits at its static position,
@@ -75,4 +82,22 @@ test('a fixed body with auto top sits at the html content edge', () => {
   assert.deepEqual(at(`html{${g}}`), ['0', '0', '30']);
   assert.deepEqual(at(`html{${g};padding:5px 0 0 7px}`), ['0', '5', '30']);
   assert.deepEqual(at('html{display:block;padding:5px 0 0 7px}'), ['0', '5', '30']);
+});
+
+// An absolute or fixed box with one inline inset and an auto width shrinks to fit (CSS 2 §10.3.7): its max-content
+// width, clamped by min-width and max-width, where that fits the room the inset leaves (measured in Chromium, Firefox
+// and WebKit at 1280px). Where it may not fit, Unknown.
+test('an auto width on an absolute or fixed box with one inline inset shrinks to fit its content', () => {
+  const width = (box, kids, vp = 1280) => {
+    const r = analyzeHTML(`<html lang="en"><body><div class="o">${kids}<div class="i"></div></div></body></html>`, {name: 'P', css: `*{margin:0;box-sizing:border-box}html,body{${g}}body{position:relative;height:300px}.o{${box}}.k{width:var(--w);height:10px}.i{position:absolute;right:0;top:-24px;width:20px;height:20px}`, viewport: {min: vp, max: vp, height: {min: 720, max: 720}}, accessibility: true});
+    if (r.status === 'unknown') return ['unknown', r.diagnostics.find(d => d.severity === 'unknown')?.message];
+    const s = r.sizes.find(s => s.box === '.o').rect;
+    return [s.inlineStart.constant, s.inlineStart.coefficient, s.inlineSize.constant];
+  };
+  assert.deepEqual(width('position:fixed;top:24px;right:24px;min-width:180px;max-width:320px', ''), ['-204', '1', '180']);
+  assert.deepEqual(width('position:fixed;top:24px;right:24px', '<div class="k" style="--w:120px"></div>'), ['-144', '1', '120']);
+  assert.deepEqual(width('position:fixed;top:24px;right:24px;max-width:320px', '<div class="k" style="--w:500px"></div>'), ['-344', '1', '320']);
+  assert.deepEqual(width('position:fixed;top:24px;left:10px;padding:0 5px;box-sizing:content-box;min-width:50px', '<div class="k" style="--w:20px"></div>'), ['10', '0', '60']);
+  // 1300px of content in a 1280px viewport may not fit: Unknown.
+  assert.equal(width('position:fixed;top:24px;right:24px', '<div class="k" style="--w:1300px"></div>')[0], 'unknown');
 });

@@ -2302,3 +2302,36 @@ test('occluded-target names every box over the target where it is covered, not o
   const left = find(run(tree, css('.bg { pointer-events: none; }')), 'E_A11Y_OCCLUDED');
   assert.ok(left.length > 0 && left.every(d => !d.alsoCoveredBy));
 });
+
+// filter (any value but none; measured in Chromium, Firefox and WebKit): a stacking context (a z-index 99 child stays
+// under a z-index 2 sibling), the containing block of fixed descendants (even brightness(1)), the same hit area (a
+// drop shadow takes no pointer), no layout change. Colors under it are not modeled (contrast Unknown).
+test('filter makes a stacking context and the fixed containing block, keeps the hit area, leaves colors Unknown', () => {
+  const tree = page([{tag: 'div', classes: ['a'], children: [{tag: 'button', classes: ['b'], named: true}]}, {tag: 'div', classes: ['s']}]);
+  const css = (filter, extra = '') => pageCSS(`.page { background: #fff; grid-auto-rows: 100px; }\n.a { position: relative; display: grid; grid-template-columns: 40px; grid-auto-rows: 40px; filter: ${filter}; }\n.b { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; position: relative; z-index: 99; }\n.s { position: absolute; left: 0; top: 0; inline-size: 30px; block-size: 30px; z-index: 2; }\n${extra}`);
+  // Without a filter the button (z-index 99, in the root context) is above the sibling; with one it is trapped below.
+  assert.equal(find(run(tree, css('none')), 'E_A11Y_OCCLUDED').length, 0);
+  for (const filter of ['drop-shadow(4px 4px 4px black)', 'blur(2px)', 'brightness(1)', 'drop-shadow(0 0 2px rgb(0 0 0 / .5)) saturate(2)']) {
+    const r = run(tree, css(filter));
+    assert.notEqual(r.status, 'unknown', `${filter}: ${JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message))}`);
+    const found = find(r, 'E_A11Y_OCCLUDED');
+    assert.equal(found.length > 0, true, filter);
+    assert.match(found[0].message, /stacking context of \.a \(.*filter/);
+  }
+  // A url() filter is not modeled.
+  assert.equal(run(tree, css('url(#f)')).status, 'unknown');
+  // Text under a filter: its colors are Unknown.
+  // (#767676 on white is 4.54:1, a pass; invert(1) would paint it on black, which is not modeled.)
+  const contrast = filter => run(card, cardCSS(`.card { background: #fff; color: #767676; }\n.t { filter: ${filter}; }`), {boxes: cardBoxes}).diagnostics.filter(d => d.rule === 'text-contrast').map(d => d.code);
+  assert.deepEqual(contrast('none'), []);
+  assert.deepEqual([...new Set(contrast('invert(1)'))], ['U_A11Y_CONTRAST']);
+});
+
+test('filter makes its box the containing block of fixed descendants (Unknown, with the trap warning)', () => {
+  const tree = page([{tag: 'div', classes: ['a'], children: [{tag: 'div', classes: ['f']}]}]);
+  const css = filter => pageCSS(`.a { display: grid; grid-template-columns: minmax(0, 1fr); filter: ${filter}; }\n.f { position: fixed; left: 0; top: 0; inline-size: 10px; block-size: 10px; }`);
+  assert.notEqual(run(tree, css('none')).status, 'unknown');
+  const trapped = run(tree, css('drop-shadow(4px 4px 4px black)'));
+  assert.equal(trapped.status, 'unknown');
+  assert.ok((trapped.layoutWarnings ?? []).some(w => w.code === 'W_LAYOUT_FIXED_TRAPPED' && /filter/.test(w.message)), JSON.stringify(trapped.layoutWarnings));
+});
