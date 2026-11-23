@@ -89,6 +89,10 @@
 //   focus-transparent → W_A11Y_FOCUS_TRANSPARENT a focusable box that stays at opacity 0 (itself or an ancestor) when focused: its own focus indicator cannot show
 //   error-message    → W_A11Y_ERROR_HIDDEN / W_A11Y_INVALID_NO_MESSAGE  aria-invalid="true" whose aria-errormessage does not render, or with no message at all (SC 3.3.1)
 //   modal-background → W_A11Y_MODAL_BACKGROUND  focusable content outside a rendered aria-modal dialog that is neither inert nor aria-hidden
+//   inert-shown      → W_A11Y_INERT_SHOWN       an inert control with nothing painted over it: it looks clickable but takes no click
+//   safe-area-target → W_A11Y_SAFE_AREA_TARGET  a fixed control in the device's safe area on a viewport-fit=cover page (option safeArea)
+//   hinge-target     → W_A11Y_HINGE_TARGET      a control under a dual-screen hinge (option hinge)
+//   target-offscreen → E_A11Y_TARGET_OFFSCREEN / W_A11Y_TARGET_PARTLY_OFFSCREEN  a control in a fixed box (partly) outside the viewport
 //   new-window       → W_A11Y_NEW_WINDOW        a link opening a new window/tab (target=_blank) whose name does not say so (G201)
 //   form-submit      → W_A11Y_FORM_SUBMIT       a form with fields but no submit button (SC 3.2.2)
 //   native-aria-conflict → W_A11Y_NATIVE_ARIA_CONFLICT an ARIA state that contradicts the native one (required/disabled/checked), which Chromium announces instead
@@ -112,13 +116,13 @@ export const accessibilityRules = ['accessible-name', 'text-contrast', 'occluded
   'role-parent', 'role-children', 'role-attr', 'aria-attr', 'aria-value', 'presentation-conflict', 'empty-th', 'redundant-alt', 'title-only', 'input-button-name', 'autocomplete', 'scope',
   'html-lang', 'lang-valid', 'meta-viewport', 'touch-zoom', 'forced-colors', 'page-h1', 'region', 'bypass', 'landmark-top-level', 'duplicate-landmark', 'p-as-heading', 'orientation', 'focus-visible', 'text-spacing', 'state-contrast', 'frame-title', 'video-caption', 'autoplay-audio', 'hover-only',
   'clickable-look', 'list-style-semantics', 'motion', 'blink', 'definition-list', 'accesskeys', 'server-side-image-map', 'aria-hidden-body',
-  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable'];
+  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable'];
 
 // Usefulness tiers (docs/accessibility-rule-evaluation.md). core: depends on the CSS result and is proved over the
 // viewport region and states; dom: decided by the DOM alone (lint overlaps); heuristic: a Technique or a guess that
 // legitimate designs can trip; legacy: rare or obsolete markup. profile 'core' keeps core and dom only.
 const tierLists = {
-  core: ['page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
+  core: ['inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
   heuristic: ['color-only-state', 'visual-order', 'p-as-heading', 'link-text', 'link-purpose', 'new-window', 'redundant-alt', 'title-only', 'form-submit', 'clickable-look', 'list-style-semantics', 'small-text', 'region', 'bypass', 'page-h1', 'page-main', 'landmark-name', 'landmark-top-level', 'duplicate-landmark', 'radio-group', 'fieldset-name', 'motion', 'autoplay-audio'],
   legacy: ['blink', 'server-side-image-map', 'accesskeys', 'aria-hidden-body'],
 };
@@ -131,13 +135,14 @@ export function paintFacts(style) {
   const hiddenVisually = style['clip-path'] === 'empty' || style.clip === 'empty' || (['hidden', 'clip'].includes(style['overflow-x']) && /^\d+(?:\.\d+)?px$/.test(String(style['block-size'])) && Number(String(style['block-size']).slice(0, -2)) <= 1);
   return { ...(style.$iconPaint !== undefined ? { iconPaint: style.$iconPaint } : {}), ...(hiddenVisually ? { hiddenVisually: true } : {}), caretColor: style['caret-color'], objectFit: style['object-fit'], scrollBehavior: style['scroll-behavior'], touchAction: style['touch-action'], color: style.color, backgroundColor: style['background-color'], backgroundImage: style['background-image'], opacity: style.opacity,
     visibility: style.visibility, pointerEvents: style['pointer-events'], fontSize: style['font-size'], fontStyle: style['font-style'], fontWeight: style['font-weight'], position: style.position, decoration: style['text-decoration-line'],
-    isolation: style.isolation, transform: style.transform, ...(style['transform-style'] === 'preserve-3d' && style.display !== 'inline' ? { preserve3d: true } : {}), backdropFilter: style['backdrop-filter'] ?? 'none', ...(style.$stacks ? { stacks: true } : {}), willChange: style['will-change'] ?? 'auto', scrollMargin: { top: style['scroll-margin-top'], bottom: style['scroll-margin-bottom'] }, scrollPadding: { top: style['scroll-padding-top'], bottom: style['scroll-padding-bottom'] }, outlineStyle: style['outline-style'], outlineWidth: style['outline-width'], outlineColor: style['outline-color'], outlineOffset: style['outline-offset'], clippedAway: style['clip-path'] === 'empty' || (style.clip === 'empty' && ['absolute', 'fixed'].includes(style.$fixed ? 'fixed' : style.position)), borderColors: { top: style['border-top-color'], right: style['border-right-color'], bottom: style['border-bottom-color'], left: style['border-left-color'] }, boxShadow: style['box-shadow'], cursor: style.cursor, listStyleType: style['list-style-type'],
+    isolation: style.isolation, transform: style.transform, ...(style['transform-style'] === 'preserve-3d' && style.display !== 'inline' ? { preserve3d: true } : {}), backdropFilter: style['backdrop-filter'] ?? 'none', filter: style.filter ?? 'none', ...(style.$stacks ? { stacks: true } : {}), willChange: style['will-change'] ?? 'auto', scrollMargin: { top: style['scroll-margin-top'], bottom: style['scroll-margin-bottom'] }, scrollPadding: { top: style['scroll-padding-top'], bottom: style['scroll-padding-bottom'] }, outlineStyle: style['outline-style'], outlineWidth: style['outline-width'], outlineColor: style['outline-color'], outlineOffset: style['outline-offset'], clippedAway: style['clip-path'] === 'empty' || (style.clip === 'empty' && ['absolute', 'fixed'].includes(style.$fixed ? 'fixed' : style.position)), borderColors: { top: style['border-top-color'], right: style['border-right-color'], bottom: style['border-bottom-color'], left: style['border-left-color'] }, boxShadow: style['box-shadow'], cursor: style.cursor, listStyleType: style['list-style-type'],
     animations: animationsOf(style).map(a => ({ name: a.name, duration: a.duration, count: a.count, playState: a.playState, direction: a.direction })),
     transitions: transitionsOf(style).map(t => ({ property: t.property, duration: t.duration })) };
 }
 // defaultColors (a caller-stated assumption, judgeAccessibility sets it): the UA canvas and its text color; see color/.
 let uaColors = null;
-const backdrop = chain => backdropOf(chain, uaColors);
+// A filter on the box or an ancestor repaints its colors (brightness, invert, a drop shadow behind the glyphs): not modeled.
+const backdrop = chain => chain.some(layer => (layer?.filter ?? 'none') !== 'none') ? { unknown: 'a filter on it or an ancestor changes the painted colors, which is not modeled' } : backdropOf(chain, uaColors);
 const px = value => { const m = /^(\d+(?:\.\d+)?)px$/.exec(String(value)); return m ? Number(m[1]) : undefined; };
 const weight = value => value === 'bold' ? 700 : /^\d+$/.test(String(value)) ? Number(value) : 400;
 // Large text: at least 18pt (24px), or 14pt (56/3 px) bold. An unknown size is not large (the stricter ratio).
@@ -235,7 +240,7 @@ export function circleReach(region, dx, dy, r) {
   return { yes, maybe };
 }
 
-export function judgeAccessibility({ geometry, waived = [], root, domain }, { keyframeFrames = new Map(), contrast = 'AA', targetLevel = 'AA', targetSize = targetLevel === 'AAA' ? 44 : 24, ranges, block, viewportMin, hostInset = 0, hostBlockInset = 0, viewportBlock = null, scrollPaddingDeclared = false, forcedColorsHandled = false, smoothReduced = false, defaultColors = null, scrollZero = false }) {
+export function judgeAccessibility({ geometry, waived = [], root, domain }, { keyframeFrames = new Map(), contrast = 'AA', targetLevel = 'AA', targetSize = targetLevel === 'AAA' ? 44 : 24, ranges, block, viewportMin, hostInset = 0, hostBlockInset = 0, viewportBlock = null, safeArea = null, hinge = null, scrollPaddingDeclared = false, forcedColorsHandled = false, smoothReduced = false, defaultColors = null, scrollZero = false }) {
   uaColors = defaultColors;
   const findings = [], warnings = [], unknowns = [], notes = [], exempted = [];
   // Generated boxes (::before/::after) paint and receive the pointer (for their element), but carry no DOM semantics.
@@ -243,7 +248,10 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   geometry = geometry.filter(row => !row.box.pseudo);
   const witness = region => { const p = sample(region); return { viewport: number(p.x), viewportExact: exact(p.x), ...(block ? { viewportHeight: number(p.y), viewportHeightExact: exact(p.y) } : {}) }; };
   // `region` keeps the exact constraints: a 2-D region (e.g. width > height) is not the product of its two ranges.
-  const report = (list, code, severity, message, row, region, extra) => list.push({ code, severity, message, box: row.box.label, path: row.path, source: row.box.source, ...ranges(region), ...(block ? { regionConstraints: serialize(region).constraints } : {}), witness: witness(region), ...extra });
+  const push = (list, code, severity, message, row, region, extra) => list.push({ code, severity, message, box: row.box.label, path: row.path, source: row.box.source, ...ranges(region), ...(block ? { regionConstraints: serialize(region).constraints } : {}), witness: witness(region), ...extra });
+  // Covered, hidden behind or under a bar: outside an open aria-modal dialog that is the intent (see `modals`).
+  const coverCodes = new Set(['E_A11Y_OCCLUDED', 'E_A11Y_FOCUS_OBSCURED', 'E_A11Y_FOCUS_SCROLLED_UNDER', 'E_A11Y_FIXED_HIDES', 'E_A11Y_FIXED_HIDES_PART']);
+  const report = (list, code, severity, message, row, region, extra) => { for (const piece of coverCodes.has(code) && row.path ? outsideModals(row, region) : [region]) push(list, code, severity, message, row, piece, extra); };
   const visible = row => row.paint.visibility === 'visible';
   // Interactive: buttons, links with href (or a dynamic one), and form fields (not type=hidden or disabled-hidden).
   const field = box => ['select', 'textarea'].includes(box.tag) || (box.tag === 'input' && box.inputType !== 'hidden');
@@ -257,6 +265,17 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // aria-hidden on any ancestor in the box tree (display: contents elements have no geometry row).
   const treeBoxes = new Map(); (function walk(box) { treeBoxes.set(box.path, box); for (const child of [...(box.children ?? []), ...(box.inline ?? [])]) walk(child); })(root);
   const hiddenFrom = path => { for (let p = path; p; p = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '') { const b = treeBoxes.get(p); if (b?.ariaHidden && !['body', 'html'].includes(b.tag)) return true; } return false; };
+  // A box at opacity 0 (itself or an ancestor) draws nothing: it hides nothing from sight, but it still hit-tests.
+  const zeroOpacity = value => /^(?:0|0?\.0+|0%)$/.test(String(value ?? '1').trim());
+  const invisible = row => (row.chain ?? [row.paint]).some(layer => zeroOpacity(layer?.opacity));
+  const seen = row => row.painted && !invisible(row);
+  // inert (itself or an ancestor): skipped by hit testing, so it covers nothing and its controls take no click
+  // (measured in Chromium, Firefox and WebKit).
+  const inertAt = row => { if (row.box.inertSubtree) return true; for (let p = row.path; p; p = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '') if (treeBoxes.get(p)?.inertSubtree) return true; return false; };
+  // An open aria-modal dialog: the page outside it is meant to be out of reach while it renders, so a target outside
+  // it is not reported as covered where the dialog renders (focus escaping it is modal-background's warning).
+  const modals = geometry.filter(row => ['dialog', 'alertdialog'].includes(roleOf(row.box)) && row.box.aria?.['aria-modal']?.trim() === 'true' && visible(row) && !hiddenFrom(row.path) && row.region);
+  const outsideModals = (row, region) => modals.filter(d => d.path !== row.path && !isAncestor(d.path, row.path)).reduce((rest, d) => rest.flatMap(r => subtract(r, d.region)), region ? [region] : []);
 
   // accessible-name: no name attribute, and no visible text rendered inside.
   // aria-labelledby names through the text of the referenced elements, rendered or not (accname 2.B).
@@ -293,7 +312,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
 
   // text-contrast over the DOM ancestors' backgrounds.
   const [normal, big] = contrast === 'AAA' ? [7, 4.5] : [4.5, 3];
-  const painted = placed.filter(row => row.painted && visible(row));
+  const painted = placed.filter(row => seen(row) && visible(row));
   // Visually hidden text (sr-only) is not seen: SC 1.4.3 does not apply to it.
   for (const text of geometry.filter(row => row.box.text && visible(row) && !row.paint?.hiddenVisually)) {
     const result = backdrop(text.chain);
@@ -319,7 +338,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       const bound = text.origin ? null : placed.filter(row => row.overflow === 'scroll' && row.origin && row.block && isAncestor(row.path, text.path)).at(-1);
       const others = text.origin
         ? painted.filter(row => !related(row.path, text.path) && text.block && overlap(text, row))
-        : bound ? geometry.filter(row => row.painted && visible(row) && !related(row.path, text.path) && (row.origin ? overlap(bound, row) : isAncestor(bound.path, row.path))) : [];
+        : bound ? geometry.filter(row => seen(row) && visible(row) && !related(row.path, text.path) && (row.origin ? overlap(bound, row) : isAncestor(bound.path, row.path))) : [];
       if ((!text.origin && !bound) || others.length) { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${text.box.label} is positioned without an opaque background of its own; the boxes behind it are not its ancestors`, text, text.region, { rule: 'text-contrast' }); continue; }
     }
     const ratio = contrastRatio(result.fg, result.bg), required = large(text.chain.at(-1)) ? big : normal;
@@ -380,7 +399,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // a property that would make one: a descendant's z-index does not escape them.
   const willStack = /(?:^|,\s*)(?:transform|translate|rotate|scale|opacity|filter|backdrop-filter|perspective|isolation|mix-blend-mode|clip-path|mask|contain)(?:\s*,|$)/;
   const createsContext = r => (r.zIndex !== null && r.zIndex !== undefined) || !opaqueValue(r.paint.opacity) || r.paint.isolation === 'isolate' || Boolean(r.paint.preserve3d) || (r.paint.transform ?? 'none') !== 'none'
-    || r.position === 'fixed' || Boolean(r.sticky) || Boolean(r.paint.stacks) || (r.paint.backdropFilter ?? 'none') !== 'none' || willStack.test(r.paint.willChange ?? 'auto');
+    || r.position === 'fixed' || Boolean(r.sticky) || Boolean(r.paint.stacks) || (r.paint.backdropFilter ?? 'none') !== 'none' || (r.paint.filter ?? 'none') !== 'none' || willStack.test(r.paint.willChange ?? 'auto');
   const contexts = row => { const out = []; for (let p = row.path; p; p = parentPath(p)) { const r = p === row.path ? row : rowAt(p); if (r && createsContext(r)) out.unshift(r); } return out; };
   // The nearest positioned ancestor-or-self strictly inside `within` (a context path, or '' for the root).
   const layerIn = (row, within) => { for (let p = row.path; p && p !== within; p = parentPath(p)) { const r = rowAt(p); if (r && r.position !== 'static') return p; } return null; };
@@ -403,23 +422,55 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     if (!above) return !own && treeOrder(cover.path, target.path) > 0;
     return !(own && (isAncestor(above, own) || above === own || treeOrder(above, own) < 0));
   };
-  const targets = placed.filter(row => interactive(row) && visible(row));
+  // Why a box makes a stacking context, for the message.
+  const contextReasons = r => [
+    ...(r.zIndex !== null && r.zIndex !== undefined ? [`z-index ${r.zIndex}`] : []), ...(r.position === 'fixed' ? ['position: fixed'] : []), ...(r.sticky ? ['position: sticky'] : []),
+    ...((r.paint.transform ?? 'none') !== 'none' ? ['transform'] : []), ...(!opaqueValue(r.paint.opacity) ? [`opacity ${r.paint.opacity}`] : []), ...(r.paint.isolation === 'isolate' ? ['isolation: isolate'] : []),
+    ...(r.paint.preserve3d ? ['transform-style: preserve-3d'] : []), ...((r.paint.backdropFilter ?? 'none') !== 'none' ? ['backdrop-filter'] : []), ...((r.paint.filter ?? 'none') !== 'none' ? [`filter: ${r.paint.filter}`] : []), ...(willStack.test(r.paint.willChange ?? 'auto') ? [`will-change: ${r.paint.willChange}`] : []),
+  ];
+  const occludedMessage = (target, cover) => {
+    const base = `${target.box.label} is covered by ${cover.box.label}, which is painted later and receives the pointer`;
+    if (invisible(cover)) return `${target.box.label} is covered by ${cover.box.label}, which is invisible (opacity 0) but still receives the pointer; give it pointer-events: none, or display: none while it is not shown`;
+    // A z-index on the target (or a context between it and the one compared) orders it only inside that context.
+    const ca = contexts(cover), cb = contexts(target);
+    let k = 0; while (k < ca.length && k < cb.length && ca[k] === cb[k]) k++;
+    const outer = cb[k], inner = outer ? [...cb.slice(k + 1), target].filter(r => r !== outer && Number.isInteger(r.zIndex)) : [];
+    if (!inner.length) return base;
+    const top = inner.reduce((a, b) => b.zIndex > a.zIndex ? b : a);
+    return `${base}: the z-index ${top.zIndex} of ${top.box.label} orders it only inside the stacking context of ${outer.box.label} (${contextReasons(outer).join(', ')}), which paints below ${cover.box.label}`;
+  };
+  const targets = placed.filter(row => interactive(row) && visible(row) && !inertAt(row));
+  // inert-shown: an inert control that nothing paints over looks clickable, but takes no click: the click
+  // reaches whatever is under it. (An inert page behind a modal's backdrop is covered there, and not reported.)
+  for (const target of placed.filter(row => interactive(row) && visible(row) && inertAt(row) && !row.box.pseudo)) {
+    const own = layer(target);
+    let rest = [target.region];
+    for (const cover of placed) {
+      // (An inert box still paints: over the control it hides it from sight, so it counts here.)
+      if (related(cover.path, target.path) || !visible(cover) || !seen(cover) || !paintsAbove(cover, layer(cover), target, own)) continue;
+      const region = overlap(target, cover);
+      if (region) rest = rest.flatMap(piece => subtract(piece, region));
+    }
+    for (const piece of rest) report(warnings, 'W_A11Y_INERT_SHOWN', 'warning', `${target.box.label} is inert but shown with nothing over it: it looks clickable, yet takes no click or focus (the click reaches what is under it). Remove inert while it is shown, or hide it`, target, piece, { rule: 'inert-shown' });
+  }
   for (const target of targets) {
     const own = layer(target);
     // Every cover counts where it covers: one cover's region is not another's (the first found used to end the
     // search, which lost the region where only a later cover overlaps; found by the occlusion fuzz).
     let reported = [];
-    for (const cover of placed) {
-      if (related(cover.path, target.path) || !visible(cover) || cover.paint.pointerEvents === 'none') continue;
-      const above = layer(cover);
-      // Positioned layers paint after in-flow content, and among themselves in tree order (z-index is not modeled);
-      // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
-      if (!paintsAbove(cover, above, target, own)) continue;
-      const region = overlap(target, cover);
-      if (!region) continue;
+    // Paint order: stacking contexts by z-index (paintsAbove), then positioned layers after in-flow content in tree order;
+    // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
+    const covers = placed.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
+      .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
+    for (const { cover, region } of covers) {
       let fresh = [region];
       for (const done of reported) fresh = fresh.flatMap(piece => subtract(piece, done));
-      for (const piece of fresh) report(findings, 'E_A11Y_OCCLUDED', 'error', `${target.box.label} is covered by ${cover.box.label}, which is painted later and receives the pointer`, target, piece, { rule: 'occluded-target', cover: cover.path });
+      for (const piece of fresh) {
+        // The other boxes over the target in the same viewport range: removing this cover alone does not free it.
+        const others = covers.filter(c => c.cover !== cover && intersect(c.region, piece)).map(c => c.cover);
+        const also = others.length ? `; ${others.map(c => c.box.label).join(', ')} ${others.length > 1 ? 'are' : 'is'} over it there too` : '';
+        report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover) + also, target, piece, { rule: 'occluded-target', cover: cover.path, ...(others.length ? { alsoCoveredBy: others.map(c => c.path) } : {}) });
+      }
       reported.push(region);
     }
   }
@@ -560,7 +611,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         if (maybe && sure) maybe = subtract(maybe, sure);
         for (const region of [maybe].flat().filter(Boolean)) report(unknowns, 'U_A11Y_OCCLUDED', 'unknown', `${target.box.label} (inline) may be covered by ${cover.box.label}: its measured text bounds touch the cover`, target, region, { rule: 'occluded-target', cover: cover.path });
       }
-      if (cover.painted && focusable(target)) {
+      if (seen(cover) && focusable(target)) {
         let region = intersect(target.region, cover.region);
         region = atMost(region, cover.origin.inline, outer.origin.inline); region = atMost(region, cover.origin.block, outer.origin.block);
         region = atMost(region, right(outer), right(cover)); region = atMost(region, bottom(outer), bottom(cover));
@@ -656,7 +707,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   for (const target of focusedRows(placed.filter(focusable))) {
     const own = layer(target);
     for (const cover of placed) {
-      if (related(cover.path, target.path) || !visible(cover) || !cover.painted) continue;
+      if (related(cover.path, target.path) || !visible(cover) || !seen(cover)) continue;
       // A zero-size box is reported by focus-area, not as obscured.
       const above = layer(cover);
       if (!paintsAbove(cover, above, target, own)) continue;
@@ -908,9 +959,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // scroll position puts the element inside that area but entirely behind a position: fixed bar, Tab lands on it there
   // and nothing reveals it. Positions are scroll offsets s in [0, page height - viewport height]: the element's
   // viewport top y = top - s; the bar stays at its viewport place.
-  const fixedBars = placed.filter(row => row.fixed && visible(row) && row.painted);
+  const fixedBars = placed.filter(row => row.fixed && visible(row) && seen(row));
   // A sticky (top: 0) bar is stuck at the viewport top for s in [its page top, its parent's bottom − its height].
-  const stickyBars = placed.filter(row => row.sticky && row.sticky.parent && visible(row) && row.painted);
+  const stickyBars = placed.filter(row => row.sticky && row.sticky.parent && visible(row) && seen(row));
   // autofocus: on load the browser focuses the first autofocus candidate that can take focus — one not rendered or
   // not visible there (display: none, visibility: hidden, aria-hidden is not a reason) is skipped for the next
   // (measured in Chromium). Where no candidate can, nothing takes focus (W_A11Y_AUTOFOCUS_HIDDEN); a later candidate
@@ -1118,6 +1169,71 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       }
     }
   }
+  // safe-area-target: on a viewport-fit=cover page, a control in a fixed (or sticky) box that reaches into the device's
+  // safe area — under the notch or Dynamic Island, the status bar or the home indicator, or a landscape cutout. Content
+  // in the flow scrolls out of those bands; a fixed control stays there. (The device's shape is not in any browser:
+  // Chromium's safe-area override checks the env() values and positions; see docs/devices.md.)
+  // Where a row is pinned to the viewport: the parts of its region where it, or the ancestor row that holds it there,
+  // is fixed (or sticky). Rows of one path differ by region (position: fixed under a breakpoint only), so each
+  // ancestor's rows are matched with the target's region, not taken from the first row of that path.
+  const pinnedPieces = (target, test) => {
+    const pieces = [];
+    for (let p = target.path; p; p = parentPath(p)) for (const r of p === target.path ? [target] : everything.filter(g => g.path === p)) {
+      if (!test(r)) continue;
+      const piece = r === target ? target.region : intersect(target.region, r.region);
+      if (piece) pieces.push(...pieces.reduce((rest, done) => rest.flatMap(x => subtract(x, done)), [piece]));
+    }
+    return pieces;
+  };
+  if (safeArea && block && viewportBlock) {
+    const pinned = row => pinnedPieces(row, r => r.fixed || r.sticky);
+    const bands = [
+      ['top', safeArea.top, r => below(r.region, r.origin.block, scalar(safeArea.top))],
+      ['bottom', safeArea.bottom, r => below(r.region, diff(viewportBlock, scalar(safeArea.bottom)), bottom(r))],
+      ['left', safeArea.left, r => below(r.region, r.origin.inline, scalar(safeArea.left))],
+      ['right', safeArea.right, r => below(r.region, diff(domainWidth, scalar(safeArea.right)), right(r))],
+    ].filter(([, inset]) => inset > 0);
+    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path))) for (const piece of pinned(target)) {
+      for (const [side, inset, under] of bands) {
+        const region = under({ ...target, region: piece });
+        if (region) report(warnings, 'W_A11Y_SAFE_AREA_TARGET', 'warning', `${target.box.label} is fixed into the device's ${side} safe area (${inset}px${side === 'top' ? ': the notch, Dynamic Island or status bar' : side === 'bottom' ? ': the home indicator' : ': a landscape cutout'}) on this viewport-fit=cover page: it may be hidden or its taps taken by the system. Offset it by env(safe-area-inset-${side})`, target, region, { rule: 'safe-area-target', side, inset });
+      }
+    }
+  }
+  // target-offscreen: a control in a fixed box does not scroll into view, so the part of it outside the viewport is
+  // never shown: entirely outside, it cannot be used (E_A11Y_TARGET_OFFSCREEN); partly outside, it is cut off
+  // (W_A11Y_TARGET_PARTLY_OFFSCREEN). Content in the flow scrolls into view (negative offsets in it: focus-offscreen).
+  if (block && viewportBlock) {
+    // (A control that a :focus rule moves, the skip link at top: -40px that slides in, is hidden until focused on
+    // purpose: focus-offscreen checks that it does show then.)
+    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path) && !(row.focusStates ?? []).some(state => state.origin || state.originUnknown))) for (const piece of pinnedPieces(target, r => r.fixed)) {
+      const zero = scalar(0);
+      const entirely = [atMost(piece, right(target), zero), atMost(piece, domainWidth, target.origin.inline), atMost(piece, bottom(target), zero), atMost(piece, viewportBlock, target.origin.block)];
+      const partly = [['top', below(piece, target.origin.block, zero)], ['left', below(piece, target.origin.inline, zero)], ['right', below(piece, domainWidth, right(target))], ['bottom', below(piece, viewportBlock, bottom(target))]];
+      let done = [];
+      for (const region of entirely.filter(Boolean)) {
+        for (const piece of done.reduce((rest, d) => rest.flatMap(r => subtract(r, d)), [region])) report(findings, 'E_A11Y_TARGET_OFFSCREEN', 'error', `${target.box.label} is in a fixed box but lies entirely outside the viewport: it never scrolls into view and cannot be used`, target, piece, { rule: 'target-offscreen' });
+        done.push(region);
+      }
+      for (const [side, region] of partly) {
+        if (!region) continue;
+        for (const piece of done.reduce((rest, d) => rest.flatMap(r => subtract(r, d)), [region])) report(warnings, 'W_A11Y_TARGET_PARTLY_OFFSCREEN', 'warning', `${target.box.label} is in a fixed box and reaches past the viewport's ${side} edge: that part never scrolls into view (it is cut off)`, target, piece, { rule: 'target-offscreen', side });
+        done.push(region);
+      }
+    }
+  }
+  // hinge-target: on a dual-screen device, nothing under the hinge is shown or can be tapped.
+  if (hinge && hinge.width > 0 && block) {
+    const [left, top, right_, bottom_] = [scalar(hinge.left), scalar(hinge.top), scalar(hinge.left + hinge.width), scalar(hinge.top + hinge.height)];
+    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path))) {
+      let region = below(target.region, target.origin.inline, right_);
+      region = below(region, left, right(target));
+      region = below(region, target.origin.block, bottom_);
+      region = below(region, top, bottom(target));
+      if (region) report(warnings, 'W_A11Y_HINGE_TARGET', 'warning', `${target.box.label} lies under the dual-screen hinge (x ${hinge.left}–${hinge.left + hinge.width}px): that part is not shown and takes no tap. Lay it out in one segment (the viewport-segments media query)`, target, region, { rule: 'hinge-target' });
+    }
+  }
+
   // pointer-disabled: keyboard can reach it, a pointer cannot.
   for (const row of geometry.filter(row => interactive(row) && visible(row) && !hiddenFrom(row.path) && row.paint.pointerEvents === 'none'))
     report(findings, 'E_A11Y_POINTER_DISABLED', 'error', `${row.box.label} cannot be clicked: pointer-events is none here`, row, row.region, { rule: 'pointer-disabled' });
@@ -1909,7 +2025,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // fragment-under-bar: following #id scrolls the target's top (less its scroll-margin and the viewport's scroll-padding)
   // to the viewport top, as far as the page scrolls (s = top − padding − margin, within [0, page − viewport]). If a
   // fixed bar, or a sticky one stuck at that s, spans that line, the target starts behind it (a heading under a header).
-  const jumpBars = placed.filter(row => (row.fixed || (row.sticky && row.sticky.parent)) && visible(row) && row.painted);
+  const jumpBars = placed.filter(row => (row.fixed || (row.sticky && row.sticky.parent)) && visible(row) && seen(row));
   const pageRow = geometry.find(row => row.path === root.path && row.origin && row.block);
   if (jumpBars.length && block && viewportBlock && pageRow) {
     const length = value => value === undefined || value === 'auto' ? 0 : Number(String(value).replace(/px$/, ''));
@@ -2071,5 +2187,5 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
 
 function dedupe(rows) {
   const seen = new Set();
-  return rows.filter(row => { const key = JSON.stringify([row.code, row.path, row.other, row.cover, row.before, row.previous, row.outer, row.reference, row.id, row.name, row.range, row.heightRange]); if (seen.has(key)) return false; seen.add(key); return true; });
+  return rows.filter(row => { const key = JSON.stringify([row.code, row.path, row.other, row.cover, row.before, row.previous, row.outer, row.reference, row.id, row.name, row.range, row.heightRange, row.side]); if (seen.has(key)) return false; seen.add(key); return true; });
 }

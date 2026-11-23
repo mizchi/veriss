@@ -17,6 +17,10 @@
       "types": "./src/critical.d.mts",
       "import": "./src/critical.mjs"
     },
+    "./devices": {
+      "types": "./src/devices/index.d.mts",
+      "import": "./src/devices/index.mjs"
+    },
     "./z3": {
       "types": "./src/layout-z3.d.mts",
       "import": "./src/layout-z3.mjs"

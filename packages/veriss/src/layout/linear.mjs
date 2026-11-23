@@ -8,7 +8,9 @@ const make = (n, d = 1n) => {
 export function q(value) {
   if (value?.n !== undefined) return value;
   const text = String(value);
-  if (!/^-?\d{1,12}(?:\.\d{1,6})?$/.test(text)) throw new Error('Layout numbers require at most twelve integer and six decimal digits');
+  // A decimal is an exact rational at any precision (a script writes 80 / 3 + 'px' as 26.666666666666668px); the
+  // bound only keeps the numbers finite text.
+  if (!/^-?\d{1,12}(?:\.\d{1,20})?$/.test(text)) throw new Error('Layout numbers require at most twelve integer and twenty decimal digits');
   const digits = text.split('.')[1]?.length ?? 0;
   return make(BigInt(text.replace('.', '')), 10n ** BigInt(digits));
 }
@@ -19,6 +21,15 @@ export const div = (x, y) => make(x.n * y.d, x.d * y.n);
 export const cmp = (x, y) => { const delta = x.n * y.d - y.n * x.d; return delta < 0n ? -1 : delta > 0n ? 1 : 0; };
 export const number = x => Number(x.n) / Number(x.d);
 export const exact = x => x.d === 1n ? String(x.n) : `${x.n}/${x.d}`;
+// The exact decimal text of a rational that q() reads back as the same value (a finite decimal within its digit
+// bounds), or null. Unlike String(number(x)), never the nearest double of a value it is not.
+export function decimal(x) {
+  let digits = 0;
+  while ((10n ** BigInt(digits)) % x.d !== 0n) if (++digits > 20) return null;
+  const unit = 10n ** BigInt(digits), abs = (x.n < 0n ? -x.n : x.n) * unit / x.d;
+  const text = `${x.n < 0n ? '-' : ''}${abs / unit}${digits ? `.${String(abs % unit).padStart(digits, '0')}` : ''}`;
+  return /^-?\d{1,12}(?:\.\d{1,20})?$/.test(text) ? text : null;
+}
 export const constant = value => ({ a: q(0), b: q(value) });
 export const plus = (x, y) => ({ a: add(x.a, y.a), b: add(x.b, y.b) });
 export const minus = (x, y) => ({ a: sub(x.a, y.a), b: sub(x.b, y.b) });

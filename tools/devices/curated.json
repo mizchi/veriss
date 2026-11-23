@@ -1,0 +1,250 @@
+{
+  "$comment": "Hand-kept device facts that no machine-readable source carries. Safe-area insets are CSS px in portrait (top, bottom) and landscape (side = the notch or Dynamic Island side and its mirror, bottom = the home indicator). 'measured' is per mode: 'browser' turns true once tools/devices/measure-safe-area.mjs has read the insets in Mobile Safari in the iOS Simulator (env(safe-area-inset-*) in a viewport-fit=cover page); 'fullscreen' stays false until they are read in a full-screen web view (Safari cannot report the portrait top inset, which its bars cover). Until then they are public figures and may be off by a few px. Groups are looked up by model name (Playwright's device names); a measured model is split into a group of its own. 'screen' is the portrait screen in CSS px, for reference. A model missing here (iPhone Air) has no known safe area: its checks carry no safeArea, so the safe-area-target rule does not run on them, and a viewport-fit=cover page that reads env(safe-area-inset-*) is Unknown there.",
+  "safeAreas": [
+    {
+      "screen": "375x812",
+      "models": [
+        "iPhone X",
+        "iPhone XS",
+        "iPhone 11 Pro"
+      ],
+      "cutout": "notch",
+      "portrait": {
+        "top": 44,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 44,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "375x812",
+      "models": [
+        "iPhone 12 Mini",
+        "iPhone 13 Mini"
+      ],
+      "cutout": "notch",
+      "portrait": {
+        "top": 50,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 50,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "414x896",
+      "models": [
+        "iPhone XR",
+        "iPhone 11",
+        "iPhone 11 Pro Max"
+      ],
+      "cutout": "notch",
+      "portrait": {
+        "top": 48,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 48,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "390x844",
+      "models": [
+        "iPhone 12",
+        "iPhone 12 Pro",
+        "iPhone 13",
+        "iPhone 13 Pro",
+        "iPhone 14",
+        "iPhone 16e",
+        "iPhone 17e"
+      ],
+      "cutout": "notch",
+      "portrait": {
+        "top": 47,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 47,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "428x926",
+      "models": [
+        "iPhone 12 Pro Max",
+        "iPhone 13 Pro Max",
+        "iPhone 14 Plus"
+      ],
+      "cutout": "notch",
+      "portrait": {
+        "top": 47,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 47,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "393x852",
+      "models": [
+        "iPhone 14 Pro",
+        "iPhone 15",
+        "iPhone 15 Pro",
+        "iPhone 16"
+      ],
+      "cutout": "dynamic-island",
+      "portrait": {
+        "top": 59,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 59,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "430x932",
+      "models": [
+        "iPhone 14 Pro Max",
+        "iPhone 15 Plus",
+        "iPhone 15 Pro Max",
+        "iPhone 16 Plus"
+      ],
+      "cutout": "dynamic-island",
+      "portrait": {
+        "top": 59,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 59,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "402x874",
+      "models": [
+        "iPhone 16 Pro",
+        "iPhone 17",
+        "iPhone 17 Pro"
+      ],
+      "cutout": "dynamic-island",
+      "portrait": {
+        "top": 62,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 62,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "440x956",
+      "models": [
+        "iPhone 16 Pro Max",
+        "iPhone 17 Pro Max"
+      ],
+      "cutout": "dynamic-island",
+      "portrait": {
+        "top": 62,
+        "bottom": 34
+      },
+      "landscape": {
+        "side": 62,
+        "bottom": 21
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    },
+    {
+      "screen": "375x667",
+      "models": [
+        "iPhone 6",
+        "iPhone 7",
+        "iPhone 8",
+        "iPhone SE (2nd gen)",
+        "iPhone SE (3rd gen)"
+      ],
+      "cutout": "none",
+      "portrait": {
+        "top": 20,
+        "bottom": 0
+      },
+      "landscape": {
+        "side": 0,
+        "bottom": 0
+      },
+      "measured": {
+        "browser": false,
+        "fullscreen": false
+      }
+    }
+  ],
+  "safeAreaSources": [
+    "Apple Human Interface Guidelines, Layout (safe areas, status bar and home indicator)",
+    "iOS Simulator reports of UIWindow.safeAreaInsets as published per model; re-measure with tools/devices/measure-safe-area.mjs"
+  ],
+  "dualScreen": [
+    {
+      "id": "surface-duo",
+      "name": "Surface Duo",
+      "kind": "dual-screen",
+      "dpr": 2.5,
+      "touch": true,
+      "single": {
+        "width": 540,
+        "height": 720
+      },
+      "spanned": {
+        "width": 1114,
+        "height": 720,
+        "hinge": {
+          "left": 540,
+          "top": 0,
+          "width": 34,
+          "height": 720
+        }
+      },
+      "measured": false,
+      "source": "Chrome DevTools emulated device 'Surface Duo' (dual-screen, 34px hinge)"
+    }
+  ]
+}
