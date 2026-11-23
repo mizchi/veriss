@@ -3044,7 +3044,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
               const split = partition(m.region, diff(part.size ?? natural.block, outer(m.value)), '>=');
               return [...split.yes.map(r => ({ region: r, size: part.size })), ...split.no.map(r => ({ region: r, size: outer(m.value) }))];
             }));
-            for (const part of parts) results.push(...solve(box, part.size ? { ...available, $raisedBlock: part.size, $minRaised: true, $minNatural: true } : { ...available, $minNatural: true }, part.region, parents, inherited, emit));
+            // part.size already has both bounds applied (the minimum wins): it is not capped again by max-block-size.
+            for (const part of parts) results.push(...solve(box, part.size ? { ...available, $raisedBlock: part.size, $minRaised: true, $minNatural: true, $boundedBlock: true } : { ...available, $minNatural: true }, part.region, parents, inherited, emit));
           }
           continue;
         }
@@ -3060,9 +3061,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
           let used = sizes.max;
           if (!['auto', '0', '0px'].includes(String(style['min-inline-size']))) { const m = px(style['min-inline-size']); const outer = style['box-sizing'] === 'content-box' ? add(m, edges) : m; if (cmp(outer, used) > 0) used = outer; }
-          const text = String(number(used));
-          if (cmp(q(text), used) !== 0) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
-          style = { ...style, 'inline-size': `${text}px`, 'box-sizing': 'border-box', 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
+          // The used width is a border-box width; box-sizing stays as declared (it also sizes the block axis), so a
+          // content-box box gets the width less its inline padding and borders.
+          const declared = style['box-sizing'] === 'content-box' ? sub(used, edges) : used;
+          const text = String(number(declared));
+          if (cmp(q(text), declared) !== 0) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+          style = { ...style, 'inline-size': `${text}px`, 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
         }
         if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null)) continue;
         // A fieldset's first legend is rendered in its block-start border (HTML §15.3.13): it is not a
@@ -3144,7 +3148,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const blockPieces = block && style['block-size'] !== 'auto' && !/^\d+(?:\.\d+)?(?:px|%)$/.test(style['block-size'])
             ? lengthPieces(style['block-size'], available.percentBlock ?? available.block, content.region, style).map(piece => ({ region: piece.region, value: sum(piece.value, contentEdges) }))
             : [{ region: content.region, value: fixedBlock }];
-          const fixedPieces = blockPieces.flatMap(piece => !(block && style['max-block-size'] !== 'none' && piece.value) ? [piece]
+          const fixedPieces = blockPieces.flatMap(piece => !(block && style['max-block-size'] !== 'none' && piece.value && !available.$boundedBlock) ? [piece]
             : lengthPieces(style['max-block-size'], available.percentBlock ?? available.block, piece.region, style).flatMap(cap => minimumOf(cap.region, piece.value, sum(cap.value, contentEdges))));
           // min-block-size (content-box value, outer minus edges): wins over max-block-size, so it is applied after it.
           const minBlock = block && !['auto', '0', '0px'].includes(String(style['min-block-size'])) && !available.flexBlockMinimum && !available.$minNatural

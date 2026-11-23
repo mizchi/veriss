@@ -462,9 +462,12 @@
   e2e `filter traps a z-index` で 5 通りをヒットテストと照合。色は変わるので、filter の下のコントラストは Unknown。`url()` の filter は Unknown のまま
 - [x] **H13. 幅が auto の絶対配置・fixed の箱(shrink-to-fit)**: 横の inset が片方だけのとき、中身の max-content 幅を `max-width` / `min-width` で挟んだ値
   (CSS 2 §10.3.7)。max-content 幅が inset の残す幅を超えうる範囲があれば Unknown。3 ブラウザーで 2 つの幅と 6 通りを照合
-  (中身が絶対配置の子だけで `min-width: 180px` → 180、`content-box` の padding を含めて 60 など)
+  (中身が絶対配置の子だけで `min-width: 180px` → 180、`content-box` の padding を含めて 60 など)。決めた幅は border-box の値だが、`box-sizing` は
+  宣言のまま残す(`content-box` なら padding と border を引いた幅にする)。縦の `height` / `min-height` / `max-height` は宣言どおりの box-sizing で読む
+  (`height: 20px; padding: 10px; box-sizing: content-box` は 40px。以前は border-box に変えて 20px と誤っていた)。高さも含めて 4 通りを足して照合
 - [x] **H14. 高さが auto の絶対配置の箱の `min-height` / `max-height`**: 中身の高さで一度解き、範囲を分けて、下回るところは最小、上回るところは最大の高さで
-  解き直す(最小が勝つ)。H7 で Unknown にしていた組
+  解き直す(最小が勝つ。`min-height: 100px; max-height: 50px` は 100px で、最大で詰め直さない。以前は 50px と誤っていた)。H7 で Unknown にしていた組。
+  e2e `absolute boxes with an auto height` に最小が最大より大きい組と、最大の内側の組を足して 3 ブラウザーで照合
 - [x] **H15. `inert` とヒットテスト**(`W_A11Y_INERT_SHOWN`): `inert` の部分木はヒットテストで透明(クリックと `elementFromPoint` は下の要素に届く)で、中の
   操作部品はクリックを受けない(Chromium・Firefox・WebKit で、`inert` のある層とない層を対照に実測)。`inert` の箱は覆いにならない(`E_A11Y_OCCLUDED`)。
   `inert` の操作部品の上に何も描かれていない(見えている)範囲は、押せるように見えて押せないので警告する。モーダルのライブラリが広告や通知を含む兄弟要素を
