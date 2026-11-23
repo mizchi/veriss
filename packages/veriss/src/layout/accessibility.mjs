@@ -1173,17 +1173,29 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // safe area — under the notch or Dynamic Island, the status bar or the home indicator, or a landscape cutout. Content
   // in the flow scrolls out of those bands; a fixed control stays there. (The device's shape is not in any browser:
   // Chromium's safe-area override checks the env() values and positions; see docs/devices.md.)
+  // Where a row is pinned to the viewport: the parts of its region where it, or the ancestor row that holds it there,
+  // is fixed (or sticky). Rows of one path differ by region (position: fixed under a breakpoint only), so each
+  // ancestor's rows are matched with the target's region, not taken from the first row of that path.
+  const pinnedPieces = (target, test) => {
+    const pieces = [];
+    for (let p = target.path; p; p = parentPath(p)) for (const r of p === target.path ? [target] : everything.filter(g => g.path === p)) {
+      if (!test(r)) continue;
+      const piece = r === target ? target.region : intersect(target.region, r.region);
+      if (piece) pieces.push(...pieces.reduce((rest, done) => rest.flatMap(x => subtract(x, done)), [piece]));
+    }
+    return pieces;
+  };
   if (safeArea && block && viewportBlock) {
-    const pinned = row => { for (let p = row.path; p; p = parentPath(p)) { const r = rowAt(p); if (r?.fixed || r?.sticky) return true; } return false; };
+    const pinned = row => pinnedPieces(row, r => r.fixed || r.sticky);
     const bands = [
       ['top', safeArea.top, r => below(r.region, r.origin.block, scalar(safeArea.top))],
       ['bottom', safeArea.bottom, r => below(r.region, diff(viewportBlock, scalar(safeArea.bottom)), bottom(r))],
       ['left', safeArea.left, r => below(r.region, r.origin.inline, scalar(safeArea.left))],
       ['right', safeArea.right, r => below(r.region, diff(domainWidth, scalar(safeArea.right)), right(r))],
     ].filter(([, inset]) => inset > 0);
-    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path) && pinned(row))) {
+    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path))) for (const piece of pinned(target)) {
       for (const [side, inset, under] of bands) {
-        const region = under(target);
+        const region = under({ ...target, region: piece });
         if (region) report(warnings, 'W_A11Y_SAFE_AREA_TARGET', 'warning', `${target.box.label} is fixed into the device's ${side} safe area (${inset}px${side === 'top' ? ': the notch, Dynamic Island or status bar' : side === 'bottom' ? ': the home indicator' : ': a landscape cutout'}) on this viewport-fit=cover page: it may be hidden or its taps taken by the system. Offset it by env(safe-area-inset-${side})`, target, region, { rule: 'safe-area-target', side, inset });
       }
     }
@@ -1192,13 +1204,12 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // never shown: entirely outside, it cannot be used (E_A11Y_TARGET_OFFSCREEN); partly outside, it is cut off
   // (W_A11Y_TARGET_PARTLY_OFFSCREEN). Content in the flow scrolls into view (negative offsets in it: focus-offscreen).
   if (block && viewportBlock) {
-    const fixedAt = row => { for (let p = row.path; p; p = parentPath(p)) if (rowAt(p)?.fixed) return true; return false; };
     // (A control that a :focus rule moves, the skip link at top: -40px that slides in, is hidden until focused on
     // purpose: focus-offscreen checks that it does show then.)
-    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path) && fixedAt(row) && !(row.focusStates ?? []).some(state => state.origin || state.originUnknown))) {
+    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path) && !(row.focusStates ?? []).some(state => state.origin || state.originUnknown))) for (const piece of pinnedPieces(target, r => r.fixed)) {
       const zero = scalar(0);
-      const entirely = [atMost(target.region, right(target), zero), atMost(target.region, domainWidth, target.origin.inline), atMost(target.region, bottom(target), zero), atMost(target.region, viewportBlock, target.origin.block)];
-      const partly = [['top', below(target.region, target.origin.block, zero)], ['left', below(target.region, target.origin.inline, zero)], ['right', below(target.region, domainWidth, right(target))], ['bottom', below(target.region, viewportBlock, bottom(target))]];
+      const entirely = [atMost(piece, right(target), zero), atMost(piece, domainWidth, target.origin.inline), atMost(piece, bottom(target), zero), atMost(piece, viewportBlock, target.origin.block)];
+      const partly = [['top', below(piece, target.origin.block, zero)], ['left', below(piece, target.origin.inline, zero)], ['right', below(piece, domainWidth, right(target))], ['bottom', below(piece, viewportBlock, bottom(target))]];
       let done = [];
       for (const region of entirely.filter(Boolean)) {
         for (const piece of done.reduce((rest, d) => rest.flatMap(r => subtract(r, d)), [region])) report(findings, 'E_A11Y_TARGET_OFFSCREEN', 'error', `${target.box.label} is in a fixed box but lies entirely outside the viewport: it never scrolls into view and cannot be used`, target, piece, { rule: 'target-offscreen' });
@@ -2176,5 +2187,5 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
 
 function dedupe(rows) {
   const seen = new Set();
-  return rows.filter(row => { const key = JSON.stringify([row.code, row.path, row.other, row.cover, row.before, row.previous, row.outer, row.reference, row.id, row.name, row.range, row.heightRange]); if (seen.has(key)) return false; seen.add(key); return true; });
+  return rows.filter(row => { const key = JSON.stringify([row.code, row.path, row.other, row.cover, row.before, row.previous, row.outer, row.reference, row.id, row.name, row.range, row.heightRange, row.side]); if (seen.has(key)) return false; seen.add(key); return true; });
 }

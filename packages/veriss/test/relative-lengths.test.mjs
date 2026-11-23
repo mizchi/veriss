@@ -76,3 +76,24 @@ test('percentage heights inside a stretched flex or grid item resolve against it
     assert.equal(r.sizes.find(s => s.box === '.a').blockSize.constant, '0');
   }
 });
+
+// em and rem lengths compute to px exactly: a script-written font-size (80 / 3 + 'px' = 26.666666666666668px) times
+// 1.1 is 29.3333333333333348px, not the nearest double 29.333333333333336.
+test('em and rem lengths compute to the exact px value', async () => {
+  const {q, exact} = await import('../src/layout/linear.mjs');
+  const height = css => { const r = analyzeHTML('<html lang="en"><body><div class="p"><div class="a"></div></div></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}body,.p{${g}}.p{align-content:start}${css}`, viewport: {min: 400, max: 400, height: {min: 300, max: 300}}}); assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.map(d => d.message))); return r.sizes.find(s => s.box === '.a' && s.rect).rect.blockSize.constant; };
+  const want = exact(q('29.3333333333333348'));
+  assert.equal(height('html{font-size:16px}.a{font-size:26.666666666666668px;height:1.1em}'), want);
+  assert.equal(height('html{font-size:26.666666666666668px}.a{height:1.1rem}'), want);
+  assert.equal(height('html{font-size:16px}.a{font-size:26.666666666666668px;height:1.1em;padding-top:1.1em}'), want);
+  assert.equal(height('html{font-size:16px}.a{font-size:20px;height:1.1em}'), '22');
+});
+
+// A length the engine computes and writes back into a style (here a collapsed margin) keeps every decimal digit:
+// 0.30000000000000001px is not the double 0.3.
+test('a collapsed margin written back as px keeps its exact value', async () => {
+  const {q, add, exact} = await import('../src/layout/linear.mjs');
+  const r = analyzeHTML('<html lang="en"><body><div class="x"></div><div class="p"><div class="a"></div></div></body></html>', {name: 'P', css: '*{box-sizing:border-box;margin:0}html,body{display:block}.x{height:10px}.a{height:10px}.p{margin-top:0.30000000000000001px}.a{margin-top:0.1px}', viewport: {min: 400, max: 400, height: {min: 300, max: 300}}});
+  assert.equal(r.status, 'verified', JSON.stringify(r.diagnostics.map(d => d.message)));
+  assert.equal(r.sizes.find(s => s.box === '.a' && s.rect).rect.blockStart.constant, exact(add(q(10), q('0.30000000000000001'))));
+});

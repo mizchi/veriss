@@ -9,7 +9,7 @@ import { gridTrackProblem } from './grid-syntax.mjs';
 import { keywordProblem } from './keyword-syntax.mjs';
 import { timingProblem } from './timing-syntax.mjs';
 import {findCSSWriteConflicts,cssWriteConflictMessage} from '../css-writes.mjs';
-import { q, cmp, add, mul, div, exact, number } from './linear.mjs';
+import { q, cmp, add, mul, div, exact, decimal } from './linear.mjs';
 import { parseCondition, preferenceValues } from './conditions.mjs';
 import { supportsCondition, supportsFunctionToken } from './supports.mjs';
 import { flattenNesting } from './nesting.mjs';
@@ -1464,20 +1464,21 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // $stacks: sticky makes a stacking context whatever its insets (measured in Chromium), even where it never sticks.
   if (values.position === 'sticky') { values.position = 'relative'; values.$sticky = true; values.$stacks = true; }
   // rem box lengths compute to px once the root font size is known (setRootFontSize), so every px-only check sees
-  // them as px; a value with more than 6 decimals stays rem (Unknown where it is used).
+  // them as px. Only an exact decimal is written (decimal(): never the nearest double of the product); a value that
+  // has none stays rem (Unknown where it is used).
   if (rootFontSize) for (const key of remLengths) {
     const m = /^(\d+(?:\.\d{1,20})?)rem$/.exec(String(values[key] ?? ''));
     if (!m) continue;
-    const v = mul(q(m[1]), rootFontSize), text = number(v);
-    if (/^\d+(?:\.\d{1,20})?$/.test(text)) values[key] = text === '0' ? '0' : `${text}px`;
+    const text = decimal(mul(q(m[1]), rootFontSize));
+    if (text !== null) values[key] = text === '0' ? '0' : `${text}px`;
   }
   // em box lengths (checklist D2) compute to px against the element's own px font-size, as rem does against the root's.
   // (font-size in em is relative to the parent's and is left as it is.)
   if (/^\d+(?:\.\d{1,20})?px$/.test(String(values['font-size']))) for (const key of remLengths.filter(k => k !== 'font-size')) {
     const m = /^(\d+(?:\.\d{1,20})?)em$/.exec(String(values[key] ?? ''));
     if (!m) continue;
-    const v = mul(q(m[1]), q(values['font-size'].slice(0, -2))), text = number(v);
-    if (/^\d+(?:\.\d{1,20})?$/.test(text)) values[key] = text === '0' ? '0' : `${text}px`;
+    const text = decimal(mul(q(m[1]), q(values['font-size'].slice(0, -2))));
+    if (text !== null) values[key] = text === '0' ? '0' : `${text}px`;
   }
   // An em length left over (the font-size is not px): Unknown, attributed to the declaration that set it.
   for (const key of remLengths.filter(k => k !== 'font-size')) if (/^\d+(?:\.\d{1,20})?em$/.test(String(values[key] ?? '')))

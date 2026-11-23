@@ -67,6 +67,11 @@ test('an absolute box with an auto height is as tall as its content', () => {
   assert.deepEqual(capped.sizes.filter(s => s.box === '.o').map(s => s.blockSize.constant), ['20']);
   assert.deepEqual(at('bottom:5px;width:50px;min-height:60px'), ['135', '60']);
   assert.deepEqual(at('top:0;width:50px;min-height:30px'), ['0', '42']);
+  // min-height wins over a smaller max-height (raised to 100px, not capped to 50px; measured in three browsers), and
+  // a max-height alone still caps.
+  assert.deepEqual(at('top:0;width:50px;min-height:100px;max-height:50px'), ['0', '100']);
+  assert.deepEqual(at('top:0;width:50px;min-height:30px;max-height:50px'), ['0', '42']);
+  assert.deepEqual(run('top:0;width:50px;min-height:30px;max-height:35px;overflow:hidden').sizes.filter(s => s.box === '.o').map(s => s.blockSize.constant), ['35']);
 });
 
 // A scroll lock (body { position: fixed; left: 0; right: 0 }) leaves top auto: the body sits at its static position,
@@ -98,6 +103,24 @@ test('an auto width on an absolute or fixed box with one inline inset shrinks to
   assert.deepEqual(width('position:fixed;top:24px;right:24px', '<div class="k" style="--w:120px"></div>'), ['-144', '1', '120']);
   assert.deepEqual(width('position:fixed;top:24px;right:24px;max-width:320px', '<div class="k" style="--w:500px"></div>'), ['-344', '1', '320']);
   assert.deepEqual(width('position:fixed;top:24px;left:10px;padding:0 5px;box-sizing:content-box;min-width:50px', '<div class="k" style="--w:20px"></div>'), ['10', '0', '60']);
+  // The width becomes a border-box length, but the block axis keeps the declared box-sizing: a content-box height
+  // with padding is outer height + padding (40px), as are its min- and max-height (measured in three browsers).
+  const tall = (box, kids = '<div class="k" style="--w:20px"></div>') => {
+    const r = analyzeHTML(`<html lang="en"><body><div class="o">${kids}</div></body></html>`, {name: 'P', css: `*{margin:0;box-sizing:border-box}html,body{${g}}body{position:relative;height:300px}.o{${box}}.k{width:var(--w);height:10px}`, viewport: {min: 1280, max: 1280, height: {min: 720, max: 720}}, accessibility: true});
+    assert.equal(r.status === 'unknown', false, JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message)));
+    const s = r.sizes.find(s => s.box === '.o').rect;
+    return [s.inlineSize.constant, s.blockSize.constant];
+  };
+  assert.deepEqual(tall('position:absolute;top:0;left:10px;height:20px;padding:10px;box-sizing:content-box'), ['40', '40']);
+  assert.deepEqual(tall('position:absolute;top:0;left:10px;min-height:30px;padding:10px;box-sizing:content-box'), ['40', '50']);
+  assert.deepEqual(tall('position:fixed;top:0;right:10px;height:20px;padding:10px;box-sizing:content-box;border:2px solid #000'), ['44', '44']);
+  assert.deepEqual(tall('position:absolute;top:0;left:10px;height:20px;padding:10px'), ['40', '20']);
   // 1300px of content in a 1280px viewport may not fit: Unknown.
   assert.equal(width('position:fixed;top:24px;right:24px', '<div class="k" style="--w:1300px"></div>')[0], 'unknown');
+});
+
+test('a shrink-to-fit width that is an exact decimal beyond a double is kept, not Unknown', () => {
+  const r = analyzeHTML('<html lang="en"><body><div class="o"><div class="k"></div></div></body></html>', {name: 'P', css: `*{margin:0;box-sizing:border-box}html,body{${g}}body{position:relative;height:300px}.o{position:absolute;top:0;left:0}.k{width:20.30000000000000001px;height:10px}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
+  assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message)));
+  assert.equal(r.sizes.find(s => s.box === '.o' && s.rect).rect.inlineSize.constant, '2030000000000000001/100000000000000000');
 });

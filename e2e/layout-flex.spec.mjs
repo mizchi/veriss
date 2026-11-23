@@ -344,3 +344,24 @@ test('vw / vh caps that never bind on a content-sized flex item', async ({page})
     }
   }
 });
+
+// A focused position inside the centred, content-sized box: a skip link moved by a :focus rule is laid out from the
+// box's start edge and moved by the centring offset with the rest of the box. Each browser focuses it and reads where
+// it is; the static check reports E_A11Y_FOCUS_OFFSCREEN exactly where it is above the viewport.
+test('a focused position inside a centred content-sized box moves with the box', async ({page}) => {
+  const html = '<div class="bg"><div class="c"><a class="s" href="#k">Skip</a><div class="k" id="k"></div></div></div>';
+  const css = (focus, c) => `*{box-sizing:border-box;margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.bg{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;background:#fff;color:#000}.c{position:relative;${c}}.k{width:300px;height:100px}.s{position:absolute;left:0;top:-500px;width:60px;height:24px;display:block;color:#000;background:#fff;font-size:16px;line-height:24px}.s:focus{${focus}}`;
+  const cases = [['top:-30px', ''], ['top:-50px', ''], ['top:-130px', ''], ['top:-30px', 'align-self:flex-end'], ['top:-90px', 'align-self:flex-end'], ['transform:translateY(470px)', '']];
+  const verdicts = new Set();
+  for (const [focus, c] of cases) for (const h of [200, 400]) {
+    const r = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: css(focus, c), viewport: {min: 400, max: 400, height: {min: h, max: h}}, accessibility: true, boxes: {'.s': {minInlineSize: 40, intrinsicBlockSize: 24, maxInlineSize: 40}}});
+    expect(r.status === 'unknown', `${focus} ${c}: ${JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message))}`).toBe(false);
+    await page.setViewportSize({width: 400, height: h});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css(focus, c)}</style></head><body>${html}</body></html>`);
+    await page.focus('.s');
+    const browser = await page.evaluate(() => document.querySelector('.s').getBoundingClientRect().bottom <= 0);
+    expect(r.diagnostics.some(d => d.code === 'E_A11Y_FOCUS_OFFSCREEN'), `${focus} ${c} at height ${h}`).toBe(browser);
+    verdicts.add(browser);
+  }
+  expect([...verdicts].sort()).toEqual([false, true]);
+});

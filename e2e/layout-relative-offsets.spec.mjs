@@ -51,8 +51,9 @@ test('absolute boxes with an auto height take their content height', async ({pag
   const cases = [['top:0;width:50px', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['bottom:0;width:50px', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['top:10px;left:0;right:0', 'display:grid;grid-template-columns:minmax(0,1fr)'],
     ['top:0;width:50px;padding:3px 0;border:2px solid black', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['top:0;width:50px;padding:3px 0;box-sizing:content-box', 'display:grid;grid-template-columns:minmax(0,1fr)'],
     ['bottom:5px;width:50px;min-height:60px', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['top:0;width:50px;max-height:20px;overflow:hidden', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['bottom:5px;width:50px;min-height:60px', 'display:block'], ['top:0;width:50px;min-height:30px', 'display:grid;grid-template-columns:minmax(0,1fr)'],
+    ['top:0;width:50px;min-height:100px;max-height:50px', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['top:0;width:50px;min-height:30px;max-height:50px', 'display:grid;grid-template-columns:minmax(0,1fr)'],
     ['top:0;width:50px', 'display:block'], ['top:0;width:50px;row-gap:4px', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['top:0;width:50px', 'display:flex;flex-direction:column']];
-  // A min or max height bounds the content height (laid out again at the bound).
+  // A min or max height bounds the content height (laid out again at the bound); a min-height above the max-height wins.
   // (Under overflow: hidden, the nested absolute .n has a clipping ancestor, which is Unknown.)
   const unknownOk = o => /overflow:hidden/.test(o);
   let compared = 0;
@@ -100,7 +101,10 @@ test('a fixed body with auto top sits where the browser puts it', async ({page})
 test('absolute and fixed boxes with an auto width shrink to fit as the browser does', async ({page}) => {
   const cases = [['position:fixed;top:24px;right:24px;min-width:180px;max-width:320px', ''], ['position:fixed;top:24px;right:24px', '<div class="k" style="width:120px"></div>'],
     ['position:fixed;top:24px;right:24px;max-width:320px', '<div class="k" style="width:500px"></div>'], ['position:fixed;top:24px;left:10px;padding:0 5px;box-sizing:content-box;min-width:50px', '<div class="k" style="width:20px"></div>'],
-    ['position:absolute;top:0;right:0', '<div class="k" style="width:120px"></div>'], ['position:absolute;top:0;left:10%', '<div class="k" style="width:90px"></div><div class="k" style="width:60px"></div>']];
+    ['position:absolute;top:0;right:0', '<div class="k" style="width:120px"></div>'], ['position:absolute;top:0;left:10%', '<div class="k" style="width:90px"></div><div class="k" style="width:60px"></div>'],
+    // box-sizing stays content-box on the block axis: the padding adds to the height, the min-height and the max-height.
+    ['position:absolute;top:0;left:10px;height:20px;padding:10px;box-sizing:content-box', '<div class="k" style="width:20px"></div>'], ['position:fixed;top:0;right:10px;min-height:30px;padding:10px;border:2px solid #000;box-sizing:content-box', '<div class="k" style="width:20px"></div>'],
+    ['position:absolute;top:0;left:10px;height:60px;max-height:20px;padding:10px;box-sizing:content-box', '<div class="k" style="width:20px"></div>'], ['position:absolute;top:0;left:10px;height:20px;padding:10px', '<div class="k" style="width:20px"></div>']];
   const n = t => { const [a, b = '1'] = String(t ?? '0').split('/'); return Number(a) / Number(b); };
   for (const width of [600, 1280]) for (const [box, kids] of cases) {
     const body = `<div class="o" style="${box}">${kids}<div class="i"></div></div>`;
@@ -110,7 +114,7 @@ test('absolute and fixed boxes with an auto width shrink to fit as the browser d
     const s = r.sizes.find(s => s.box === '.o').rect, v = x => n(x.constant) + width * n(x.coefficient) + 720 * n(x.heightCoefficient);
     await page.setViewportSize({width, height: 720});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${body}</body></html>`);
-    const b = await page.evaluate(() => { const r = document.querySelector('.o').getBoundingClientRect(); return [r.left, r.top, r.width]; });
-    expect([v(s.inlineStart), v(s.blockStart), v(s.inlineSize)], `${width} ${box}`).toEqual(b);
+    const b = await page.evaluate(() => { const r = document.querySelector('.o').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+    expect([v(s.inlineStart), v(s.blockStart), v(s.inlineSize), v(s.blockSize)], `${width} ${box}`).toEqual(b);
   }
 });

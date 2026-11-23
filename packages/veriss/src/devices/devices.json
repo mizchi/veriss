@@ -682,7 +682,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -746,7 +749,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -810,7 +816,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -931,7 +940,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -997,7 +1009,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1062,7 +1077,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1098,29 +1116,6 @@
    ]
   },
   {
-   "id": "tablet-1280x800",
-   "kind": "tablet",
-   "source": "statcounter",
-   "screen": {
-    "width": 1280,
-    "height": 800
-   },
-   "portrait": {
-    "width": 1280,
-    "height": {
-     "min": 600,
-     "max": 800
-    }
-   },
-   "screenShare": {
-    "jp": 6.11,
-    "worldwide": 7.96
-   },
-   "devices": [
-    "Tablet 1280×800"
-   ]
-  },
-  {
    "id": "tablet-800x1280",
    "kind": "tablet",
    "source": "playwright",
@@ -1146,11 +1141,34 @@
    },
    "screenShare": {
     "jp": 6.11,
-    "worldwide": 7.96
+    "worldwide": 7.88
    },
    "devices": [
     "Kindle Fire HDX",
     "Nexus 10"
+   ]
+  },
+  {
+   "id": "tablet-1280x800",
+   "kind": "tablet",
+   "source": "statcounter",
+   "screen": {
+    "width": 1280,
+    "height": 800
+   },
+   "portrait": {
+    "width": 1280,
+    "height": {
+     "min": 600,
+     "max": 800
+    }
+   },
+   "screenShare": {
+    "jp": 5.06,
+    "worldwide": 7.96
+   },
+   "devices": [
+    "Tablet 1280×800"
    ]
   },
   {
@@ -1436,7 +1454,10 @@
    },
    "safeArea": {
     "cutout": "none",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1535,7 +1556,10 @@
    },
    "safeArea": {
     "cutout": "dynamic-island",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1599,7 +1623,10 @@
    },
    "safeArea": {
     "cutout": "dynamic-island",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1633,29 +1660,6 @@
     "iPhone 15",
     "iPhone 15 Pro",
     "iPhone 16"
-   ]
-  },
-  {
-   "id": "tablet-1007x601",
-   "kind": "tablet",
-   "source": "statcounter",
-   "screen": {
-    "width": 1007,
-    "height": 601
-   },
-   "portrait": {
-    "width": 1007,
-    "height": {
-     "min": 401,
-     "max": 601
-    }
-   },
-   "screenShare": {
-    "jp": 0.93,
-    "worldwide": 4.02
-   },
-   "devices": [
-    "Tablet 1007×601"
    ]
   },
   {
@@ -1711,7 +1715,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1775,7 +1782,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1839,7 +1849,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -1903,7 +1916,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -2007,29 +2023,6 @@
    ]
   },
   {
-   "id": "tablet-962x601",
-   "kind": "tablet",
-   "source": "statcounter",
-   "screen": {
-    "width": 962,
-    "height": 601
-   },
-   "portrait": {
-    "width": 962,
-    "height": {
-     "min": 401,
-     "max": 601
-    }
-   },
-   "screenShare": {
-    "jp": 1.83,
-    "worldwide": 2.71
-   },
-   "devices": [
-    "Tablet 962×601"
-   ]
-  },
-  {
    "id": "tablet-1180x688",
    "kind": "tablet",
    "source": "statcounter",
@@ -2128,7 +2121,10 @@
    },
    "safeArea": {
     "cutout": "dynamic-island",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -2384,7 +2380,7 @@
    },
    "screenShare": {
     "jp": 1.03,
-    "worldwide": 1.83
+    "worldwide": 1.75
    },
    "devices": [
     "Tablet 800×1334"
@@ -2437,29 +2433,6 @@
    ]
   },
   {
-   "id": "tablet-1098x686",
-   "kind": "tablet",
-   "source": "statcounter",
-   "screen": {
-    "width": 1098,
-    "height": 686
-   },
-   "portrait": {
-    "width": 1098,
-    "height": {
-     "min": 486,
-     "max": 686
-    }
-   },
-   "screenShare": {
-    "jp": 0.93,
-    "worldwide": 1.65
-   },
-   "devices": [
-    "Tablet 1098×686"
-   ]
-  },
-  {
    "id": "tablet-686x1098",
    "kind": "tablet",
    "source": "statcounter",
@@ -2503,6 +2476,52 @@
    },
    "devices": [
     "Desktop 1600×900"
+   ]
+  },
+  {
+   "id": "tablet-1098x686",
+   "kind": "tablet",
+   "source": "statcounter",
+   "screen": {
+    "width": 1098,
+    "height": 686
+   },
+   "portrait": {
+    "width": 1098,
+    "height": {
+     "min": 486,
+     "max": 686
+    }
+   },
+   "screenShare": {
+    "jp": 0.93,
+    "worldwide": 1.31
+   },
+   "devices": [
+    "Tablet 1098×686"
+   ]
+  },
+  {
+   "id": "tablet-962x601",
+   "kind": "tablet",
+   "source": "statcounter",
+   "screen": {
+    "width": 962,
+    "height": 601
+   },
+   "portrait": {
+    "width": 962,
+    "height": {
+     "min": 401,
+     "max": 601
+    }
+   },
+   "screenShare": {
+    "jp": 0.97,
+    "worldwide": 1.24
+   },
+   "devices": [
+    "Tablet 962×601"
    ]
   },
   {
@@ -2581,6 +2600,29 @@
    },
    "devices": [
     "iPad Pro 11"
+   ]
+  },
+  {
+   "id": "tablet-1007x601",
+   "kind": "tablet",
+   "source": "statcounter",
+   "screen": {
+    "width": 1007,
+    "height": 601
+   },
+   "portrait": {
+    "width": 1007,
+    "height": {
+     "min": 401,
+     "max": 601
+    }
+   },
+   "screenShare": {
+    "jp": 0.93,
+    "worldwide": 1.04
+   },
+   "devices": [
+    "Tablet 1007×601"
    ]
   },
   {
@@ -2884,7 +2926,10 @@
    },
    "safeArea": {
     "cutout": "dynamic-island",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -2948,7 +2993,10 @@
    },
    "safeArea": {
     "cutout": "dynamic-island",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -3193,7 +3241,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -3257,7 +3308,10 @@
    },
    "safeArea": {
     "cutout": "notch",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,
@@ -4045,7 +4099,10 @@
    },
    "safeArea": {
     "cutout": "dynamic-island",
-    "measured": false,
+    "measured": {
+     "browser": false,
+     "fullscreen": false
+    },
     "browser": {
      "portrait": {
       "top": 0,

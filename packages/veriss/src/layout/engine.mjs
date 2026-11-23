@@ -1,4 +1,7 @@
-import { q, add, sub, mul, cmp, div, exact, number } from './linear.mjs';
+import { q, add, sub, mul, cmp, div, exact, number, decimal } from './linear.mjs';
+// A computed length written back into a style as decimal text: exact (decimal()), never the nearest double of it
+// (String(number(v)) is read back by q() as a different value); with no finite decimal, Unknown.
+const lengthText = v => { const text = decimal(v); if (text === null) throw Object.assign(new Error(`A computed length of ${exact(v)}px has no finite decimal form; laying it out exactly is not modeled`), { code: 'U_LAYOUT_GEOMETRY' }); return text; };
 import { scalar, width, height, sum, diff, times, evaluate, affine, sample, rectangle, clip, partition, projection, serialize } from './region.mjs';
 import { validateOptions } from './input.mjs';
 import { parseLayoutCSS, computeStyle, matches, px, setRootFontSize, setSafeArea, containsFixed, fixedContainer, setUAProfile, setRegisteredProperties, animationsOf, transitionsOf, dependentProperty } from './css.mjs';
@@ -1708,6 +1711,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const shift = o => o ? (delta ? { inline: o.inline, block: sum(o.block, delta) } : null) : o;
         for (const row of geometry.slice(box.$starts.geometry).filter(row => inside(row) && !kept(row.path))) {
           row.origin = shift(row.origin); row.clipOrigin = shift(row.clipOrigin);
+          // A focused position (a :focus rule that moves it) was placed from the start edge too; unknown with the height.
+          if (row.focusStates) row.focusStates = row.focusStates.map(state => !state.origin ? state : delta ? { ...state, origin: shift(state.origin) } : (({ origin, inline, block, ...rest }) => ({ ...rest, originUnknown: true }))(state));
           if (row.bounds) row.bounds = delta ? row.bounds.map(piece => ({ ...piece, outer: piece.outer && { ...piece.outer, origin: shift(piece.outer.origin) }, inner: piece.inner && { ...piece.inner, origin: shift(piece.inner.origin) } })) : null;
         }
         for (const row of sizes.slice(box.$starts.sizes).filter(row => row.$shown && isDescendant(box.path, row.path) && intersectRegions(row.$shown.region, region) && !kept(row.path))) {
@@ -2587,7 +2592,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         else share(nonEmpty, k => div(mul(spanned[k], excess), total));
         rowTracks.splice(r, n, ...grown);
       }
-      rowTracks = rowTracks.map(value => `${number(value)}px`);
+      rowTracks = rowTracks.map(value => `${lengthText(value)}px`);
       // With explicit row tracks every cell stretches to its rows (its own height is in the track).
       for (const row of rows) for (const cell of row.children) cell.tableStretch = true;
     }
@@ -2659,35 +2664,35 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // An auto width outside a grid area shrinks to fit: as wide as the available width, at most its columns'
         // max-content widths plus its edges (a max-inline-size on the equivalent grid).
         if (style['inline-size'] === 'auto' && parentDisplay !== 'grid') contentShrink = add(ranges.map(range => range.fixed ?? range.max).reduce(add, zero), edges);
-        contentTracks = ranges.map(range => range.fixed ? `-isle-auto-table-fixed(${number(range.min)},${number(range.fixed)})` : `-isle-auto-table(${number(range.min)},${number(range.max)})`).join(' ');
+        contentTracks = ranges.map(range => range.fixed ? `-isle-auto-table-fixed(${lengthText(range.min)},${lengthText(range.fixed)})` : `-isle-auto-table(${lengthText(range.min)},${lengthText(range.max)})`).join(' ');
       } else if (style['inline-size'] === 'auto' && parentDisplay === 'grid') autoMinimum = widths.filter(Boolean).reduce(add, zero);
       else if (style['inline-size'] === 'auto') {
         if (autos) fail('An automatic table with an auto column needs an explicit inline-size');
         autoWidth = add(widths.reduce(add, zero), edges);
       } else autoMinimum = widths.filter(Boolean).reduce(add, zero);
     }
-    const tracks = contentTracks ? contentTracks.split(' ') : widths.every(Boolean) ? widths.map(w => `minmax(0, ${number(w)}fr)`) : widths.map(w => w ? `${number(w)}px` : 'minmax(0, 1fr)');
+    const tracks = contentTracks ? contentTracks.split(' ') : widths.every(Boolean) ? widths.map(w => `minmax(0, ${lengthText(w)}fr)`) : widths.map(w => w ? `${lengthText(w)}px` : 'minmax(0, 1fr)');
     const spacingEdges = { 'padding-left': add(px(style['padding-left']), h), 'padding-right': add(px(style['padding-right']), h), 'padding-top': add(px(style['padding-top']), v), 'padding-bottom': add(px(style['padding-bottom']), v) };
     // A content-box table's width includes the edge spacing (measured): the grid's content width is W − 2·spacing.
-    let inlineSize = autoWidth ? `${number(autoWidth)}px` : style['inline-size'];
-    if (autoWidth || contentShrink) style = { ...style, 'box-sizing': 'border-box', ...(contentShrink ? { 'max-inline-size': `${number(contentShrink)}px` } : {}) };
+    let inlineSize = autoWidth ? `${lengthText(autoWidth)}px` : style['inline-size'];
+    if (autoWidth || contentShrink) style = { ...style, 'box-sizing': 'border-box', ...(contentShrink ? { 'max-inline-size': `${lengthText(contentShrink)}px` } : {}) };
     else if (style['box-sizing'] === 'content-box') {
       if (!/^\d+(?:\.\d+)?px$/.test(inlineSize)) fail('A content-box fixed table needs a px inline-size');
-      inlineSize = `${number(sub(px(inlineSize), add(h, h)))}px`;
+      inlineSize = `${lengthText(sub(px(inlineSize), add(h, h)))}px`;
     }
     // A caption with border-spacing: the caption spans the table's full width while the rows are inset, so the
     // spacing becomes explicit gap tracks (h c1 h c2 h; v r1 v r2 v) and every cell an explicit grid area.
     // The table's border and padding surround the rows but not the caption (measured): they join the edge tracks.
     const edge = side => add(px(style[`padding-${side}`]), px(style[`border-${side}`]));
     if (caption && (cmp(h, zero) !== 0 || cmp(v, zero) !== 0 || ['left', 'right', 'top', 'bottom'].some(side => cmp(edge(side), zero) !== 0))) {
-      const top = caption.tableCaption.side !== 'bottom', gapH = `${number(h)}px`, gapV = `${number(v)}px`, track = value => `${number(value)}px`;
+      const top = caption.tableCaption.side !== 'bottom', gapH = `${lengthText(h)}px`, gapV = `${lengthText(v)}px`, track = value => `${lengthText(value)}px`;
       const rowList = rowTracks ?? rows.map(() => 'auto');
       const rowTemplate = [track(add(edge('top'), v)), ...rowList.flatMap((t, i) => [t, i === rowList.length - 1 ? track(add(edge('bottom'), v)) : gapV])];
       // The caption is as wide as the table's border box; a content-box width excludes the border and padding.
       let width = style['inline-size'];
       if (style['box-sizing'] === 'content-box') {
         if (!/^\d+(?:\.\d+)?px$/.test(width)) fail('A content-box table with a caption needs a px inline-size');
-        width = `${number(add(px(width), add(edge('left'), edge('right'))))}px`;
+        width = `${lengthText(add(px(width), add(edge('left'), edge('right'))))}px`;
       }
       const columnTemplate = [track(add(edge('left'), h)), ...tracks.flatMap((t, i) => [t, i === tracks.length - 1 ? track(add(edge('right'), h)) : gapH])];
       const noEdges = Object.fromEntries(['left', 'right', 'top', 'bottom'].flatMap(side => [[`padding-${side}`, '0'], [`border-${side}`, '0']]));
@@ -2697,8 +2702,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         'grid-auto-rows': 'auto', 'column-gap': '0px', 'row-gap': '0px', tableColumns: automatic ? null : widths.every(Boolean) ? widths.reduce(add, zero) : null,
         tableGaps: add(mul(h, q(columns + 1)), add(edge('left'), edge('right'))) };
     }
-    const grid = { ...style, 'inline-size': inlineSize, display: 'grid', 'grid-template-columns': tracks.join(' '), 'grid-template-rows': rowTracks ? (caption ? (caption.tableCaption.side === 'bottom' ? [...rowTracks, 'auto'] : ['auto', ...rowTracks]).join(' ') : rowTracks.join(' ')) : 'none', 'grid-auto-rows': 'auto', 'column-gap': `${number(h)}px`, 'row-gap': `${number(v)}px`,
-      ...Object.fromEntries(Object.entries(spacingEdges).map(([key, value]) => [key, `${number(value)}px`])), tableColumns: automatic ? null : widths.every(Boolean) ? widths.reduce(add, zero) : null, tableGaps: mul(h, q(columns - 1)),
+    const grid = { ...style, 'inline-size': inlineSize, display: 'grid', 'grid-template-columns': tracks.join(' '), 'grid-template-rows': rowTracks ? (caption ? (caption.tableCaption.side === 'bottom' ? [...rowTracks, 'auto'] : ['auto', ...rowTracks]).join(' ') : rowTracks.join(' ')) : 'none', 'grid-auto-rows': 'auto', 'column-gap': `${lengthText(h)}px`, 'row-gap': `${lengthText(v)}px`,
+      ...Object.fromEntries(Object.entries(spacingEdges).map(([key, value]) => [key, `${lengthText(value)}px`])), tableColumns: automatic ? null : widths.every(Boolean) ? widths.reduce(add, zero) : null, tableGaps: mul(h, q(columns - 1)),
       ...(autoWidth ? { tableShrink: autoWidth } : {}), ...(autoMinimum ? { tableAutoMinimum: autoMinimum } : {}) };
     return grid;
   }
@@ -2824,21 +2829,21 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     }
     const stretch = ['normal', 'stretch'].includes(String(style['justify-content'] ?? 'normal'));
     const rewritten = tokens.map((token, i) => {
-      if (bare[i]) return cmp(mins[i], zero) > 0 ? `minmax(${number(mins[i])}px, ${bare[i]}fr)` : `minmax(0, ${bare[i]}fr)`;
-      if (kinds[i] === 'min') return `${number(minContents[i])}px`;
-      if (kinds[i] === 'max') return `${number(maxContents[i])}px`;
+      if (bare[i]) return cmp(mins[i], zero) > 0 ? `minmax(${lengthText(mins[i])}px, ${bare[i]}fr)` : `minmax(0, ${bare[i]}fr)`;
+      if (kinds[i] === 'min') return `${lengthText(minContents[i])}px`;
+      if (kinds[i] === 'max') return `${lengthText(maxContents[i])}px`;
       if (kinds[i] === 'auto' || kinds[i] === 'fit') {
         let limit = cmp(maxContents[i], mins[i]) > 0 ? maxContents[i] : mins[i];
         if (kinds[i] === 'fit') { const cap = px(token.match(/\(\s*([^)]+?)\s*\)/)[1]); if (cmp(limit, cap) > 0) limit = cmp(cap, mins[i]) > 0 ? cap : mins[i]; }
-        return `-isle-content(${number(mins[i])},${number(limit)},${kinds[i] === 'auto' && stretch ? 1 : 0})`;
+        return `-isle-content(${lengthText(mins[i])},${lengthText(limit)},${kinds[i] === 'auto' && stretch ? 1 : 0})`;
       }
       return token;
     }).join(' ');
     return { ...style, 'grid-template-columns': rewritten };
   }
   function tablePlacement(box, style) {
-    if (box.tableCell && !box.tableFlow && style.display === 'table-cell' && box.tableBaselineShift) style = { ...style, 'padding-top': `${number(add(px(style['padding-top']), box.tableBaselineShift))}px`, 'vertical-align': 'top' };
-    if (box.tableFlow && style.display === 'table-cell') style = { ...style, display: 'grid', 'grid-template-columns': 'minmax(0, 1fr)', 'grid-template-rows': 'none', 'grid-auto-rows': 'auto', ...(box.tableBaselineShift ? { 'padding-top': `${number(add(px(style['padding-top']), box.tableBaselineShift))}px` } : {}), 'align-content': box.tableBaselineTop || box.tableBaselineShift ? 'start' : { middle: 'center', bottom: 'end' }[style['vertical-align']] ?? 'start', 'row-gap': '0', 'column-gap': '0', 'grid-auto-flow': 'row', $fromCell: true };
+    if (box.tableCell && !box.tableFlow && style.display === 'table-cell' && box.tableBaselineShift) style = { ...style, 'padding-top': `${lengthText(add(px(style['padding-top']), box.tableBaselineShift))}px`, 'vertical-align': 'top' };
+    if (box.tableFlow && style.display === 'table-cell') style = { ...style, display: 'grid', 'grid-template-columns': 'minmax(0, 1fr)', 'grid-template-rows': 'none', 'grid-auto-rows': 'auto', ...(box.tableBaselineShift ? { 'padding-top': `${lengthText(add(px(style['padding-top']), box.tableBaselineShift))}px` } : {}), 'align-content': box.tableBaselineTop || box.tableBaselineShift ? 'start' : { middle: 'center', bottom: 'end' }[style['vertical-align']] ?? 'start', 'row-gap': '0', 'column-gap': '0', 'grid-auto-flow': 'row', $fromCell: true };
     if (box.tableCell && (style.display === 'table-cell' || style.$fromCell) && box.tableArea) return { ...style, display: style.$fromCell ? style.display : 'block', 'inline-size': 'auto', ...(box.tableStretch ? { 'block-size': 'auto' } : {}), 'grid-column': `${box.tableArea.column} / span ${box.tableArea.span}`, 'grid-row': `${box.tableArea.row} / span ${box.tableArea.down}` };
     if (box.tableCaption?.interleaved && style.display === 'table-caption') return { ...style, display: 'block', 'grid-column': `1 / span ${box.tableCaption.interleaved.columns}`, 'grid-row': String(box.tableCaption.interleaved.row) };
     if (box.tableCell && style.$fromCell) return { ...style, 'inline-size': 'auto', ...(box.tableStretch ? { 'block-size': 'auto' } : {}), ...(box.colSpan > 1 ? { 'grid-column': `span ${box.colSpan}` } : {}), ...(box.tableRowSpan ? { 'grid-row': `span ${box.tableRowSpan}` } : {}) };
@@ -3044,7 +3049,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
               const split = partition(m.region, diff(part.size ?? natural.block, outer(m.value)), '>=');
               return [...split.yes.map(r => ({ region: r, size: part.size })), ...split.no.map(r => ({ region: r, size: outer(m.value) }))];
             }));
-            for (const part of parts) results.push(...solve(box, part.size ? { ...available, $raisedBlock: part.size, $minRaised: true, $minNatural: true } : { ...available, $minNatural: true }, part.region, parents, inherited, emit));
+            // part.size already has both bounds applied (the minimum wins): it is not capped again by max-block-size.
+            for (const part of parts) results.push(...solve(box, part.size ? { ...available, $raisedBlock: part.size, $minRaised: true, $minNatural: true, $boundedBlock: true } : { ...available, $minNatural: true }, part.region, parents, inherited, emit));
           }
           continue;
         }
@@ -3060,15 +3066,19 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
           let used = sizes.max;
           if (!['auto', '0', '0px'].includes(String(style['min-inline-size']))) { const m = px(style['min-inline-size']); const outer = style['box-sizing'] === 'content-box' ? add(m, edges) : m; if (cmp(outer, used) > 0) used = outer; }
-          const text = String(number(used));
-          if (cmp(q(text), used) !== 0) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
-          style = { ...style, 'inline-size': `${text}px`, 'box-sizing': 'border-box', 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
+          // The used width is a border-box width; box-sizing stays as declared (it also sizes the block axis), so a
+          // content-box box gets the width less its inline padding and borders.
+          const declared = style['box-sizing'] === 'content-box' ? sub(used, edges) : used;
+          // (Its exact decimal text, which may hold more digits than a double: null when it has no finite one.)
+          const text = decimal(declared);
+          if (text === null) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+          style = { ...style, 'inline-size': `${text}px`, 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
         }
         if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null)) continue;
         // A fieldset's first legend is rendered in its block-start border (HTML §15.3.13): it is not a
         // layout child, and the fieldset's effective border-top is max(border-top, legend height).
         const rendered = renderedLegend(box, style, state.region, parents);
-        if (rendered) style = { ...style, 'border-top': `${number(rendered.effectiveTop)}px` };
+        if (rendered) style = { ...style, 'border-top': `${lengthText(rendered.effectiveTop)}px` };
         if (box.tag==='body' && parents.at(-1)?.box.documentRoot && inherited['overflow-x']==='visible' && inherited['overflow-y']==='visible' && inherited['container-type']==='normal' && style['container-type']==='normal' && (style['overflow-x']!=='visible' || style['overflow-y']!=='visible')) throw Object.assign(new Error('Body overflow propagation requires explicit overflow on html; set html overflow to auto or hidden'),{code:'U_LAYOUT_SCROLLBAR'});
         const incoming=available;
         for (const frame of scrollbarFrames(style,scrollbarProfile,box.documentRoot)) {
@@ -3144,7 +3154,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const blockPieces = block && style['block-size'] !== 'auto' && !/^\d+(?:\.\d+)?(?:px|%)$/.test(style['block-size'])
             ? lengthPieces(style['block-size'], available.percentBlock ?? available.block, content.region, style).map(piece => ({ region: piece.region, value: sum(piece.value, contentEdges) }))
             : [{ region: content.region, value: fixedBlock }];
-          const fixedPieces = blockPieces.flatMap(piece => !(block && style['max-block-size'] !== 'none' && piece.value) ? [piece]
+          const fixedPieces = blockPieces.flatMap(piece => !(block && style['max-block-size'] !== 'none' && piece.value && !available.$boundedBlock) ? [piece]
             : lengthPieces(style['max-block-size'], available.percentBlock ?? available.block, piece.region, style).flatMap(cap => minimumOf(cap.region, piece.value, sum(cap.value, contentEdges))));
           // min-block-size (content-box value, outer minus edges): wins over max-block-size, so it is applied after it.
           const minBlock = block && !['auto', '0', '0px'].includes(String(style['min-block-size'])) && !available.flexBlockMinimum && !available.$minNatural
@@ -3304,7 +3314,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
               {
                 const constantOf = e => e && cmp(e.x, zero) === 0 && cmp(e.y, zero) === 0 ? e.b : null;
                 const inlineBasis = constantOf(contentInline), blockBasis = style['block-size'] !== 'auto' ? constantOf(knownBlock) : null;
-                const share = (token, basis) => /^\d+(?:\.\d+)?%$/.test(token) && basis ? `${number(mul(basis, div(q(token.slice(0, -1)), q(100))))}px` : token;
+                const share = (token, basis) => /^\d+(?:\.\d+)?%$/.test(token) && basis ? `${lengthText(mul(basis, div(q(token.slice(0, -1)), q(100))))}px` : token;
                 const exactShare = (token, basis) => { const v = mul(basis, div(q(token.slice(0, -1)), q(100))); return /^\d+(?:\.\d{1,20})?$/.test(String(number(v))) && cmp(q(String(number(v))), v) === 0; };
                 const rewrite = (key, basis) => {
                   const text = String(style[key] ?? '');
@@ -3453,7 +3463,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                           layoutWarnings.push({ code: 'W_LAYOUT_MARGIN_COLLAPSE_THROUGH', severity: 'warning', box: child.box.label, path: child.box.path, side,
                             message: `${child.box.label}: the margin-${side} of ${edge.box.label} (${number(theirs)}px) collapses through it — it has no padding-${side} or border-${side} — so the space shows ${side === 'top' ? 'above' : 'below'} ${child.box.label}'s background, not inside it. Give ${child.box.label} a padding-${side} (or display: flow-root), or use padding on ${edge.box.label}` });
                         const total = cmp(theirs, mv(child, side)) > 0 ? theirs : mv(child, side);
-                        updates[`margin-${side}`] = cmp(total, zero) === 0 ? '0' : `${number(total)}px`; updates[side === 'top' ? '$collapsedTop' : '$collapsedBottom'] = true;
+                        updates[`margin-${side}`] = cmp(total, zero) === 0 ? '0' : `${lengthText(total)}px`; updates[side === 'top' ? '$collapsedTop' : '$collapsedBottom'] = true;
                       }
                       if (!Object.keys(updates).length) return;
                       const index = children.children.indexOf(child);
@@ -3478,7 +3488,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       for (let i = 1; i < flow.length; i++) {
                         const previous = mv(flow[i - 1], 'bottom'), top = mv(flow[i], 'top'), adjusted = cmp(top, previous) > 0 ? sub(top, previous) : zero;
                         const index = children.children.indexOf(flow[i]);
-                        children.children[index] = { ...flow[i], style: { ...flow[i].style, 'margin-top': cmp(adjusted, zero) === 0 ? '0' : `${number(adjusted)}px` } };
+                        children.children[index] = { ...flow[i], style: { ...flow[i].style, 'margin-top': cmp(adjusted, zero) === 0 ? '0' : `${lengthText(adjusted)}px` } };
                         flow[i] = children.children[index];
                       }
                     }

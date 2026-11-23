@@ -54,3 +54,18 @@ test('a vh max-height that never caps an auto height', () => {
   assert.deepEqual([c.blockSize.constant, c.blockStart.constant, c.blockStart.heightCoefficient], ['266', '-133', '1/2']);
   for (const [max, k] of [['max-height:100vh', 500], ['max-height:30vh', 250]]) assert.equal(at(max, k).status, 'unknown', `${max} ${k}`);
 });
+
+// A content-sized box aligned in a flex row is laid out from the start edge and then moved by the alignment offset;
+// a focused position (a skip link that a :focus rule moves) moves with it. A 100px box centred in a 200px viewport
+// is at 50px: its absolute link moved to top: -30px on focus is at 20px, not -30px (measured in Chromium, Firefox
+// and WebKit: 20, -80 for top: -130px, 70 at flex-end, 20 for a translateY(470px) from top: -500px).
+test('a focused position inside an aligned content-sized box moves with the box', () => {
+  const html = '<html lang="en"><body><div class="bg"><div class="c"><a class="s" href="#k">Skip</a><div class="k" id="k"></div></div></div></body></html>';
+  const at = (focus, c = '') => analyzeHTML(html, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body{${g}}.bg{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;background:#fff;color:#000}.c{position:relative;${c}}.k{width:300px;height:100px}.s{position:absolute;left:0;top:-500px;width:60px;height:24px;display:block;color:#000;background:#fff;font-size:16px;line-height:24px}.s:focus{${focus}}`, viewport: {min: 400, max: 400, height: {min: 200, max: 200}}, accessibility: true, boxes: {'.s': {minInlineSize: 40, intrinsicBlockSize: 24, maxInlineSize: 40}}});
+  const offscreen = r => { assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message))); return r.diagnostics.some(d => d.code === 'E_A11Y_FOCUS_OFFSCREEN'); };
+  assert.equal(offscreen(at('top:-30px')), false);
+  assert.equal(offscreen(at('top:-50px')), false);
+  assert.equal(offscreen(at('top:-30px', 'align-self:flex-end')), false);
+  assert.equal(offscreen(at('transform:translateY(470px)')), false);
+  assert.equal(offscreen(at('top:-130px')), true);
+});
