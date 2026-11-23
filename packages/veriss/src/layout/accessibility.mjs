@@ -437,17 +437,19 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     // Every cover counts where it covers: one cover's region is not another's (the first found used to end the
     // search, which lost the region where only a later cover overlaps; found by the occlusion fuzz).
     let reported = [];
-    for (const cover of placed) {
-      if (related(cover.path, target.path) || !visible(cover) || cover.paint.pointerEvents === 'none') continue;
-      const above = layer(cover);
-      // Paint order: stacking contexts by z-index (paintsAbove), then positioned layers after in-flow content in tree order;
-      // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
-      if (!paintsAbove(cover, above, target, own)) continue;
-      const region = overlap(target, cover);
-      if (!region) continue;
+    // Paint order: stacking contexts by z-index (paintsAbove), then positioned layers after in-flow content in tree order;
+    // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
+    const covers = placed.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && paintsAbove(cover, layer(cover), target, own))
+      .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
+    for (const { cover, region } of covers) {
       let fresh = [region];
       for (const done of reported) fresh = fresh.flatMap(piece => subtract(piece, done));
-      for (const piece of fresh) report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover), target, piece, { rule: 'occluded-target', cover: cover.path });
+      for (const piece of fresh) {
+        // The other boxes over the target in the same viewport range: removing this cover alone does not free it.
+        const others = covers.filter(c => c.cover !== cover && intersect(c.region, piece)).map(c => c.cover);
+        const also = others.length ? `; ${others.map(c => c.box.label).join(', ')} ${others.length > 1 ? 'are' : 'is'} over it there too` : '';
+        report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover) + also, target, piece, { rule: 'occluded-target', cover: cover.path, ...(others.length ? { alsoCoveredBy: others.map(c => c.path) } : {}) });
+      }
       reported.push(region);
     }
   }

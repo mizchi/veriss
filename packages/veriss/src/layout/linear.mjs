@@ -8,7 +8,9 @@ const make = (n, d = 1n) => {
 export function q(value) {
   if (value?.n !== undefined) return value;
   const text = String(value);
-  if (!/^-?\d{1,12}(?:\.\d{1,6})?$/.test(text)) throw new Error('Layout numbers require at most twelve integer and six decimal digits');
+  // A decimal is an exact rational at any precision (a script writes 80 / 3 + 'px' as 26.666666666666668px); the
+  // bound only keeps the numbers finite text.
+  if (!/^-?\d{1,12}(?:\.\d{1,20})?$/.test(text)) throw new Error('Layout numbers require at most twelve integer and twenty decimal digits');
   const digits = text.split('.')[1]?.length ?? 0;
   return make(BigInt(text.replace('.', '')), 10n ** BigInt(digits));
 }

@@ -4,7 +4,7 @@ import {scalar, sum, diff, times} from './region.mjs';
 /** Fixed coefficients only; no evaluation, variable products or intrinsic sizing. */
 export function insetLength(text, basis) {
   const atom = value => {
-    if (!/^[+-]?(?:\d+(?:\.\d{1,6})?)(?:px|%)$/.test(value) && value !== '0') throw new Error(`Unsupported positioned length: ${text}`);
+    if (!/^[+-]?(?:\d+(?:\.\d{1,20})?)(?:px|%)$/.test(value) && value !== '0') throw new Error(`Unsupported positioned length: ${text}`);
     value=value.replace(/^\+/,'');
     return value.endsWith('%') ? times(basis, div(q(value.slice(0, -1)), q(100))) : scalar(q(value.replace(/px$/, '')));
   };

@@ -89,7 +89,7 @@ export function textFontMismatch(style, font, defaultFontSize) {
   if (style['text-transform'] !== 'none') return `text-transform ${style['text-transform']} changes the measured characters`;
   if (!['normal', '0', '0px'].includes(style['word-spacing'])) return 'word-spacing must be normal';
   // letter-spacing: the measured spacing (font.letterSpacing, px) must be the computed one.
-  const spacing = ['normal', '0', '0px'].includes(style['letter-spacing']) ? 0 : /^-?\d+(?:\.\d{1,6})?px$/.test(style['letter-spacing']) ? Number(style['letter-spacing'].slice(0, -2)) : null;
+  const spacing = ['normal', '0', '0px'].includes(style['letter-spacing']) ? 0 : /^-?\d+(?:\.\d{1,20})?px$/.test(style['letter-spacing']) ? Number(style['letter-spacing'].slice(0, -2)) : null;
   if (spacing === null) return `letter-spacing ${style['letter-spacing']} must resolve to px (an em value needs a px font-size)`;
   if (Math.abs(spacing - (font.letterSpacing ?? 0)) > 1e-6) return `letter-spacing ${style['letter-spacing']} differs from the measured ${font.letterSpacing ?? 0}px`;
   return null;

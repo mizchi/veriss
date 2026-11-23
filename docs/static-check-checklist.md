@@ -441,9 +441,24 @@
 - [x] **H4. 幅だけの `border`**: `border: 5px`・`medium`・`0px` は style が初期値の none に戻り、使われる幅は 0(`border: 0` と同じ。
   Chromium・Firefox・WebKit で button と inline-block の箱が `border: 0` と同じ形・同じ描画になることを実測。対照の `5px solid` は箱が変わる)。
   解析は今まで `0` と `none` だけを受けて、ほかを Unknown にしていた。`%` と負の長さは幅ではない(宣言ごと捨てられる)ので Unknown のまま
+- [x] **H5. 覆いを全部並べる**: 同じ viewport の範囲で同じ要素に重なる、ほかの覆いを `alsoCoveredBy` と文言に並べる(1 つ目の覆いだけ直しても押せないことが分かる)。
+  報告の件数は今までどおり範囲ごとに 1 つ
+- [x] **H6. 横の inset のない絶対配置(静的位置)**: 包含ブロックが親そのものの block コンテナなら、内容の端(ltr は `padding-left`、rtl は `padding-right`)。
+  grid コンテナが包含ブロックなら padding の端(既存)。Chromium・Firefox・WebKit で 2 つの幅と 6 通りを照合(e2e `absolute boxes with auto inline insets`)。
+  もとの display が inline 系の箱(`text-align` で動く。inline-block で 206px)、% の padding、flex の親、`margin-left` のある箱は Unknown のまま
+- [x] **H7. 高さが auto の絶対配置**: 包含ブロックに伸ばさず、中身の高さ(CSS 2 §10.6.4)。`top` で置く箱は、高さが決まる前でも中身に位置が出る
+  (`bottom` で置く箱の中身は、高さが決まるまで位置なし)。`min-height` / `max-height` との組は Unknown。3 ブラウザーで 10 通り、子と孫を含めて 22 の矩形を照合
+- [x] **H8. スクロールロックの body**(`body { position: fixed; left: 0; right: 0 }`、`top` は auto): html の内容の端(html の `padding-top`)に置く。
+  包含ブロックが grid 自身でないときの静的位置は grid の内容の端(grid の html に padding があると body は padding の分下がる。3 ブラウザーで実測)。
+  html に margin か border がある、rtl、px でない padding は Unknown
+- [x] **H9. 決して効かない `vw` / `vh` の上限**: 幅が中身で決まり伸びない flex アイテムの `max-width: Nvw` は、中身の max-content 幅が最小の viewport 幅 × N% 以下なら効かない
+  (中身 300px・`100vw`・幅 320〜:3 ブラウザーで 300px。360px か `50vw` なら効くので Unknown)。高さが auto の箱の `max-height: Nvh` は、決まった高さが
+  viewport の高さ × N% を超えうる範囲があれば Unknown、なければ効かない
+- [x] **H10. 中身の高さで寄せる flex アイテムの子の位置**: `align-items: center` などで寄せる箱の高さが中身で決まるとき、子は上端から並べ、高さが決まったら子孫を
+  寄せの量だけずらす(高さが決まらなければ子孫の位置を出さない)。中央寄せのダイアログの中の閉じるボタンが覆われるかを判定できる。3 ブラウザーで 3 つの大きさで照合
+- [x] **H11. 小数の桁**: px の値は小数点以下 20 桁まで正確な有理数として読む(スクリプトが書く `26.666666666666668px`)。今までは 6 桁を超えると Unknown
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、`inert` の部分木をヒットテストから外すこと、
-  `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。
-  横の inset のない `position: absolute`(静的位置)と、内容の幅で決まる flex アイテムは配置が Unknown
+  `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
 ## 済み(このチェックリストを作る前に済んだもの)
 

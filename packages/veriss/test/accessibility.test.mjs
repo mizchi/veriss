@@ -2279,3 +2279,26 @@ test('a border shorthand with only a width (0, 0px, 5px, medium) leaves the styl
   // Not a width: a percentage or a negative length drops the declaration (the UA border stays); a style alone draws one.
   for (const border of ['0%', '-1px', 'solid']) assert.equal(run(tree, css(border)).status, 'unknown', border);
 });
+
+test('px lengths with more than six decimals are exact rationals (a script writes 80 / 3 + "px")', () => {
+  const tree = page([{tag: 'div', classes: ['w'], children: [{tag: 'button', classes: ['b'], named: true}]}]);
+  const css = pageCSS(`.page { background: #fff; grid-auto-rows: 100px; }\n.w { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); }\n.b { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; position: absolute; right: 0; top: 26.666666666666668px; inline-size: 26.666666666666668px; block-size: 24px; }`);
+  const report = run(tree, css);
+  assert.equal(report.status, 'verified', JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown')));
+  const rect = report.sizes.find(r => r.box === '.b' && r.rect).rect;
+  assert.equal(rect.blockStart.constant, '6666666666666667/250000000000000');
+  assert.equal(rect.inlineSize.constant, '6666666666666667/250000000000000');
+});
+
+test('occluded-target names every box over the target where it is covered, not only the first', () => {
+  const btn = cls => ({tag: 'button', classes: [cls], named: true});
+  const tree = page([{tag: 'div', classes: ['host'], children: [btn('x')]}, {tag: 'div', classes: ['bg']}, {tag: 'div', classes: ['ad']}]);
+  const css = extra => pageCSS(`.page { background: #fff; }\n.host { position: fixed; right: 0; bottom: 0; inline-size: 120px; block-size: 60px; z-index: 5; display: grid; grid-template-columns: 24px; background: #fff; }\n.x { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; inline-size: 24px; block-size: 24px; }\n.bg { position: fixed; left: 0; right: 0; bottom: 0; block-size: 70px; opacity: 0; background: #333; z-index: 9; }\n.ad { position: fixed; left: 0; right: 0; bottom: 20px; block-size: 50px; z-index: 10; }\n${extra}`);
+  const found = find(run(tree, css('')), 'E_A11Y_OCCLUDED');
+  assert.ok(found.length > 0);
+  assert.ok(found.every(d => d.alsoCoveredBy?.length === 1), JSON.stringify(found.map(d => [d.cover, d.alsoCoveredBy])));
+  assert.match(found[0].message, /invisible \(opacity 0\).*is over it there too/);
+  // With the strip out of the way the other box remains, alone.
+  const left = find(run(tree, css('.bg { pointer-events: none; }')), 'E_A11Y_OCCLUDED');
+  assert.ok(left.length > 0 && left.every(d => !d.alsoCoveredBy));
+});

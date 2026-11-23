@@ -17,7 +17,7 @@ import {customName,variableValue,variableEnvironment,substituteDeclaration} from
 
 import { compileSelector, matches, greaterRank, scopeProximity } from './selectors.mjs';
 export { matches, simpleSelector } from './selectors.mjs';
-const pointSize = /^(?:\d+(?:\.\d{1,6})?px|0)$/;
+const pointSize = /^(?:\d+(?:\.\d{1,20})?px|0)$/;
 const remLengths = ['top', 'right', 'bottom', 'left'].flatMap(side => [`margin-${side}`, `padding-${side}`, side]).concat(['inline-size', 'block-size', 'min-inline-size', 'max-inline-size', 'min-block-size', 'max-block-size', 'row-gap', 'column-gap', 'flex-basis', 'font-size']);
 // rem resolves against the analysed html root's px font-size once the engine has seen it (setRootFontSize).
 let rootFontSize = null;
@@ -48,12 +48,12 @@ export const registeredValueProblem = (name, text) => { const r = registeredProp
 // Parse-time check of a px or rem length; rem resolves at layout time, against the html root (else Unknown).
 // env(safe-area-inset-*) (optionally with a px fallback, or as max(px, env(…))) resolves at layout time against the
 // declared safe area (setSafeArea; 0 without viewport-fit=cover, as browsers report).
-const envPattern = /^env\(\s*safe-area-inset-(top|right|bottom|left)\s*(?:,\s*(\d+(?:\.\d{1,6})?px|0)\s*)?\)$/;
-const maxEnv = /^max\(\s*(\d+(?:\.\d{1,6})?px|0)\s*,\s*(env\([^()]*\))\s*\)$/;
+const envPattern = /^env\(\s*safe-area-inset-(top|right|bottom|left)\s*(?:,\s*(\d+(?:\.\d{1,20})?px|0)\s*)?\)$/;
+const maxEnv = /^max\(\s*(\d+(?:\.\d{1,20})?px|0)\s*,\s*(env\([^()]*\))\s*\)$/;
 let safeArea = null;
 export function setSafeArea(area) { safeArea = area; }
 // em (checklist D2) also resolves later, against the element's font-size (computeStyle); else it is Unknown where used.
-const pxSyntax = text => { if (!/^\d+(?:\.\d{1,6})?r?em$/.test(text) && !envPattern.test(text) && !maxEnv.test(text)) px(text); };
+const pxSyntax = text => { if (!/^\d+(?:\.\d{1,20})?r?em$/.test(text) && !envPattern.test(text) && !maxEnv.test(text)) px(text); };
 export function px(text) {
   const env = envPattern.exec(text ?? ''), envMax = maxEnv.exec(text ?? '');
   if (envMax) { const a = px(envMax[1]), b = px(envMax[2]); return cmp(a, b) >= 0 ? a : b; }
@@ -61,7 +61,7 @@ export function px(text) {
     if (safeArea === 'unknown') throw new Error(`${text}: viewport-fit=cover lets the page under the device's safe area; declare the safeArea option`);
     return q(String(safeArea?.[env[1]] ?? 0));
   }
-  const rem = /^(\d+(?:\.\d{1,6})?)rem$/.exec(text ?? '');
+  const rem = /^(\d+(?:\.\d{1,20})?)rem$/.exec(text ?? '');
   if (rem && rootFontSize) return mul(q(rem[1]), rootFontSize);
   if (!pointSize.test(text)) throw new Error(`Unsupported CSS pixel length: ${text}`);
   return q(text.replace(/px$/, ''));
@@ -276,7 +276,7 @@ function expand(property, value) {
     // Zero, or auto (only flex items may use it on their main axis; checked by the engine).
     // Zero, auto, or a non-negative px length (grid items take px margins; checked by the engine).
     // A non-negative rem margin stays rem until computeStyle resolves it against the root font size.
-    const margin = v => { if (v === 'auto') return 'auto'; if (/^\d+(?:\.\d{1,6})?r?em$/.test(v)) return /^0+(?:\.0+)?r?em$/.test(v) ? '0' : v; if (/^-\d+(?:\.\d{1,6})?px$/.test(v)) return v; /* a negative px margin: the engine models it on a flex row's main axis only */ const n = px(v); if (cmp(n, q(0)) === 0) return '0'; if (cmp(n, q(0)) < 0) throw new Error('Negative margins are not modeled'); if (!/^\d+(?:\.\d+)?px$/.test(v)) throw new Error('Only px, zero or auto margins are supported'); return v; };
+    const margin = v => { if (v === 'auto') return 'auto'; if (/^\d+(?:\.\d{1,20})?r?em$/.test(v)) return /^0+(?:\.0+)?r?em$/.test(v) ? '0' : v; if (/^-\d+(?:\.\d{1,20})?px$/.test(v)) return v; /* a negative px margin: the engine models it on a flex row's main axis only */ const n = px(v); if (cmp(n, q(0)) === 0) return '0'; if (cmp(n, q(0)) < 0) throw new Error('Negative margins are not modeled'); if (!/^\d+(?:\.\d+)?px$/.test(v)) throw new Error('Only px, zero or auto margins are supported'); return v; };
     const values = property === 'margin' ? [parts[0], parts[1] ?? parts[0], parts[2] ?? parts[0], parts[3] ?? parts[1] ?? parts[0]] : sides.length === 2 ? [parts[0], parts[1] ?? parts[0]] : [parts[0]];
     return sides.map((side, i) => [`margin-${side}`, margin(values[i])]);
   }
@@ -323,7 +323,7 @@ function expand(property, value) {
   }
   if (textPropertySet.has(property)) {
     // letter-spacing: normal, px or em (made px at the declaring element, its computed value); word-spacing: normal.
-    if (property === 'letter-spacing' && !wide.has(value) && !['normal', '0', '0px'].includes(value) && !/^-?\d+(?:\.\d{1,6})?(?:px|em)$/.test(value)) throw new Error(`Unsupported ${property}: ${value}`);
+    if (property === 'letter-spacing' && !wide.has(value) && !['normal', '0', '0px'].includes(value) && !/^-?\d+(?:\.\d{1,20})?(?:px|em)$/.test(value)) throw new Error(`Unsupported ${property}: ${value}`);
     if (property === 'word-spacing' && !wide.has(value) && !['normal', '0', '0px'].includes(value)) throw new Error(`Unsupported ${property}: ${value}`);
     return [[property, value]];
   }
@@ -457,9 +457,9 @@ function expand(property, value) {
     const fail = () => { throw new Error(`Unsupported transform: ${value} (only px translate, positive scale and quarter-turn rotation are modeled)`); };
     // A length: px, or a percentage of the box's own width (x) or height (y): [px, fraction].
     // A length: px, a percentage of the box's own width (x) or height (y), or em (the element's font-size): [px, fraction, em].
-    const len = v => { const m = /^(-?\d+(?:\.\d{1,6})?)px$|^(0)$|^(-?\d+(?:\.\d{1,4})?)%$|^(-?\d+(?:\.\d{1,4})?)em$|^(-?\d+(?:\.\d{1,4})?)rem$/.exec(v.trim()); if (!m) fail();
+    const len = v => { const m = /^(-?\d+(?:\.\d{1,20})?)px$|^(0)$|^(-?\d+(?:\.\d{1,4})?)%$|^(-?\d+(?:\.\d{1,4})?)em$|^(-?\d+(?:\.\d{1,4})?)rem$/.exec(v.trim()); if (!m) fail();
       return m[3] !== undefined ? [q(0), mul(q(m[3]), q('0.01')), q(0), q(0)] : m[4] !== undefined ? [q(0), q(0), q(m[4]), q(0)] : m[5] !== undefined ? [q(0), q(0), q(0), q(m[5])] : [q(m[1] ?? '0'), q(0), q(0), q(0)]; };
-    const factor = v => { const t = v.trim().replace(/^\./, '0.'); if (!/^\d+(?:\.\d{1,6})?$/.test(t) || Number(t) <= 0) fail(); return q(t); };
+    const factor = v => { const t = v.trim().replace(/^\./, '0.'); if (!/^\d+(?:\.\d{1,20})?$/.test(t) || Number(t) <= 0) fail(); return q(t); };
     // t = t0 + W·u + H·v (W, H the box's border-box size) for percentage translations.
     let A = [q(1), q(0), q(0), q(1)], t = [q(0), q(0)], u = [q(0), q(0)], w = [q(0), q(0)], e = [q(0), q(0)], r = [q(0), q(0)];
     const apply = ([a, b, c, d], [x, y]) => [add(mul(a, x), mul(b, y)), add(mul(c, x), mul(d, y))];
@@ -1449,28 +1449,28 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     values['white-space'] = ({ nowrap: 'normal', pre: 'pre-wrap' })[ws] ?? ws;
   }
   // letter-spacing in em computes to px against the element's own font-size (then inherits as px).
-  const em = /^(-?\d+(?:\.\d{1,6})?)em$/.exec(String(values['letter-spacing'] ?? ''));
-  if (em) values['letter-spacing'] = /^\d+(?:\.\d{1,6})?px$/.test(values['font-size']) ? `${+(Number(em[1]) * Number(values['font-size'].slice(0, -2))).toFixed(6)}px` : 'em-unresolved';
+  const em = /^(-?\d+(?:\.\d{1,20})?)em$/.exec(String(values['letter-spacing'] ?? ''));
+  if (em) values['letter-spacing'] = /^\d+(?:\.\d{1,20})?px$/.test(values['font-size']) ? `${+(Number(em[1]) * Number(values['font-size'].slice(0, -2))).toFixed(6)}px` : 'em-unresolved';
   // $stacks: sticky makes a stacking context whatever its insets (measured in Chromium), even where it never sticks.
   if (values.position === 'sticky') { values.position = 'relative'; values.$sticky = true; values.$stacks = true; }
   // rem box lengths compute to px once the root font size is known (setRootFontSize), so every px-only check sees
   // them as px; a value with more than 6 decimals stays rem (Unknown where it is used).
   if (rootFontSize) for (const key of remLengths) {
-    const m = /^(\d+(?:\.\d{1,6})?)rem$/.exec(String(values[key] ?? ''));
+    const m = /^(\d+(?:\.\d{1,20})?)rem$/.exec(String(values[key] ?? ''));
     if (!m) continue;
     const v = mul(q(m[1]), rootFontSize), text = number(v);
-    if (/^\d+(?:\.\d{1,6})?$/.test(text)) values[key] = text === '0' ? '0' : `${text}px`;
+    if (/^\d+(?:\.\d{1,20})?$/.test(text)) values[key] = text === '0' ? '0' : `${text}px`;
   }
   // em box lengths (checklist D2) compute to px against the element's own px font-size, as rem does against the root's.
   // (font-size in em is relative to the parent's and is left as it is.)
-  if (/^\d+(?:\.\d{1,6})?px$/.test(String(values['font-size']))) for (const key of remLengths.filter(k => k !== 'font-size')) {
-    const m = /^(\d+(?:\.\d{1,6})?)em$/.exec(String(values[key] ?? ''));
+  if (/^\d+(?:\.\d{1,20})?px$/.test(String(values['font-size']))) for (const key of remLengths.filter(k => k !== 'font-size')) {
+    const m = /^(\d+(?:\.\d{1,20})?)em$/.exec(String(values[key] ?? ''));
     if (!m) continue;
     const v = mul(q(m[1]), q(values['font-size'].slice(0, -2))), text = number(v);
-    if (/^\d+(?:\.\d{1,6})?$/.test(text)) values[key] = text === '0' ? '0' : `${text}px`;
+    if (/^\d+(?:\.\d{1,20})?$/.test(text)) values[key] = text === '0' ? '0' : `${text}px`;
   }
   // An em length left over (the font-size is not px): Unknown, attributed to the declaration that set it.
-  for (const key of remLengths.filter(k => k !== 'font-size')) if (/^\d+(?:\.\d{1,6})?em$/.test(String(values[key] ?? '')))
+  for (const key of remLengths.filter(k => k !== 'font-size')) if (/^\d+(?:\.\d{1,20})?em$/.test(String(values[key] ?? '')))
     throw Object.assign(new Error(`${key}: ${values[key]} needs a px font-size to resolve (font-size is ${values['font-size']})`), { code: 'U_LAYOUT_CSS', css: sources[key] ? { file: sources[key].file, line: sources[key].line } : undefined });
   // A list's UA padding-inline-start is 40px (Chromium's UA sheet): on the left in ltr, on the right in rtl.
   if (['ul', 'ol'].includes(box.tag) && values['padding-left'] === 'ua') {

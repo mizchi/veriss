@@ -66,7 +66,7 @@ function lengthPieces(value, parent, region, style) {
     if (u === 'vh') return constant(times(height, k));
     if (u === 'vmin' || u === 'vmax') return pick([constant(times(width, k)), constant(times(height, k))], u === 'vmax');
     if (u === 'rem') { if (!unitContext.rootFontSize) throw new Error(`${value}: rem needs the html root with a px font-size in the analysed tree`); return constant(scalar(mul(q(n), unitContext.rootFontSize))); }
-    if (u === 'em') { if (!/^\d+(?:\.\d{1,6})?px$/.test(style?.['font-size'] ?? '')) throw new Error(`${value}: em needs a px font-size`); return constant(scalar(mul(q(n), px(style['font-size'])))); }
+    if (u === 'em') { if (!/^\d+(?:\.\d{1,20})?px$/.test(style?.['font-size'] ?? '')) throw new Error(`${value}: em needs a px font-size`); return constant(scalar(mul(q(n), px(style['font-size'])))); }
     fail();
   };
   const primary = () => {
@@ -219,6 +219,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   const untransformed = preferences.includes('untransformed');
   let sawTransform = false;
   const layoutWarnings = [], generatedTexts = [], textFonts = new Map(), transitionSizes = [];
+  // Aligned boxes laid out from the start edge until their content height is known (finish shifts their descendants).
+  const deferredAligns = new Map();
   // Checklist E1: whether the page fits the viewport and whether it overflows it somewhere in the viewport range, and
   // whether html keeps a scrollbar gutter either way (scrollbar-gutter: stable, overflow-y: scroll) or never shows one
   // (overflow-y: hidden or clip).
@@ -565,6 +567,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // An absolute box with both insets of an axis auto sits at its static position. In a grid container that is the
       // container's padding edge (css-grid-1 §9.4); when that container is also the containing block (positioned),
       // it is an inset of 0 on the start side (the visually hidden "sr-only" pattern, a badge without offsets).
+      // A fixed body (a scroll lock: position: fixed; left: 0; right: 0) with an auto inset pair sits at its static
+      // position: the html's content edge. With no margin or border on html that is the viewport's origin plus html's
+      // padding at scroll 0 (measured in Chromium, Firefox and WebKit, grid and block html).
+      if (style.$fixed && box.tag === 'body' && !box.pseudo && ancestors.at(-1)?.box?.documentRoot) {
+        const html = ancestors.at(-1).style, none = side => style[side] === undefined || style[side] === 'auto';
+        const zero = v => ['0', '0px', undefined].includes(v === undefined ? undefined : String(v)), pxOr0 = v => /^(?:0|\d+(?:\.\d+)?px)$/.test(String(v ?? '0'));
+        const plain = ['top', 'right', 'bottom', 'left'].every(side => zero(html[`margin-${side}`]) && zero(html[`border-${side}`])) && html.direction !== 'rtl' && style.direction !== 'rtl';
+        if (plain && none('left') && none('right') && pxOr0(html['padding-left'])) style = { ...style, left: String(html['padding-left'] ?? '0') === '0' ? '0px' : html['padding-left'], $staticPosition: true };
+        if (plain && none('top') && none('bottom') && pxOr0(html['padding-top'])) style = { ...style, top: String(html['padding-top'] ?? '0') === '0' ? '0px' : html['padding-top'], $staticPosition: true };
+      }
       if (style.position === 'absolute' && !style.$fixed && !box.pseudo) {
         const parentStyle = ancestors.at(-1)?.style;
         if (parentStyle && ['grid', 'inline-grid'].includes(parentStyle.display) && parentStyle.position !== 'static') {
@@ -577,6 +589,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const blockAlign = String(style['align-self'] ?? 'auto') === 'auto' ? parentStyle['align-items'] : style['align-self'];
           if (none('top') && none('bottom') && aligned(blockAlign)) throw Object.assign(new Error(`${box.label}: an absolute box with auto top and bottom aligned by ${String(style['align-self'] ?? 'auto') === 'auto' ? `its grid's align-items: ${blockAlign}` : `align-self: ${blockAlign}`} has a static position that is not modeled`), { code: 'U_LAYOUT_CSS', box });
           if (none('top') && none('bottom')) style = { ...style, top: '0px', $staticPosition: true };
+        }
+        // In a block container that is also the containing block, a block-level box with both inline insets auto starts
+        // at the container's content edge: its inline-start padding inside the padding box (measured in Chromium,
+        // Firefox and WebKit, ltr and rtl, with a margin added as with an inset). A box that was inline-level sits on a
+        // line (text-align moves it), and the block axis depends on the boxes before it: both stay Unknown.
+        else if (parentStyle && ['block', 'flow-root', 'list-item'].includes(parentStyle.display) && parentStyle.position !== 'static' && !style.$inlineLevel && ['block', 'flow-root', 'flex', 'grid', 'table', 'list-item'].includes(String(style.display ?? 'block'))) {
+          const none = side => style[side] === undefined || style[side] === 'auto';
+          const rtl = parentStyle.direction === 'rtl', start = rtl ? 'right' : 'left';
+          const padding = String(parentStyle[`padding-${start}`] ?? '0');
+          if (none('left') && none('right') && parentStyle.direction === style.direction && /^(?:0|\d+(?:\.\d+)?px)$/.test(padding)) style = { ...style, [start]: padding === '0' ? '0px' : padding, $staticPosition: true };
         }
       }
       if (style.position === 'absolute') {
@@ -890,7 +912,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (style.position === 'relative' && ['left','right','top','bottom'].some(key=>!['auto'].includes(style[key]) && !/^-?(?:\d+(?:\.\d+)?|\.\d+)px$|^0$/.test(String(style[key])))) throw new Error('Relative positioning offsets other than px are not modeled');
     // In an rtl box the children are placed from its inline end, mirrored: an inline offset there is not modeled yet.
     if (style.position === 'relative' && style.direction === 'rtl' && ['left','right'].some(key=>!['auto','0','0px'].includes(String(style[key])))) throw new Error('A relative inline offset in an rtl box is not modeled');
-    if (style.position === 'absolute' && (!block || ['inline-size','block-size'].some(key=>style[key]==='auto') || style['grid-column']!=='auto' || style['grid-row']!=='auto')) throw new Error('Absolute boxes require both explicit sizes, both-axis analysis and auto Grid placement');
+    // An absolute box with an auto height is as tall as its content; a min or max height on top of that is not applied
+    // to a content height here (Unknown).
+    if (style.position === 'absolute' && style['block-size'] === 'auto' && [style['min-block-size'], style['max-block-size']].some(v => !['auto', 'none', '0', '0px', undefined].includes(v))) throw new Error('An absolute box with an auto height and a min or max height is not modeled');
+    if (style.position === 'absolute' && (!block || style['inline-size']==='auto' || style['grid-column']!=='auto' || style['grid-row']!=='auto')) throw new Error('Absolute boxes require both explicit sizes, both-axis analysis and auto Grid placement');
     if (!['border-box', 'content-box'].includes(style['box-sizing'])) throw new Error('Unsupported box-sizing');
     if (!['normal', 'inline-size', 'size'].includes(style['container-type'])) throw new Error('Unsupported container-type');
     if (style['container-name'] !== 'none' && !style['container-name'].split(/\s+/).every(name => /^[a-zA-Z_][\w-]*$/.test(name) && !['and', 'or', 'not', 'none', 'default', 'inherit', 'initial', 'unset', 'revert', 'revert-layer'].includes(name.toLowerCase()))) throw new Error('Unsupported container-name');
@@ -916,8 +941,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // other max sizes are not modeled.
       // max-block-size in px: it caps an explicit or stretched height, and a leaf's content height; an auto-height
       // container with children is not modeled.
-      if (axis === 'block' && style['max-block-size'] !== 'none' && !(/^\d+(?:\.\d+)?px$/.test(style['max-block-size']) && !available.flexItem && style.display !== 'table' && (style['block-size'] !== 'auto' || !(box.children ?? []).length || (available.block && available.alignBlock === undefined && !available.root)))) throw new Error('CSS max size clamping is not modeled');
-      if (style[`max-${axis}-size`] !== 'none' && axis === 'inline' && !( ((/^\d+(?:\.\d+)?px$/.test(style['max-inline-size'])) || (!/px$/.test(style['max-inline-size']) && available.inline && !available.flexItem)) && (!available.flexItem || available.flexItem.main === 'inline') && style.display !== 'table')) throw new Error('CSS max size clamping is not modeled');
+      // A vh max-height on an auto height is checked once the height is known (finish): where the height never exceeds
+      // it, the clamp does nothing; where it may, Unknown.
+      const vhLater = axis === 'block' && block && style['block-size'] === 'auto' && /^\d+(?:\.\d+)?vh$/.test(String(style['max-block-size']));
+      if (axis === 'block' && !vhLater && style['max-block-size'] !== 'none' && !(/^\d+(?:\.\d+)?px$/.test(style['max-block-size']) && !available.flexItem && style.display !== 'table' && (style['block-size'] !== 'auto' || !(box.children ?? []).length || (available.block && available.alignBlock === undefined && !available.root)))) throw new Error('CSS max size clamping is not modeled');
+      if (style[`max-${axis}-size`] !== 'none' && axis === 'inline' && !available.flexItem?.maxNeverCaps && !( ((/^\d+(?:\.\d+)?px$/.test(style['max-inline-size'])) || (!/px$/.test(style['max-inline-size']) && available.inline && !available.flexItem)) && (!available.flexItem || available.flexItem.main === 'inline') && style.display !== 'table')) throw new Error('CSS max size clamping is not modeled');
       if (axis === 'inline') {
         if (style['min-inline-size'] !== 'auto') px(style['min-inline-size']);
       // A column flex item's minimum is resolved by the flex line (its track is never smaller).
@@ -1206,7 +1234,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const m = /^(\d+(?:\.\d+)?)%$/.exec(String(st[key]));
         if (!m) continue;
         const v = mul(columnBasis, div(q(m[1]), q(100))), text = String(number(v));
-        if (!/^\d+(?:\.\d{1,6})?$/.test(text) || cmp(q(text), v) !== 0) continue;
+        if (!/^\d+(?:\.\d{1,20})?$/.test(text) || cmp(q(text), v) !== 0) continue;
         st = { ...st, [key]: `${text}px` };
       }
       return st === child.style ? child : { ...child, style: st };
@@ -1248,7 +1276,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // A percentage height resolves against the container's definite height, not the area left after the item's
         // margins (measured: height: 50% with margin-top: 10px in a 100px row is 50px).
         ...(knownBlock ? { percentBlock: knownBlock } : {}),
-        flexItem: { main }, ...(main === 'block' ? { flexBlockMinimum: true } : {}),
+        flexItem: { main, ...(entry.item.maxNeverCaps ? { maxNeverCaps: true } : {}) }, ...(main === 'block' ? { flexBlockMinimum: true } : {}),
         // Checklist D2: the item's height is definite — stretched in a single-line row of a definite height, or flexed
         // in a column of a definite height — so its children's percentage heights resolve against it (measured in
         // Chromium, Firefox and WebKit).
@@ -1584,6 +1612,13 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   function finish(box, style, region, inline, contentInline, blockSize, contentBlock, available, parents, emit) {
     const contract = box.contract ?? {};
+    {
+      const vh = style['block-size'] === 'auto' && /^(\d+(?:\.\d+)?)vh$/.exec(String(style['max-block-size']));
+      if (vh && blockSize) {
+        const measured = style['box-sizing'] === 'border-box' ? blockSize : contentBlock;
+        if (!measured || clip(region, diff(measured, times(height, div(q(vh[1]), q(100)))), true)) throw Object.assign(new Error(`${box.label}: max-height ${style['max-block-size']} may cap its height in this viewport range; that clamp is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+      }
+    }
     // Justify alignment is modeled as the default (stretch / start) only: where it applies — a grid container's items,
     // a grid item, an absolute box — any other value is Unknown; on a flex item or container it does nothing.
     {
@@ -1653,6 +1688,24 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         positioned = {origin:{inline:affine(origin.inline),block:affine(origin.block)},containingBlock:{path:containing.path,inline:affine(containing.inline),block:affine(containing.block)}};
       }
       const origin=resolvedOrigin(style,available,inline,blockSize,parents);
+      // The descendants were laid out from the start edge (deferAlign): move them by the alignment offset, or withhold
+      // their positions where the height stays unknown.
+      if (box.$starts && deferredAligns.get(available)?.some(r => intersectRegions(r, region))) {
+        const delta = origin && blockSize ? times(diff(available.block, blockSize), available.alignBlock) : null;
+        const inside = row => isDescendant(box.path, row.path) && intersectRegions(row.region ?? row.$shown?.region, region);
+        // A fixed box (against the viewport) and an absolute box whose containing block is outside stay where they are.
+        const stays = geometry.slice(box.$starts.geometry).filter(row => inside(row) && (row.fixed || (row.position === 'absolute' && row.containingPath && !isDescendant(box.path, row.containingPath) && row.containingPath !== box.path))).map(row => row.path);
+        const kept = path => stays.some(p => path === p || isDescendant(p, path));
+        const shift = o => o ? (delta ? { inline: o.inline, block: sum(o.block, delta) } : null) : o;
+        for (const row of geometry.slice(box.$starts.geometry).filter(row => inside(row) && !kept(row.path))) {
+          row.origin = shift(row.origin); row.clipOrigin = shift(row.clipOrigin);
+          if (row.bounds) row.bounds = delta ? row.bounds.map(piece => ({ ...piece, outer: piece.outer && { ...piece.outer, origin: shift(piece.outer.origin) }, inner: piece.inner && { ...piece.inner, origin: shift(piece.inner.origin) } })) : null;
+        }
+        for (const row of sizes.slice(box.$starts.sizes).filter(row => row.$shown && isDescendant(box.path, row.path) && intersectRegions(row.$shown.region, region) && !kept(row.path))) {
+          row.$shown = { ...row.$shown, origin: shift(row.$shown.origin) };
+          if (row.rect) { if (row.$shown.origin) row.rect = { ...row.rect, blockStart: affine(row.$shown.origin.block) }; else delete row.rect; }
+        }
+      }
       const overflowValue=[style['overflow-x'],style['overflow-y']].find(v=>v!=='visible') ?? 'visible';
       // A box's own overflow clips its content, not its border box.
       const unscaledOrigin = origin ?? resolvedOrigin({...style,'overflow-x':'visible','overflow-y':'visible'},available,inline,blockSize,parents);
@@ -2118,7 +2171,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (needsH && !size?.block) return null;
     // em: the element's font-size, which must be a px value.
     const needsEm = cmp(m[10], zero) !== 0 || cmp(m[11], zero) !== 0;
-    if (needsEm && !/^\d+(?:\.\d{1,6})?px$/.test(style['font-size'])) throw Object.assign(new Error(`An em translation needs a px font-size (got ${style['font-size']})`), { code: 'U_LAYOUT_CSS' });
+    if (needsEm && !/^\d+(?:\.\d{1,20})?px$/.test(style['font-size'])) throw Object.assign(new Error(`An em translation needs a px font-size (got ${style['font-size']})`), { code: 'U_LAYOUT_CSS' });
     const em = needsEm ? px(style['font-size']) : zero;
     // rem: the root element's font-size, known only when the analysed root is html with a px font-size.
     const needsRem = cmp(m[12], zero) !== 0 || cmp(m[13], zero) !== 0;
@@ -2154,13 +2207,15 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if(style.position!=='absolute') {
       // Cross-axis alignment of a flex item that is not stretched.
       let origin = available.origin ?? null;
-      if (origin && available.alignBlock !== undefined) origin = blockSize ? { inline: origin.inline, block: sum(origin.block, times(diff(available.block, blockSize), available.alignBlock)) } : null;
+      if (origin && available.alignBlock !== undefined) origin = blockSize ? { inline: origin.inline, block: sum(origin.block, times(diff(available.block, blockSize), available.alignBlock)) } : available.$startForNow ? origin : null;
       if (origin && available.alignInline !== undefined) origin = { inline: sum(origin.inline, times(diff(available.inline, inline), available.alignInline)), block: origin.block };
       return origin;
     }
     const containing=available.containingBlock;
-    if(!containing?.origin || !blockSize) return null;
-    const local=absoluteOrigin(style,containing,{inline,block:blockSize});
+    // A content-sized height is not known while the children are laid out: a box placed by its top does not need it.
+    const startPlaced = style.top !== undefined && style.top !== 'auto';
+    if(!containing?.origin || (!blockSize && !startPlaced)) return null;
+    const local=absoluteOrigin(style,containing,{inline,block:blockSize ?? scalar(0)});
     return offset(containing.origin,local.inline,local.block);
   }
 
@@ -2666,7 +2721,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const edges = st => ['left', 'right'].map(side => add(length(st[`padding-${side}`], 'padding'), length(st[`border-${side}`], 'border'))).reduce(add, zero);
     const margins = st => ['left', 'right'].map(side => st[`margin-${side}`] === 'auto' ? zero : length(st[`margin-${side}`], 'margin')).reduce(add, zero);
     const borderBox = (st, value) => st['box-sizing'] === 'content-box' ? add(value, edges(st)) : value;
-    const clampMax = (st, value) => { const m = st['max-inline-size']; if (m === 'none') return value; const v = borderBox(st, length(m, 'max-width')); return cmp(value, v) > 0 ? v : value; };
+    // A vw max-width caps only where the viewport is narrow enough: no wider content than that fraction of the narrowest
+    // viewport is never capped (measured in Chromium, Firefox and WebKit); one that may be stays Unknown.
+    const clampMax = (st, value) => {
+      const m = st['max-inline-size']; if (m === 'none') return value;
+      const vw = /^(\d+(?:\.\d+)?)vw$/.exec(String(m));
+      if (vw) { if (cmp(value, borderBox(st, mul(domain.min, div(q(vw[1]), q(100))))) <= 0) return value; unknown(`has an item whose max-width ${m} may cap its content width at the narrowest viewports`); }
+      const v = borderBox(st, length(m, 'max-width')); return cmp(value, v) > 0 ? v : value;
+    };
     // (A button is not replaced: its content is laid out like a block's.)
     const replaced = new Set(['img', 'svg', 'iframe', 'video', 'audio', 'canvas', 'input', 'select', 'textarea', 'embed', 'object']);
     // The min-content (or max-content) width (border box) of a box, or Unknown.
@@ -2918,12 +2980,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const same = own && given && cmp(given.x, zero) === 0 && cmp(given.y, zero) === 0 && cmp(evaluate(given, { x: zero, y: zero }), own) === 0;
           if (style[size] !== 'auto' && given && !same) style = { ...style, [size]: 'auto', $flexMain: style[size] };
         }
-        if (box.tag === 'html' && !parents.length && /^\d+(?:\.\d{1,6})?px$/.test(style['font-size'])) { rootFontSize = px(style['font-size']); unitContext.rootFontSize = rootFontSize; setRootFontSize(rootFontSize); }
+        if (box.tag === 'html' && !parents.length && /^\d+(?:\.\d{1,20})?px$/.test(style['font-size'])) { rootFontSize = px(style['font-size']); unitContext.rootFontSize = rootFontSize; setRootFontSize(rootFontSize); }
         // defaultFontSize (the user's default font size, an assumption the caller states): the root's medium, %, em
         // or rem font-size resolves against it, so rem lengths do too.
         else if (box.tag === 'html' && !parents.length && options.defaultFontSize) {
           const fs = String(style['font-size']), base = q(String(options.defaultFontSize));
-          const m = fs.match(/^(\d+(?:\.\d{1,6})?)(%|em|rem)$/);
+          const m = fs.match(/^(\d+(?:\.\d{1,20})?)(%|em|rem)$/);
           const size = ['medium', 'ua-default', 'initial', 'unset', 'revert'].includes(fs) ? base : m ? mul(base, m[2] === '%' ? div(q(m[1]), q('100')) : q(m[1])) : null;
           if (size) { rootFontSize = size; unitContext.rootFontSize = size; setRootFontSize(size); }
         }
@@ -3019,7 +3081,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
             // minimum in some layouts and not in others (measured: a grid item with a 30px child is 30px, a flex container
             // whose content is 38px follows the ratio's 20px); that is not modeled.
             else if (ratioOf(style) && ((box.children ?? []).length || box.text || box.inline?.length)) throw Object.assign(new Error(`${box.label}: aspect-ratio on a box with content (its height is the ratio's or its content's) is not modeled; give it a height, or put the ratio on an empty box`), { code: 'U_LAYOUT_CSS', box });
-            else if (!available.root && available.block && available.alignBlock === undefined) fixedBlock = available.block;
+            // An absolute box is not stretched by its containing block: an auto height is its content's (CSS 2 §10.6.4).
+            else if (!available.root && available.block && available.alignBlock === undefined && style.position !== 'absolute') fixedBlock = available.block;
             // A container raised to its min-height keeps that height also when it is aligned (not stretched) in its area
             // (measured: align-self: center on a 38px flex container with min-height: 50px is 50px tall).
             else if (available.$minRaised && (available.$raisedBlock || available.block)) fixedBlock = available.$raisedBlock ?? available.block;
@@ -3041,7 +3104,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const blockStates = raisedPieces.flatMap(piece => piece.value ? clamp(piece.region, diff(piece.value, blockEdges)) : [{ region: piece.region, value: null }]);
           for (const piece of fixedPieces) if (piece.value && emit) obligation(piece.value, blockEdges, box, piece.region, 'E_LAYOUT_BOX_EDGES', 'block', true, edgeExplanation('block'));
           for (const bs of blockStates) {
-            const origin=resolvedOrigin(style,available,inline,bs.value ? sum(bs.value,blockEdges) : null,parents);
+            // An aligned (not stretched) box whose height is its content's: the content is laid out from the start edge,
+            // and finish moves the box's descendants by the alignment offset once the height is known.
+            const deferAlign = !bs.value && available.alignBlock !== undefined && Boolean(available.origin) && emit;
+            if (deferAlign) { if (!deferredAligns.has(available)) deferredAligns.set(available, []); deferredAligns.get(available).push(bs.region); }
+            const origin=resolvedOrigin(style,deferAlign ? { ...available, $startForNow: true } : available,inline,bs.value ? sum(bs.value,blockEdges) : null,parents);
             const contentOrigin=offset(origin,edge(['left']),edge(['top']));
             // A transformed box is the containing block of its absolute descendants, like a positioned one.
             // Checklist D2: in block flow, a child's percentage height resolves against this box's height when that is
@@ -3189,7 +3256,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                 const constantOf = e => e && cmp(e.x, zero) === 0 && cmp(e.y, zero) === 0 ? e.b : null;
                 const inlineBasis = constantOf(contentInline), blockBasis = style['block-size'] !== 'auto' ? constantOf(knownBlock) : null;
                 const share = (token, basis) => /^\d+(?:\.\d+)?%$/.test(token) && basis ? `${number(mul(basis, div(q(token.slice(0, -1)), q(100))))}px` : token;
-                const exactShare = (token, basis) => { const v = mul(basis, div(q(token.slice(0, -1)), q(100))); return /^\d+(?:\.\d{1,6})?$/.test(String(number(v))) && cmp(q(String(number(v))), v) === 0; };
+                const exactShare = (token, basis) => { const v = mul(basis, div(q(token.slice(0, -1)), q(100))); return /^\d+(?:\.\d{1,20})?$/.test(String(number(v))) && cmp(q(String(number(v))), v) === 0; };
                 const rewrite = (key, basis) => {
                   const text = String(style[key] ?? '');
                   if (!/%/.test(text) || !basis || /\bmin\(/.test(text) || /auto-(?:fill|fit)/.test(text)) return;
