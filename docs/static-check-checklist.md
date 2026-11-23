@@ -465,7 +465,12 @@
   (中身が絶対配置の子だけで `min-width: 180px` → 180、`content-box` の padding を含めて 60 など)
 - [x] **H14. 高さが auto の絶対配置の箱の `min-height` / `max-height`**: 中身の高さで一度解き、範囲を分けて、下回るところは最小、上回るところは最大の高さで
   解き直す(最小が勝つ)。H7 で Unknown にしていた組
-- 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、`inert` の部分木をヒットテストから外すこと、
+- [x] **H15. `inert` とヒットテスト**(`W_A11Y_INERT_SHOWN`): `inert` の部分木はヒットテストで透明(クリックと `elementFromPoint` は下の要素に届く)で、中の
+  操作部品はクリックを受けない(Chromium・Firefox・WebKit で、`inert` のある層とない層を対照に実測)。`inert` の箱は覆いにならない(`E_A11Y_OCCLUDED`)。
+  `inert` の操作部品の上に何も描かれていない(見えている)範囲は、押せるように見えて押せないので警告する。モーダルのライブラリが広告や通知を含む兄弟要素を
+  `inert` にしたまま、それが最前面に見えているときに起きる。暗幕の後ろの `inert` な背面(意図した使い方)は覆われているので報告しない。
+  e2e `inert layers and controls match hit testing` で 4 通り
+- 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
 ## 済み(このチェックリストを作る前に済んだもの)
