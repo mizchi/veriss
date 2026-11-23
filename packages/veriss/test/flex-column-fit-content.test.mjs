@@ -46,3 +46,50 @@ test('text without a max-content width stays Unknown', () => {
   assert.equal(r.status, 'unknown');
   assert.match(r.diagnostics.map(d => d.message).join('\n'), /maxInlineSize/);
 });
+
+// Review of PR #11: the probe must read the content the final layout lays out. Measured in Chromium, Firefox and WebKit
+// (a column with align-items: flex-start, 300px wide).
+const status = r => JSON.stringify(r.diagnostics.map(d => d.message));
+test('generated text in an empty item stays Unknown (browsers: ::before "Hello" makes it ~35.5px wide)', () => {
+  const r = run('.col{align-items:flex-start}.a{height:20px}.a::before{content:"Hello"}', '<div class="a"></div>');
+  assert.equal(r.status, 'unknown', status(r));
+  assert.match(r.diagnostics.map(d => d.message).join('\n'), /::before/);
+});
+
+test('an absolutely positioned ::before adds no width (browsers: 0px)', () => {
+  const r = run('.col{align-items:flex-start}.a{height:20px;position:relative}.a::before{content:"";position:absolute;inset:-8px}', '<div class="a"></div>');
+  assert.notEqual(r.status, 'unknown', status(r));
+  assert.deepEqual(at(r, 300), [[0, 0]]);
+});
+
+test('a closed details is as wide as its summary (browsers: 20px; open: 300px)', () => {
+  const html = open => `<details class="a"${open ? ' open' : ''}><summary class="s"></summary><div class="b"></div></details>`;
+  const css = '.col{align-items:flex-start}.s{display:block;width:20px;height:20px}.b{width:300px;height:20px}';
+  const closed = run(css, html(false));
+  assert.notEqual(closed.status, 'unknown', status(closed));
+  assert.deepEqual(at(closed, 350), [[0, 20]]);
+  const opened = run(css, html(true));
+  assert.deepEqual(at(opened, 350), [[0, 300]]);
+});
+
+test('inline phrasing children are measured as the folded line (browsers: the sum of the spans)', () => {
+  const r = run('.col{align-items:flex-start}.a{font:400 14px/20px Arial;white-space:nowrap}', '<div class="a"><span class="x">aaaa</span><span class="y">bbbb</span></div>',
+    {'.a': {minInlineSize: 120, maxInlineSize: 120, intrinsicBlockSize: 20, wrap: 'nowrap'}, '.x': {minInlineSize: 60, maxInlineSize: 60, intrinsicBlockSize: 20, wrap: 'nowrap'}, '.y': {minInlineSize: 60, maxInlineSize: 60, intrinsicBlockSize: 20, wrap: 'nowrap'}});
+  assert.notEqual(r.status, 'unknown', status(r));
+  assert.deepEqual(at(r, 300), [[0, 120]]);
+  // (Below 120px the unwrapped line overflows, as it does in the browsers.)
+  assert.ok(r.diagnostics.filter(d => d.severity === 'error').every(d => d.range.max <= 120), status(r));
+});
+
+test('max-width below the padding: the border box is the padding (browsers: 20px)', () => {
+  const r = run('.col{align-items:flex-start}.a{height:20px;padding:0 10px;max-width:10px}', '<div class="a"></div>');
+  assert.notEqual(r.status, 'unknown', status(r));
+  assert.ok(!r.diagnostics.some(d => d.severity === 'error'), status(r));
+  assert.deepEqual(at(r, 300), [[0, 20]]);
+});
+
+test('inline-level siblings that share a line stay Unknown (browsers: their widths add up)', () => {
+  const r = run('.col{align-items:flex-start}.a{height:20px}.a i{display:inline-block;width:40px;height:10px}', '<div class="a"><i></i><i></i></div>');
+  assert.equal(r.status, 'unknown');
+  assert.match(r.diagnostics.map(d => d.message).join('\n'), /share a line/);
+});

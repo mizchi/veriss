@@ -2708,12 +2708,20 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const kinds = tokens.map(kindOf);
     if (!bare.some(Boolean) && !kinds.some(Boolean)) return style;
     const ancestors = [...parents, { box, style }];
-    const single = (target, at, inherited) => { const list = styles(target, region, at, inherited, false, true); const keys = new Set(list.map(x => JSON.stringify(x.style))); if (keys.size !== 1) unknown(`has an item whose styles change across the viewport range (${target.label})`); return list[0].style; };
+    // (gridItem: the style of a grid or flex item, blockified; false: in flow, as written.)
+    const single = (target, at, inherited, gridItem = true) => { const list = styles(target, region, at, inherited, false, gridItem); const keys = new Set(list.map(x => JSON.stringify(x.style))); if (keys.size !== 1) unknown(`has an item whose styles change across the viewport range (${target.label})`); return list[0].style; };
     const length = (value, what) => { if (value === 'ua') unknown(`has an item with UA ${what}`); if (['0', '0px'].includes(String(value))) return zero; if (!/^\d+(?:\.\d+)?px$/.test(String(value))) unknown(`has an item whose ${what} is ${value}`); return px(value); };
     const edges = st => ['left', 'right'].map(side => add(length(st[`padding-${side}`], 'padding'), length(st[`border-${side}`], 'border'))).reduce(add, zero);
     const margins = st => ['left', 'right'].map(side => st[`margin-${side}`] === 'auto' ? zero : length(st[`margin-${side}`], 'margin')).reduce(add, zero);
     const borderBox = (st, value) => st['box-sizing'] === 'content-box' ? add(value, edges(st)) : value;
-    const clampMax = (st, value) => { const m = st['max-inline-size']; if (m === 'none') return value; const v = borderBox(st, length(m, 'max-width')); return cmp(value, v) > 0 ? v : value; };
+    // (A max-width below the padding and border does not shrink the border box under them: measured in Chromium,
+    // Firefox and WebKit, padding 0 10px with max-width 10px is 20px wide.)
+    const clampMax = (st, value) => { const m = st['max-inline-size']; if (m === 'none') return value; let v = borderBox(st, length(m, 'max-width')); if (cmp(v, edges(st)) < 0) v = edges(st); return cmp(value, v) > 0 ? v : value; };
+    // A ::before / ::after generated in flow adds its content to the box's (measured: an empty item with ::before
+    // "Hello" is as wide as the text in Chromium, Firefox and WebKit); its width is not known here. Out of flow it adds
+    // nothing. (A text leaf's measured contract may hold its generated text; the final layout checks that.)
+    const generatesInFlow = (target, st, at) => ['before', 'after'].some(kind => styles({ ...target, path: `${target.path}/${kind === 'before' ? -1 : (target.children ?? []).length}`, label: `${target.label}::${kind}`, children: [], pseudo: kind }, region, at, st, false, false, new Set([`::${kind}`]))
+      .some(c => !['none', 'normal', undefined].includes(c.style.content) && c.style.display !== 'none' && !['absolute', 'fixed'].includes(c.style.position)));
     // (A button is not replaced: its content is laid out like a block's.)
     const replaced = new Set(['img', 'svg', 'iframe', 'video', 'audio', 'canvas', 'input', 'select', 'textarea', 'embed', 'object']);
     // The min-content (or max-content) width (border box) of a box, or Unknown.
@@ -2728,12 +2736,37 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (value === undefined) unknown(`has text without a ${max ? 'max' : 'min'}-content width (${target.label}; give it a ${key} contract)`);
         return add(q(String(value)), edges(st));
       }
-      const kids = (target.children ?? []).filter(k => !k.pseudo);
+      if (!target.pseudo && generatesInFlow(target, st, at)) unknown(`has generated content (${target.label}::before or ::after) whose width is not known`);
+      let kids = (target.children ?? []).filter(k => !k.pseudo);
+      // A details renders its first summary, and the rest only when open (as the final layout does); without a summary
+      // the UA generates one, which is not modeled.
+      if (target.tag === 'details') {
+        const summary = kids.find(k => k.tag === 'summary');
+        if (target.detailsOpen === 'dynamic') unknown(`has a details (${target.label}) whose open state is decided at run time`);
+        if (!summary) unknown(`has a details (${target.label}) without a summary (the UA generates one)`);
+        if (target.detailsOpen !== true) kids = [summary];
+      }
       const inner = [...at, { box: target, style: st }];
       if (!kids.length && st.display !== 'grid') return edges(st);
+      // A block whose children are all inline phrasing elements is folded into one text leaf by the final layout: one
+      // element brings its own contract, several are sized by the block's contract. Measured the same way here.
+      if (st.display === 'block' && !target.pseudo && kids.every(k => phrasingTags.has(k.tag) && k.tag !== 'img' && !(k.children ?? []).length)) {
+        const kss = kids.map(k => single(k, inner, st, false)), textual = k => k.text || k.inline?.length;
+        if (kss.every(ks => ks.display === 'inline' && ks.position === 'static' && ks.float === 'none')) {
+          if (kids.length === 1 && textual(kids[0]) && kids[0].contract && !target.contract) return minContent({ ...target, text: true, inline: kids, children: [], contract: kids[0].contract }, st, at, max);
+          if (kids.length > 1 && kids.some(textual) && target.contract) return minContent({ ...target, text: true, inline: kids, children: [] }, st, at, max);
+        }
+      }
       if (['block', 'list-item'].includes(st.display)) {
-        let widest = zero;
-        for (const kid of kids) { const ks = single(kid, inner, st); if (ks.display === 'none' || ['absolute', 'fixed'].includes(ks.position)) continue; const c = intrinsic(kid, ks, inner, max); if (cmp(c, widest) > 0) widest = c; }
+        let widest = zero, inlineBefore = null;
+        for (const kid of kids) {
+          const ks = single(kid, inner, st); if (ks.display === 'none' || ['absolute', 'fixed'].includes(ks.position)) continue;
+          // Inline-level siblings share a line: their widths add up, which is not modeled.
+          const flow = single(kid, inner, st, false), inlineLevel = String(flow.display).startsWith('inline') && flow.float === 'none' && flow.position === 'static';
+          if (inlineLevel && inlineBefore) unknown(`has inline-level children that share a line (${inlineBefore.label}, ${kid.label})`);
+          inlineBefore = inlineLevel ? kid : null;
+          const c = intrinsic(kid, ks, inner, max); if (cmp(c, widest) > 0) widest = c;
+        }
         return add(widest, edges(st));
       }
       // A flex row: single-line, the sum of its items' contributions; wrapping, the widest (min-content) or the sum
