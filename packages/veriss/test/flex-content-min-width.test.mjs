@@ -64,3 +64,14 @@ test('an in-flow generated item inside a content-sized item keeps the row Unknow
     assert.equal(r.status, 'unknown', `${m}: ${JSON.stringify(r.sizes.filter(s => /^\.[ab]$/.test(s.box) && s.rect).map(s => [s.box, s.rect.inlineSize.constant]))}`);
   }
 });
+
+// A descendant with an aspect-ratio and an auto width inside a content-sized item: its width comes from its height
+// through the ratio (Chromium, Firefox and WebKit: an 80px child makes the row 190 / 110), which the content
+// measurement does not derive. Unknown, for every min-width.
+test('a descendant with an aspect-ratio keeps the content measurement Unknown', () => {
+  for (const m of ['20px', 'auto', '0']) {
+    const css = `*{margin:0;box-sizing:border-box}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.row{display:flex;width:300px}.a,.b{flex:1 0 auto;min-width:${m};height:40px}.c{height:40px;aspect-ratio:2}`;
+    const r = analyzeHTML('<html lang="en"><body><div class="row"><div class="a"><div class="c"></div></div><div class="b"></div></div></body></html>', {name: 'P', css, viewport: {min: 300, max: 300, height: {min: 200, max: 200}}});
+    assert.equal(r.status, 'unknown', `${m}: ${JSON.stringify(r.sizes.filter(s => /^\.[ab]$/.test(s.box) && s.rect).map(s => [s.box, s.rect.inlineSize.constant]))}`);
+  }
+});

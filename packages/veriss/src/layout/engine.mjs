@@ -2694,6 +2694,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         return add(q(String(value)), edges(st));
       }
       if (!target.pseudo && generatesInFlow(target, st, at)) unknown(`has generated content (${target.label}::before or ::after) whose width is not known`);
+      // An aspect-ratio with an auto width: the width comes from the height through the ratio (measured: an empty
+      // height:40px; aspect-ratio:2 child makes its content-sized flex item 80px wide in Chromium, Firefox and WebKit),
+      // which is not derived here.
+      if ((st['aspect-ratio'] ?? 'auto') !== 'auto' && st['inline-size'] === 'auto') unknown(`has a box with an aspect-ratio (${target.label}) whose width follows its height`);
       const kids = (target.children ?? []).filter(k => !k.pseudo);
       const inner = [...at, { box: target, style: st }];
       if (!kids.length && st.display !== 'grid') return edges(st);
