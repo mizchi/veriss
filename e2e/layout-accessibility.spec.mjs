@@ -1157,6 +1157,28 @@ test('z-index and opacity stacking decide occlusion like Chromium', async ({page
   }
 });
 
+// A dialog's close button: a backdrop or overlay over it, a z-index trapped in the dialog's context, an invisible
+// layer that still takes the pointer, a tie at the top z-index. The page behind an open aria-modal dialog is covered by
+// its backdrop in every browser and is not reported (being out of reach is the intent).
+test('what covers a dialog close button decides occlusion as hit testing does', async ({page}) => {
+  const html = '<main class="page"><button class="open" aria-label="Open"></button><div class="bd"></div><div class="m" role="dialog" aria-modal="true" aria-label="Notice"><button class="x" aria-label="Close"></button></div><div class="o"></div></main>';
+  const base = `${reset}.page{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:40px;background:#fff}.open,.x{${button}inline-size:24px;block-size:24px}.bd{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:10}.m{position:fixed;left:20px;top:100px;inline-size:200px;block-size:100px;background:#fff;z-index:11;display:grid;grid-template-columns:24px}.o{position:fixed;left:0;top:90px;inline-size:100px;block-size:50px;background:#eee;z-index:1}`;
+  for (const [extra, covered] of [['', false], ['.m{z-index:5}', true], ['.m{z-index:5}.x{position:relative;z-index:2147483647}', true], ['.x{position:relative;z-index:-1}', false],
+    ['.o{z-index:12}', true], ['.o{z-index:12;opacity:0}', true], ['.o{z-index:12;opacity:0;pointer-events:none}', false], ['.o{z-index:12;visibility:hidden}', false],
+    ['.m{z-index:2147483647}.o{z-index:2147483647}', true], ['.m{z-index:2147483647}.o{z-index:2147483646}', false], ['.m{transform:scale(1)}.x{position:relative;z-index:99}.o{z-index:12}', true]]) {
+    const css = base + extra;
+    const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
+    expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
+    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))];
+    await page.setViewportSize({width: 800, height: 800});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
+    const blocked = await page.evaluate(() => ['.open', '.x'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
+    expect(blocked.includes('.open'), `${extra}: the backdrop covers the page`).toBe(true);
+    expect(blocked.includes('.x'), extra || 'none').toBe(covered);
+    expect(statics, extra || 'none').toEqual(covered ? ['.x'] : []);
+  }
+});
+
 // dir=auto follows the first strong character in DOM order (text and children interleaved), as Chromium does.
 test('dir=auto resolves in DOM order like Chromium', async ({page}) => {
   const cases = ['hello <span>שלום</span>', '<span>שלום</span> hello', '123 <span>abc</span> שלום', '<span dir="ltr">abc</span> שלום x', '<b>12</b> <i>مرحبا</i> abc', '123 !'];

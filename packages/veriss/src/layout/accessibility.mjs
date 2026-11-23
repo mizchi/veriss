@@ -243,7 +243,10 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   geometry = geometry.filter(row => !row.box.pseudo);
   const witness = region => { const p = sample(region); return { viewport: number(p.x), viewportExact: exact(p.x), ...(block ? { viewportHeight: number(p.y), viewportHeightExact: exact(p.y) } : {}) }; };
   // `region` keeps the exact constraints: a 2-D region (e.g. width > height) is not the product of its two ranges.
-  const report = (list, code, severity, message, row, region, extra) => list.push({ code, severity, message, box: row.box.label, path: row.path, source: row.box.source, ...ranges(region), ...(block ? { regionConstraints: serialize(region).constraints } : {}), witness: witness(region), ...extra });
+  const push = (list, code, severity, message, row, region, extra) => list.push({ code, severity, message, box: row.box.label, path: row.path, source: row.box.source, ...ranges(region), ...(block ? { regionConstraints: serialize(region).constraints } : {}), witness: witness(region), ...extra });
+  // Covered, hidden behind or under a bar: outside an open aria-modal dialog that is the intent (see `modals`).
+  const coverCodes = new Set(['E_A11Y_OCCLUDED', 'E_A11Y_FOCUS_OBSCURED', 'E_A11Y_FOCUS_SCROLLED_UNDER', 'E_A11Y_FIXED_HIDES', 'E_A11Y_FIXED_HIDES_PART']);
+  const report = (list, code, severity, message, row, region, extra) => { for (const piece of coverCodes.has(code) && row.path ? outsideModals(row, region) : [region]) push(list, code, severity, message, row, piece, extra); };
   const visible = row => row.paint.visibility === 'visible';
   // Interactive: buttons, links with href (or a dynamic one), and form fields (not type=hidden or disabled-hidden).
   const field = box => ['select', 'textarea'].includes(box.tag) || (box.tag === 'input' && box.inputType !== 'hidden');
@@ -257,6 +260,14 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // aria-hidden on any ancestor in the box tree (display: contents elements have no geometry row).
   const treeBoxes = new Map(); (function walk(box) { treeBoxes.set(box.path, box); for (const child of [...(box.children ?? []), ...(box.inline ?? [])]) walk(child); })(root);
   const hiddenFrom = path => { for (let p = path; p; p = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '') { const b = treeBoxes.get(p); if (b?.ariaHidden && !['body', 'html'].includes(b.tag)) return true; } return false; };
+  // A box at opacity 0 (itself or an ancestor) draws nothing: it hides nothing from sight, but it still hit-tests.
+  const zeroOpacity = value => /^(?:0|0?\.0+|0%)$/.test(String(value ?? '1').trim());
+  const invisible = row => (row.chain ?? [row.paint]).some(layer => zeroOpacity(layer?.opacity));
+  const seen = row => row.painted && !invisible(row);
+  // An open aria-modal dialog: the page outside it is meant to be out of reach while it renders, so a target outside
+  // it is not reported as covered where the dialog renders (focus escaping it is modal-background's warning).
+  const modals = geometry.filter(row => ['dialog', 'alertdialog'].includes(roleOf(row.box)) && row.box.aria?.['aria-modal']?.trim() === 'true' && visible(row) && !hiddenFrom(row.path) && row.region);
+  const outsideModals = (row, region) => modals.filter(d => d.path !== row.path && !isAncestor(d.path, row.path)).reduce((rest, d) => rest.flatMap(r => subtract(r, d.region)), region ? [region] : []);
 
   // accessible-name: no name attribute, and no visible text rendered inside.
   // aria-labelledby names through the text of the referenced elements, rendered or not (accname 2.B).
@@ -293,7 +304,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
 
   // text-contrast over the DOM ancestors' backgrounds.
   const [normal, big] = contrast === 'AAA' ? [7, 4.5] : [4.5, 3];
-  const painted = placed.filter(row => row.painted && visible(row));
+  const painted = placed.filter(row => seen(row) && visible(row));
   // Visually hidden text (sr-only) is not seen: SC 1.4.3 does not apply to it.
   for (const text of geometry.filter(row => row.box.text && visible(row) && !row.paint?.hiddenVisually)) {
     const result = backdrop(text.chain);
@@ -319,7 +330,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       const bound = text.origin ? null : placed.filter(row => row.overflow === 'scroll' && row.origin && row.block && isAncestor(row.path, text.path)).at(-1);
       const others = text.origin
         ? painted.filter(row => !related(row.path, text.path) && text.block && overlap(text, row))
-        : bound ? geometry.filter(row => row.painted && visible(row) && !related(row.path, text.path) && (row.origin ? overlap(bound, row) : isAncestor(bound.path, row.path))) : [];
+        : bound ? geometry.filter(row => seen(row) && visible(row) && !related(row.path, text.path) && (row.origin ? overlap(bound, row) : isAncestor(bound.path, row.path))) : [];
       if ((!text.origin && !bound) || others.length) { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${text.box.label} is positioned without an opaque background of its own; the boxes behind it are not its ancestors`, text, text.region, { rule: 'text-contrast' }); continue; }
     }
     const ratio = contrastRatio(result.fg, result.bg), required = large(text.chain.at(-1)) ? big : normal;
@@ -403,6 +414,23 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     if (!above) return !own && treeOrder(cover.path, target.path) > 0;
     return !(own && (isAncestor(above, own) || above === own || treeOrder(above, own) < 0));
   };
+  // Why a box makes a stacking context, for the message.
+  const contextReasons = r => [
+    ...(r.zIndex !== null && r.zIndex !== undefined ? [`z-index ${r.zIndex}`] : []), ...(r.position === 'fixed' ? ['position: fixed'] : []), ...(r.sticky ? ['position: sticky'] : []),
+    ...((r.paint.transform ?? 'none') !== 'none' ? ['transform'] : []), ...(!opaqueValue(r.paint.opacity) ? [`opacity ${r.paint.opacity}`] : []), ...(r.paint.isolation === 'isolate' ? ['isolation: isolate'] : []),
+    ...(r.paint.preserve3d ? ['transform-style: preserve-3d'] : []), ...((r.paint.backdropFilter ?? 'none') !== 'none' ? ['backdrop-filter'] : []), ...(willStack.test(r.paint.willChange ?? 'auto') ? [`will-change: ${r.paint.willChange}`] : []),
+  ];
+  const occludedMessage = (target, cover) => {
+    const base = `${target.box.label} is covered by ${cover.box.label}, which is painted later and receives the pointer`;
+    if (invisible(cover)) return `${target.box.label} is covered by ${cover.box.label}, which is invisible (opacity 0) but still receives the pointer; give it pointer-events: none, or display: none while it is not shown`;
+    // A z-index on the target (or a context between it and the one compared) orders it only inside that context.
+    const ca = contexts(cover), cb = contexts(target);
+    let k = 0; while (k < ca.length && k < cb.length && ca[k] === cb[k]) k++;
+    const outer = cb[k], inner = outer ? [...cb.slice(k + 1), target].filter(r => r !== outer && Number.isInteger(r.zIndex)) : [];
+    if (!inner.length) return base;
+    const top = inner.reduce((a, b) => b.zIndex > a.zIndex ? b : a);
+    return `${base}: the z-index ${top.zIndex} of ${top.box.label} orders it only inside the stacking context of ${outer.box.label} (${contextReasons(outer).join(', ')}), which paints below ${cover.box.label}`;
+  };
   const targets = placed.filter(row => interactive(row) && visible(row));
   for (const target of targets) {
     const own = layer(target);
@@ -412,14 +440,14 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     for (const cover of placed) {
       if (related(cover.path, target.path) || !visible(cover) || cover.paint.pointerEvents === 'none') continue;
       const above = layer(cover);
-      // Positioned layers paint after in-flow content, and among themselves in tree order (z-index is not modeled);
+      // Paint order: stacking contexts by z-index (paintsAbove), then positioned layers after in-flow content in tree order;
       // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
       if (!paintsAbove(cover, above, target, own)) continue;
       const region = overlap(target, cover);
       if (!region) continue;
       let fresh = [region];
       for (const done of reported) fresh = fresh.flatMap(piece => subtract(piece, done));
-      for (const piece of fresh) report(findings, 'E_A11Y_OCCLUDED', 'error', `${target.box.label} is covered by ${cover.box.label}, which is painted later and receives the pointer`, target, piece, { rule: 'occluded-target', cover: cover.path });
+      for (const piece of fresh) report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover), target, piece, { rule: 'occluded-target', cover: cover.path });
       reported.push(region);
     }
   }
@@ -560,7 +588,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         if (maybe && sure) maybe = subtract(maybe, sure);
         for (const region of [maybe].flat().filter(Boolean)) report(unknowns, 'U_A11Y_OCCLUDED', 'unknown', `${target.box.label} (inline) may be covered by ${cover.box.label}: its measured text bounds touch the cover`, target, region, { rule: 'occluded-target', cover: cover.path });
       }
-      if (cover.painted && focusable(target)) {
+      if (seen(cover) && focusable(target)) {
         let region = intersect(target.region, cover.region);
         region = atMost(region, cover.origin.inline, outer.origin.inline); region = atMost(region, cover.origin.block, outer.origin.block);
         region = atMost(region, right(outer), right(cover)); region = atMost(region, bottom(outer), bottom(cover));
@@ -656,7 +684,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   for (const target of focusedRows(placed.filter(focusable))) {
     const own = layer(target);
     for (const cover of placed) {
-      if (related(cover.path, target.path) || !visible(cover) || !cover.painted) continue;
+      if (related(cover.path, target.path) || !visible(cover) || !seen(cover)) continue;
       // A zero-size box is reported by focus-area, not as obscured.
       const above = layer(cover);
       if (!paintsAbove(cover, above, target, own)) continue;
@@ -908,9 +936,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // scroll position puts the element inside that area but entirely behind a position: fixed bar, Tab lands on it there
   // and nothing reveals it. Positions are scroll offsets s in [0, page height - viewport height]: the element's
   // viewport top y = top - s; the bar stays at its viewport place.
-  const fixedBars = placed.filter(row => row.fixed && visible(row) && row.painted);
+  const fixedBars = placed.filter(row => row.fixed && visible(row) && seen(row));
   // A sticky (top: 0) bar is stuck at the viewport top for s in [its page top, its parent's bottom − its height].
-  const stickyBars = placed.filter(row => row.sticky && row.sticky.parent && visible(row) && row.painted);
+  const stickyBars = placed.filter(row => row.sticky && row.sticky.parent && visible(row) && seen(row));
   // autofocus: on load the browser focuses the first autofocus candidate that can take focus — one not rendered or
   // not visible there (display: none, visibility: hidden, aria-hidden is not a reason) is skipped for the next
   // (measured in Chromium). Where no candidate can, nothing takes focus (W_A11Y_AUTOFOCUS_HIDDEN); a later candidate
@@ -1909,7 +1937,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // fragment-under-bar: following #id scrolls the target's top (less its scroll-margin and the viewport's scroll-padding)
   // to the viewport top, as far as the page scrolls (s = top − padding − margin, within [0, page − viewport]). If a
   // fixed bar, or a sticky one stuck at that s, spans that line, the target starts behind it (a heading under a header).
-  const jumpBars = placed.filter(row => (row.fixed || (row.sticky && row.sticky.parent)) && visible(row) && row.painted);
+  const jumpBars = placed.filter(row => (row.fixed || (row.sticky && row.sticky.parent)) && visible(row) && seen(row));
   const pageRow = geometry.find(row => row.path === root.path && row.origin && row.block);
   if (jumpBars.length && block && viewportBlock && pageRow) {
     const length = value => value === undefined || value === 'auto' ? 0 : Number(String(value).replace(/px$/, ''));

@@ -285,7 +285,9 @@ function expand(property, value) {
     // The color is kept as paint (border-<side>-color) for the non-text contrast rules.
     if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value]]);
     const p = postcss.list.space(value);
-    if (p.length === 1 && ['0', 'none'].includes(value)) return sides.flatMap(side => [[`border-${side}`, '0'], [`border-${side}-color`, 'currentcolor'], [`$bw-${side}`, '0'], [`$bs-${side}`, 'none']]);
+    // A width alone (0, 5px, medium) leaves the style at its initial none, so the used width is 0: no border, as 0 is
+    // (measured in Chromium, Firefox and WebKit). A percentage or a negative length is not a width (dropped).
+    if (p.length === 1 && (['0', 'none', 'thin', 'medium', 'thick'].includes(value) || /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/.test(value))) return sides.flatMap(side => [[`border-${side}`, '0'], [`border-${side}-color`, 'currentcolor'], [`$bw-${side}`, '0'], [`$bs-${side}`, 'none']]);
     if (p.length !== 3 || p[1] !== 'solid') throw new Error('Use a pixel solid border with a color');
     if (!/^(?:black|white|red|green|blue|transparent|currentcolor|#[\da-f]{3}|#[\da-f]{4}|#[\da-f]{6}|#[\da-f]{8})$/.test(p[2])) throw new Error('Use a supported literal border color');
     px(p[0]); return sides.flatMap(side => [[`border-${side}`, p[0]], [`border-${side}-color`, p[2]], [`$bw-${side}`, p[0]], [`$bs-${side}`, 'solid']]);

@@ -2231,3 +2231,51 @@ test('motion: a transition that moves the box over 5s must stop under prefers-re
   assert.equal(warn(run(tree, css('.slide { transition: transform 0.3s; }'))).length, 0);
   assert.equal(warn(run(tree, css('.slide { transition: color 6s, opacity 10s; }'))).length, 0);
 });
+
+// A modal's close button: an overlay or a backdrop over it, a z-index that cannot leave its stacking context, an
+// invisible layer that still takes the pointer. Outside an open aria-modal dialog, being covered is the point.
+test('occluded-target: what covers a modal close button, and why', () => {
+  const btn = cls => ({tag: 'button', classes: [cls], named: true});
+  const tree = page([btn('open'), {tag: 'div', classes: ['bd']}, {tag: 'div', classes: ['m'], role: 'dialog', named: true, aria: {'aria-modal': 'true'}, children: [btn('x')]}, {tag: 'div', classes: ['o']}]);
+  const css = extra => pageCSS(`.page { background: #fff; grid-auto-rows: 40px; }\nbutton { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; inline-size: 24px; block-size: 24px; }\n.bd { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .5); z-index: 10; }\n.m { position: fixed; left: 20px; top: 100px; inline-size: 200px; block-size: 100px; background: #fff; z-index: 11; display: grid; grid-template-columns: 24px; }\n.o { position: fixed; left: 0; top: 90px; inline-size: 100px; block-size: 50px; background: #eee; z-index: 1; }\n${extra}`);
+  const occluded = report => find(report, 'E_A11Y_OCCLUDED');
+  // The dialog above its backdrop: the page behind is covered on purpose and not reported.
+  const ok = run(tree, css(''));
+  assert.equal(ok.status, 'verified', JSON.stringify(ok.diagnostics.filter(d => d.severity !== 'info')));
+  // The backdrop above the dialog.
+  assert.deepEqual([...new Set(occluded(run(tree, css('.m { z-index: 5; }'))).map(d => d.box))], ['.x']);
+  // z-index 2147483647 on the button stays inside the dialog's context (position: fixed with z-index 5).
+  const trapped = occluded(run(tree, css('.m { z-index: 5; }\n.x { position: relative; z-index: 2147483647; }')));
+  assert.deepEqual([...new Set(trapped.map(d => d.box))], ['.x']);
+  assert.match(trapped[0].message, /z-index 2147483647 .*inside the stacking context of \.m \(z-index 5[,)]/);
+  // An overlay at a higher z-index, and the same at opacity 0: invisible, it still takes the pointer.
+  assert.deepEqual([...new Set(occluded(run(tree, css('.o { z-index: 12; }'))).map(d => d.box))], ['.x']);
+  const ghost = occluded(run(tree, css('.o { z-index: 12; opacity: 0; }')));
+  assert.deepEqual([...new Set(ghost.map(d => d.box))], ['.x']);
+  assert.match(ghost[0].message, /invisible \(opacity 0\).*pointer-events: none/);
+  assert.equal(occluded(run(tree, css('.o { z-index: 12; opacity: 0; pointer-events: none; }'))).length, 0);
+  // A tie at the top z-index: the later box in tree order is on top.
+  assert.deepEqual([...new Set(occluded(run(tree, css('.m { z-index: 2147483647; }\n.o { z-index: 2147483647; }'))).map(d => d.box))], ['.x']);
+  // Without aria-modal the covered page is reported as before.
+  const plain = page([btn('open'), {tag: 'div', classes: ['bd']}, {tag: 'div', classes: ['m'], children: [btn('x')]}, {tag: 'div', classes: ['o']}]);
+  assert.deepEqual([...new Set(occluded(run(plain, css(''))).map(d => d.box))], ['.open']);
+});
+
+test('an invisible (opacity 0) layer hides nothing from sight: not focus-obscured', () => {
+  const btn = cls => ({tag: 'button', classes: [cls], named: true});
+  const tree = page([btn('b'), {tag: 'div', classes: ['bg']}]);
+  const css = extra => pageCSS(`.page { background: #fff; grid-auto-rows: 40px; }\n.b { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; inline-size: 24px; block-size: 24px; position: fixed; right: 0; bottom: 0; z-index: 1; }\n.bg { position: fixed; left: 0; right: 0; bottom: 0; block-size: 120px; background: #333; z-index: 2; ${extra} }`);
+  const codes = report => [...new Set(report.diagnostics.filter(d => d.severity === 'error').map(d => d.code))].sort();
+  assert.deepEqual(codes(run(tree, css(''))), ['E_A11Y_FOCUS_OBSCURED', 'E_A11Y_OCCLUDED']);
+  assert.deepEqual(codes(run(tree, css('opacity: 0;'))), ['E_A11Y_OCCLUDED']);
+  assert.deepEqual(codes(run(tree, css('opacity: 0; pointer-events: none;'))), []);
+});
+
+test('a border shorthand with only a width (0, 0px, 5px, medium) leaves the style none: no border, as 0 does', () => {
+  // Measured in Chromium, Firefox and WebKit: border: 5px / medium / thick lay out and paint as border: 0.
+  const tree = page([{tag: 'button', classes: ['b'], named: true}]);
+  const css = border => pageCSS(`.page { background: #fff; }\n.b { appearance: none; display: block; padding: 0; border: ${border}; min-width: 0; min-height: 0; }`);
+  for (const border of ['0', '0px', '0em', '0.0px', '5px', '1.5rem', 'thin', 'medium', 'thick']) assert.equal(run(tree, css(border)).status, 'verified', border);
+  // Not a width: a percentage or a negative length drops the declaration (the UA border stays); a style alone draws one.
+  for (const border of ['0%', '-1px', 'solid']) assert.equal(run(tree, css(border)).status, 'unknown', border);
+});

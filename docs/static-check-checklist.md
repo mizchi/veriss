@@ -423,6 +423,28 @@
   `::before`・`::after` の content や子の要素(アイコン)がなければ、開いているかどうかを示すものがない。
 - [x] **F10. 要素(擬似要素でない)の `content`**: 文字列は何もしない(既存の `W_LAYOUT_DECLARATION_INERT` が出していた)。
   `url()` は要素を画像で置き換えるので効く(3 つのブラウザーで測った)。
+## H. ダイアログの閉じるボタンを覆うもの
+
+- [x] **H1. 閉じるボタンを覆う層と、その理由**(`E_A11Y_OCCLUDED` の文言): 覆う箱が opacity 0(自身か祖先)なら「見えないがクリックを受ける」と書き、
+  `pointer-events: none` か `display: none` を勧める。ボタン(か、比べる文脈より内側の文脈)の z-index が、外側の stacking context
+  (z-index・`position: fixed`・`transform` など)の中でしか効かないときは、その z-index と文脈の箱と理由を書く。
+  e2e(`what covers a dialog close button`)で、Chromium・Firefox・WebKit の `elementFromPoint` と 11 通りを照合した:
+  背景の暗幕がダイアログより上、ボタンの z-index 2147483647 がダイアログの文脈(`fixed` + z-index 5)に閉じ込められる、
+  上の層・opacity 0 の層(覆う)、`pointer-events: none` か `visibility: hidden` の層(覆わない)、最大の z-index が同じなら DOM の後ろが勝つ、
+  `transform` の文脈の中の z-index 99。対照として、ダイアログが暗幕より上・z-index が 1 つ小さい層では覆われない
+- [x] **H2. 開いた `aria-modal` のダイアログの外**: ダイアログが描かれる範囲(viewport の幅と高さの領域)では、その外の要素が覆われる・隠れることを
+  `E_A11Y_OCCLUDED`・`E_A11Y_FOCUS_OBSCURED`・`E_A11Y_FOCUS_SCROLLED_UNDER`・`E_A11Y_FIXED_HIDES(_PART)` として報告しない
+  (背面に届かないのが意図。3 つのブラウザーとも背面のボタンは暗幕に覆われることを e2e で確かめた)。フォーカスが外へ出るのは
+  従来どおり `W_A11Y_MODAL_BACKGROUND`。`aria-modal` のない箱は従来どおり報告する
+- [x] **H3. opacity 0 の層は見た目を隠さない**: 自身か祖先が opacity 0 の箱は、`E_A11Y_FOCUS_OBSCURED`・固定・sticky のバーの規則・文字の被りの覆いにしない
+  (何も描かない)。ヒットテストは受けるので `E_A11Y_OCCLUDED` には残す
+- [x] **H4. 幅だけの `border`**: `border: 5px`・`medium`・`0px` は style が初期値の none に戻り、使われる幅は 0(`border: 0` と同じ。
+  Chromium・Firefox・WebKit で button と inline-block の箱が `border: 0` と同じ形・同じ描画になることを実測。対照の `5px solid` は箱が変わる)。
+  解析は今まで `0` と `none` だけを受けて、ほかを Unknown にしていた。`%` と負の長さは幅ではない(宣言ごと捨てられる)ので Unknown のまま
+- 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、`inert` の部分木をヒットテストから外すこと、
+  `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。
+  横の inset のない `position: absolute`(静的位置)と、内容の幅で決まる flex アイテムは配置が Unknown
+
 ## 済み(このチェックリストを作る前に済んだもの)
 
 - [x] easing の行き過ぎ(cubic-bezier、`linear()`)の極値でのシフト検査と CLS の上限、終わりの戻り、relative のオフセット、
