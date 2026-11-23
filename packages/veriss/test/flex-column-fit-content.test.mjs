@@ -77,8 +77,11 @@ test('inline phrasing children are measured as the folded line (browsers: the su
     {'.a': {minInlineSize: 120, maxInlineSize: 120, intrinsicBlockSize: 20, wrap: 'nowrap'}, '.x': {minInlineSize: 60, maxInlineSize: 60, intrinsicBlockSize: 20, wrap: 'nowrap'}, '.y': {minInlineSize: 60, maxInlineSize: 60, intrinsicBlockSize: 20, wrap: 'nowrap'}});
   assert.notEqual(r.status, 'unknown', status(r));
   assert.deepEqual(at(r, 300), [[0, 120]]);
-  // (Below 120px the unwrapped line overflows, as it does in the browsers.)
-  assert.ok(r.diagnostics.filter(d => d.severity === 'error').every(d => d.range.max <= 120), status(r));
+  // (Below 120px the unwrapped line overflows, as it does in the browsers: reported there, and only there.)
+  const errors = r.diagnostics.filter(d => d.severity === 'error');
+  assert.equal(r.status, 'violated', status(r));
+  assert.ok(errors.length > 0, status(r));
+  assert.ok(errors.every(d => d.range.max <= 120), status(r));
 });
 
 test('max-width below the padding: the border box is the padding (browsers: 20px)', () => {
