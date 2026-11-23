@@ -7,6 +7,8 @@ export interface LayoutOptions {
   scrollbars?: readonly LayoutScrollbarProfile[];
   /** Static counterparts of vlmkit's box-model integrity rules (ADR-0012). */
   integrity?: boolean | LayoutIntegrityOptions;
+  /** Accessibility rules (WCAG); the report's `accessibility` member. */
+  accessibility?: boolean | LayoutAccessibilityOptions;
   css: string;
   cssFile?: string;
   /** Ordered reset sources, before css in the same author cascade. */
@@ -110,6 +112,29 @@ export interface LayoutIntegrityOptions {
   /** 'all' parents (default) or only those with a border or background, as vlmkit judges. */
   protrusion?: 'all' | 'painted';
 }
+export interface LayoutAccessibilityOptions {
+  contrast?: 'AA' | 'AAA';
+  targetLevel?: 'AA' | 'AAA';
+  /** Target size in CSS px (default 24, or 44 with targetLevel 'AAA'). */
+  targetSize?: number;
+  /** 'all' rules (default) or the 'core' ones. */
+  profile?: 'all' | 'core';
+}
+/** An accessibility warning: a diagnostic row reported beside `diagnostics`. */
+export interface LayoutAccessibilityWarning extends Omit<LayoutDiagnostic, 'severity' | 'witness'> {
+  severity: 'warning';
+  /** A sample viewport inside the region. */
+  witness?: { viewport: number; viewportExact: string; viewportHeight?: number; viewportHeightExact?: string };
+  rule?: string;
+  /** Usefulness tier of the rule ('core', 'heuristic', 'dom', ...). */
+  tier?: string;
+  /** The region's constraints when the analysis has a block axis. */
+  regionConstraints?: (LayoutAffine & { strict: boolean })[];
+  /** Rule-specific details (side, inset, ratio, ...). */
+  [detail: string]: unknown;
+}
+/** A finding a rule would report but does not, with the reason (user agent control, essential, equivalent). */
+export interface LayoutAccessibilityExemption { code: string; rule: string; box: string; path: string; range: LayoutRange; heightRange?: LayoutRange; region?: LayoutRegion; reason: string; equivalent?: string }
 export interface LayoutIntegrityRow { code: string; severity: 'error' | 'warning'; rule: string; message: string; box: string; path: string; range: LayoutRange; heightRange?: LayoutRange; other?: string; parent?: string; axis?: 'inline' | 'block'; reason?: string }
 export interface LayoutCSSCondition { kind:'media'|'container'; name?:string; params:string; css:{file:string;line:number} }
 export interface LayoutCSSOrigin { file:string; line:number; selector:string; layer?:string; specified:string; conditions?:LayoutCSSCondition[] }
@@ -147,6 +172,8 @@ export interface LayoutSummary {
   scrollbars?: {box:string;path:string;inlineSize:number;blockSize:number;viewport:boolean;variant?:number;scrollbarProfile?:string;range:LayoutRange;heightRange?:LayoutRange;region?:LayoutRegion}[];
   invalidSubstitutions?: LayoutInvalidSubstitution[];
   integrity?: { rules: string[]; targetSize: number; protrusion: 'all' | 'painted'; warnings: LayoutIntegrityRow[]; exempted: LayoutIntegrityRow[] };
+  /** Present when options.accessibility is set. */
+  accessibility?: { rules: string[]; profile: 'all' | 'core'; contrast: 'AA' | 'AAA'; targetLevel: 'AA' | 'AAA'; targetSize: number; warnings: LayoutAccessibilityWarning[]; exempted: LayoutAccessibilityExemption[]; notes: string[] };
   version: 1; ok: boolean; status: 'verified' | 'violated' | 'unknown'; component: string;
   scope: { axis: 'inline' | 'both'; viewport: LayoutRange & { height?: LayoutRange | null }; hostInset: number; hostBlockInset?: number; closedCSS: true; browserRounding: false; blockSizing: boolean; scrollbarProfiles?:readonly LayoutScrollbarProfile[] };
   assumptions: string[];
