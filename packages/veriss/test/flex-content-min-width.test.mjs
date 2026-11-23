@@ -53,3 +53,14 @@ for (const min of ['20px', '0', 'auto']) test(`max-width does not cap the conten
   assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.map(d => d.message)));
   assert.deepEqual(at(r, 300), [[0, 100], [100, 200]]);
 });
+
+// A content-sized flex item that is itself a flex container with an in-flow ::before: the generated item is a flex
+// item of it too (Chromium, Firefox and WebKit: a 100px generated item makes the row 210 / 90), which the content
+// measurement does not count. Unknown, for every min-width.
+test('an in-flow generated item inside a content-sized item keeps the row Unknown', () => {
+  for (const m of ['20px', 'auto', '0']) {
+    const css = `*{margin:0;box-sizing:border-box}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.row{display:flex;width:300px}.a{display:flex;flex:1 0 auto;min-inline-size:${m};height:20px}.k{flex:none;width:20px;height:10px}.a::before{content:"x";flex:none}.b{flex:1 0 auto;height:20px}`;
+    const r = analyzeHTML('<html lang="en"><body><div class="row"><div class="a"><div class="k"></div></div><div class="b"></div></div></body></html>', {name: 'P', css, viewport: {min: 300, max: 300, height: {min: 200, max: 200}}, boxes: {'.a::before': {minInlineSize: 100, maxInlineSize: 100, intrinsicBlockSize: 20}}});
+    assert.equal(r.status, 'unknown', `${m}: ${JSON.stringify(r.sizes.filter(s => /^\.[ab]$/.test(s.box) && s.rect).map(s => [s.box, s.rect.inlineSize.constant]))}`);
+  }
+});

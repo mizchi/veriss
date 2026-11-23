@@ -2674,6 +2674,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const margins = st => ['left', 'right'].map(side => st[`margin-${side}`] === 'auto' ? zero : length(st[`margin-${side}`], 'margin')).reduce(add, zero);
     const borderBox = (st, value) => st['box-sizing'] === 'content-box' ? add(value, edges(st)) : value;
     const clampMax = (st, value) => { const m = st['max-inline-size']; if (m === 'none') return value; const v = borderBox(st, length(m, 'max-width')); return cmp(value, v) > 0 ? v : value; };
+    // A ::before / ::after generated in flow adds its content to the box's (measured: a 100px generated item in a
+    // content-sized flex item makes a 300px row 210 / 90 in Chromium, Firefox and WebKit); its width is not counted
+    // here, so such a box is Unknown. Out of flow it adds nothing. (Same check as the column fit-content probe.)
+    const generatesInFlow = (target, st, at) => ['before', 'after'].some(kind => styles({ ...target, path: `${target.path}/${kind === 'before' ? -1 : (target.children ?? []).length}`, label: `${target.label}::${kind}`, children: [], pseudo: kind }, region, at, st, false, false, new Set([`::${kind}`]))
+      .some(c => !['none', 'normal', undefined].includes(c.style.content) && c.style.display !== 'none' && !['absolute', 'fixed'].includes(c.style.position)));
     // (A button is not replaced: its content is laid out like a block's.)
     const replaced = new Set(['img', 'svg', 'iframe', 'video', 'audio', 'canvas', 'input', 'select', 'textarea', 'embed', 'object']);
     // The min-content (or max-content) width (border box) of a box, or Unknown.
@@ -2688,6 +2693,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (value === undefined) unknown(`has text without a ${max ? 'max' : 'min'}-content width (${target.label}; give it a ${key} contract)`);
         return add(q(String(value)), edges(st));
       }
+      if (!target.pseudo && generatesInFlow(target, st, at)) unknown(`has generated content (${target.label}::before or ::after) whose width is not known`);
       const kids = (target.children ?? []).filter(k => !k.pseudo);
       const inner = [...at, { box: target, style: st }];
       if (!kids.length && st.display !== 'grid') return edges(st);
