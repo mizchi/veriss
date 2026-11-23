@@ -54,9 +54,14 @@ export function recordMeasurement(curated, model, portrait, landscape, measuredW
     curated.safeAreas.splice(index + 1, 0, own);
     group = own;
   }
+  // The bottom and landscape insets are shared by both modes: if this browser measurement changes them, a fullscreen
+  // measurement no longer stands behind the fullscreen values.
+  const landscapeNow = {side: Math.max(landscape.left, landscape.right), bottom: landscape.bottom};
+  const changed = group.portrait.bottom !== portrait.bottom || group.landscape.side !== landscapeNow.side || group.landscape.bottom !== landscapeNow.bottom;
   group.portrait.bottom = portrait.bottom;
-  group.landscape = {side: Math.max(landscape.left, landscape.right), bottom: landscape.bottom};
-  group.measured = {...group.measured, browser: true};
+  group.landscape = landscapeNow;
+  group.measured = {...group.measured, browser: true, ...(changed && group.measured?.fullscreen ? {fullscreen: false} : {})};
+  if (changed && group.measuredWith?.fullscreen) { const {fullscreen, ...rest} = group.measuredWith; group.measuredWith = rest; }
   group.measuredWith = {...group.measuredWith, browser: measuredWith};
   return group;
 }

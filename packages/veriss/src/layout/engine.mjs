@@ -3069,8 +3069,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           // The used width is a border-box width; box-sizing stays as declared (it also sizes the block axis), so a
           // content-box box gets the width less its inline padding and borders.
           const declared = style['box-sizing'] === 'content-box' ? sub(used, edges) : used;
-          const text = String(number(declared));
-          if (cmp(q(text), declared) !== 0) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+          // (Its exact decimal text, which may hold more digits than a double: null when it has no finite one.)
+          const text = decimal(declared);
+          if (text === null) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
           style = { ...style, 'inline-size': `${text}px`, 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
         }
         if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null)) continue;

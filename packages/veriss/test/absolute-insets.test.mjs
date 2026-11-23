@@ -118,3 +118,9 @@ test('an auto width on an absolute or fixed box with one inline inset shrinks to
   // 1300px of content in a 1280px viewport may not fit: Unknown.
   assert.equal(width('position:fixed;top:24px;right:24px', '<div class="k" style="--w:1300px"></div>')[0], 'unknown');
 });
+
+test('a shrink-to-fit width that is an exact decimal beyond a double is kept, not Unknown', () => {
+  const r = analyzeHTML('<html lang="en"><body><div class="o"><div class="k"></div></div></body></html>', {name: 'P', css: `*{margin:0;box-sizing:border-box}html,body{${g}}body{position:relative;height:300px}.o{position:absolute;top:0;left:0}.k{width:20.30000000000000001px;height:10px}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
+  assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message)));
+  assert.equal(r.sizes.find(s => s.box === '.o' && s.rect).rect.inlineSize.constant, '2030000000000000001/100000000000000000');
+});

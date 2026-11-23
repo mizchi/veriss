@@ -63,3 +63,14 @@ test('recordMeasurement: one model of a group is split out; the other models kee
   assert.deepEqual(c.safeAreas.find(g => g.models.includes('iPhone 17')).measured, {browser: true, fullscreen: false});
   assert.throws(() => recordMeasurement(c, 'iPhone Air', {}, {}, ''), /iPhone Air/);
 });
+
+test('recordMeasurement clears a fullscreen measurement when the shared insets it covered change', () => {
+  const curated = {safeAreas: [{models: ['A'], portrait: {top: 59, bottom: 34}, landscape: {side: 59, bottom: 21}, measured: {browser: true, fullscreen: true}, measuredWith: {browser: 'x', fullscreen: 'y'}}]};
+  // Unchanged values: the fullscreen measurement still holds.
+  recordMeasurement(curated, 'A', {bottom: 34}, {left: 59, right: 59, bottom: 21}, 'z');
+  assert.equal(curated.safeAreas[0].measured.fullscreen, true);
+  // A changed bottom inset: the fullscreen values no longer reflect a fullscreen measurement.
+  recordMeasurement(curated, 'A', {bottom: 30}, {left: 59, right: 59, bottom: 21}, 'z');
+  assert.equal(curated.safeAreas[0].measured.fullscreen, false);
+  assert.equal(curated.safeAreas[0].measured.browser, true);
+});
