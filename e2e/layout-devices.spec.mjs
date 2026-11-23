@@ -44,3 +44,25 @@ test('hinge-target matches the viewport segments of Chromium\'s display feature'
     expect(statics, x).toBe(browser);
   }
 });
+
+// target-offscreen: a fixed control outside the viewport (no scroll brings it in). In each browser: the control's
+// rectangle against the viewport — entirely outside, partly outside, or inside — at two heights, and the skip link that
+// slides in on focus (not reported).
+test('target-offscreen matches where each browser puts a fixed control', async ({page}) => {
+  const verdict = r => { const codes = [...r.diagnostics, ...r.accessibility.warnings].map(d => d.code); return codes.includes('E_A11Y_TARGET_OFFSCREEN') ? 'outside' : codes.includes('W_A11Y_TARGET_PARTLY_OFFSCREEN') ? 'partly' : 'inside'; };
+  const cases = ['top:-7px;right:8px', 'top:-30px;right:8px', 'top:8px;right:-10px', 'top:8px;left:400px', 'top:8px;right:8px', 'bottom:-20px;left:8px', 'top:calc(100% - 12px);left:8px', 'top:50%;left:calc(100% - 30px)', 'top:-40px;left:8px'];
+  let compared = 0;
+  for (const x of cases) for (const h of [600, 852]) {
+    const extra = x === 'top:-40px;left:8px' ? '.x:focus{top:8px}' : '';
+    const report = analyzeHTML(`<html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${body}</body></html>`, {name: 'P', css: css(x) + extra, viewport: {min: 393, max: 393, height: {min: h, max: h}}, accessibility: true, boxes: {'.t': {minInlineSize: 1, intrinsicBlockSize: 20}}});
+    expect(report.status === 'unknown', `${x}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message))}`).toBe(false);
+    await page.setViewportSize({width: 393, height: h});
+    await page.setContent(`<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css(x)}${extra}</style></head><body>${body}</body></html>`);
+    const browser = await page.evaluate(() => { const r = document.querySelector('.x').getBoundingClientRect(), W = innerWidth, H = innerHeight; if (r.right <= 0 || r.left >= W || r.bottom <= 0 || r.top >= H) return 'outside'; return r.top < 0 || r.left < 0 || r.right > W || r.bottom > H ? 'partly' : 'inside'; });
+    // The focus-revealed skip link is outside until focused, and not reported by design.
+    expect(verdict(report), `${x} at height ${h}`).toBe(extra ? 'inside' : browser);
+    if (extra) expect(browser, 'the skip link starts outside').toBe('outside');
+    compared++;
+  }
+  expect(compared).toBe(cases.length * 2);
+});

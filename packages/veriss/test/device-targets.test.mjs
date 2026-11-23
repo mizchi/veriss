@@ -69,3 +69,25 @@ test('analyzeDevices: one report per check, findings grouped with the checks the
   assert.equal(results.length, 2);
   assert.deepEqual(findings.filter(f => f.code === 'W_A11Y_SAFE_AREA_TARGET').map(f => f.checks), [['a/portrait']]);
 });
+
+// target-offscreen: a control in a fixed (or sticky) box does not scroll into view: the part outside the viewport is
+// never shown. Entirely outside: E_A11Y_TARGET_OFFSCREEN; partly: W_A11Y_TARGET_PARTLY_OFFSCREEN. Content in the flow
+// scrolls into view (a negative offset in it is focus-offscreen's).
+test('target-offscreen: a fixed control outside or partly outside the viewport', () => {
+  const at = (x, extra = '') => analyzeHTML(page(plain), {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}.page{background:#fff;color:#000}.t{height:20px}.x{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;width:24px;height:24px;background:#246;position:fixed;${x}}${extra}`, viewport: {min: 393, max: 393, height: {min: 600, max: 852}}, accessibility: true, boxes: {'.t': {minInlineSize: 1, intrinsicBlockSize: 20}}});
+  const codes = r => [...new Set([...r.diagnostics, ...r.accessibility.warnings].filter(d => /TARGET_(?:PARTLY_)?OFFSCREEN/.test(d.code)).map(d => d.code))].sort();
+  assert.deepEqual(codes(at('top:-7px;right:8px')), ['W_A11Y_TARGET_PARTLY_OFFSCREEN']);
+  assert.deepEqual(codes(at('top:-30px;right:8px')), ['E_A11Y_TARGET_OFFSCREEN']);
+  assert.deepEqual(codes(at('top:8px;right:-10px')), ['W_A11Y_TARGET_PARTLY_OFFSCREEN']);
+  assert.deepEqual(codes(at('top:8px;left:400px')), ['E_A11Y_TARGET_OFFSCREEN']);
+  assert.deepEqual(codes(at('top:8px;right:8px')), []);
+  // Below the bottom edge only where the viewport is short: reported for those heights (700px and up is fine).
+  const low = at('top:690px;left:8px');
+  const found = [...low.diagnostics, ...low.accessibility.warnings].filter(d => /TARGET_(?:PARTLY_)?OFFSCREEN/.test(d.code));
+  assert.ok(found.length && found.every(d => d.heightRange.max <= 714), JSON.stringify(found.map(d => [d.code, d.heightRange])));
+  // A skip link hidden above the top until focused (a :focus rule moves it in): not reported.
+  assert.deepEqual(codes(at('top:-40px;left:8px', '.x:focus{top:8px}')), []);
+  // In the flow it scrolls into view: not reported.
+  const flow = analyzeHTML(`<html lang="en"><head>${plain}</head><body><main class="page"><p class="t">text</p><button class="x" aria-label="Close"></button></main></body></html>`, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}.page{background:#fff;color:#000;padding-top:2000px}.t{height:20px}.x{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;width:24px;height:24px;background:#246}`, viewport: {min: 393, max: 393, height: {min: 600, max: 852}}, accessibility: true, boxes: {'.t': {minInlineSize: 1, intrinsicBlockSize: 20}}});
+  assert.deepEqual(codes(flow), []);
+});

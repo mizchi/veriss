@@ -479,6 +479,11 @@
   `Emulation.setDeviceMetricsOverride` の `displayFeature`(viewport segments)で 5 通り照合した。Firefox・WebKit は照合できない
 - [x] **H18. 端末のプロファイル**([devices.md](devices.md)): StatCounter の普及率(日本・世界)、Playwright の端末定義、safe area とヒンジ(手で書いた値、
   iOS Simulator の実測スクリプト付き)から、端末 × 向きの検査を作る `deviceChecks` / `analyzeDevices`
+- [x] **H19. viewport の外に出る固定された操作部品**(`E_A11Y_TARGET_OFFSCREEN` / `W_A11Y_TARGET_PARTLY_OFFSCREEN`): fixed の箱の中の操作部品は
+  スクロールで画面に入らないので、viewport の外の部分は二度と見えない。全部が外ならエラー、一部ならどの辺かを付けて警告(高さの範囲で分かれる)。
+  流れの中の要素はスクロールで届くので出ない。`:focus` の規則で位置が動く部品(フォーカスで出てくるスキップリンク)は、意図した隠し方なので出さない
+  (フォーカスしても見えないときは `focus-offscreen`)。Chromium・Firefox・WebKit で 9 通り × 2 つの高さを、部品の矩形と viewport で照合
+  (e2e `layout-devices`)
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 

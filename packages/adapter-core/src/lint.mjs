@@ -154,6 +154,8 @@ export const recommended = {
   E_A11Y_FOCUS_VISIBLE: ['error', 'keep a visible focus indicator'],
   E_A11Y_TARGET_SIZE: ['error', 'make the target at least 24×24 px'],
   W_A11Y_BAR_COVERED: ['warning', 'give the bar a z-index'],
+  E_A11Y_TARGET_OFFSCREEN: ['error', 'keep the fixed control inside the viewport (a fixed box never scrolls into view)'],
+  W_A11Y_TARGET_PARTLY_OFFSCREEN: ['warning', 'move the fixed control fully inside the viewport (its outside part is cut off for good)'],
   W_A11Y_SAFE_AREA_TARGET: ['warning', 'offset the fixed control by env(safe-area-inset-*) (calc(env(safe-area-inset-top) + 8px))'],
   W_A11Y_HINGE_TARGET: ['warning', 'keep the control in one viewport segment (@media (horizontal-viewport-segments: 2))'],
   W_A11Y_INERT_SHOWN: ['warning', 'remove inert while the control is shown on top (an inert box takes no click: it reaches what is under it), or hide it'],

@@ -92,6 +92,7 @@
 //   inert-shown      → W_A11Y_INERT_SHOWN       an inert control with nothing painted over it: it looks clickable but takes no click
 //   safe-area-target → W_A11Y_SAFE_AREA_TARGET  a fixed control in the device's safe area on a viewport-fit=cover page (option safeArea)
 //   hinge-target     → W_A11Y_HINGE_TARGET      a control under a dual-screen hinge (option hinge)
+//   target-offscreen → E_A11Y_TARGET_OFFSCREEN / W_A11Y_TARGET_PARTLY_OFFSCREEN  a control in a fixed box (partly) outside the viewport
 //   new-window       → W_A11Y_NEW_WINDOW        a link opening a new window/tab (target=_blank) whose name does not say so (G201)
 //   form-submit      → W_A11Y_FORM_SUBMIT       a form with fields but no submit button (SC 3.2.2)
 //   native-aria-conflict → W_A11Y_NATIVE_ARIA_CONFLICT an ARIA state that contradicts the native one (required/disabled/checked), which Chromium announces instead
@@ -115,13 +116,13 @@ export const accessibilityRules = ['accessible-name', 'text-contrast', 'occluded
   'role-parent', 'role-children', 'role-attr', 'aria-attr', 'aria-value', 'presentation-conflict', 'empty-th', 'redundant-alt', 'title-only', 'input-button-name', 'autocomplete', 'scope',
   'html-lang', 'lang-valid', 'meta-viewport', 'touch-zoom', 'forced-colors', 'page-h1', 'region', 'bypass', 'landmark-top-level', 'duplicate-landmark', 'p-as-heading', 'orientation', 'focus-visible', 'text-spacing', 'state-contrast', 'frame-title', 'video-caption', 'autoplay-audio', 'hover-only',
   'clickable-look', 'list-style-semantics', 'motion', 'blink', 'definition-list', 'accesskeys', 'server-side-image-map', 'aria-hidden-body',
-  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable'];
+  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable'];
 
 // Usefulness tiers (docs/accessibility-rule-evaluation.md). core: depends on the CSS result and is proved over the
 // viewport region and states; dom: decided by the DOM alone (lint overlaps); heuristic: a Technique or a guess that
 // legitimate designs can trip; legacy: rare or obsolete markup. profile 'core' keeps core and dom only.
 const tierLists = {
-  core: ['inert-shown', 'safe-area-target', 'hinge-target', 'page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
+  core: ['inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
   heuristic: ['color-only-state', 'visual-order', 'p-as-heading', 'link-text', 'link-purpose', 'new-window', 'redundant-alt', 'title-only', 'form-submit', 'clickable-look', 'list-style-semantics', 'small-text', 'region', 'bypass', 'page-h1', 'page-main', 'landmark-name', 'landmark-top-level', 'duplicate-landmark', 'radio-group', 'fieldset-name', 'motion', 'autoplay-audio'],
   legacy: ['blink', 'server-side-image-map', 'accesskeys', 'aria-hidden-body'],
 };
@@ -1184,6 +1185,29 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       for (const [side, inset, under] of bands) {
         const region = under(target);
         if (region) report(warnings, 'W_A11Y_SAFE_AREA_TARGET', 'warning', `${target.box.label} is fixed into the device's ${side} safe area (${inset}px${side === 'top' ? ': the notch, Dynamic Island or status bar' : side === 'bottom' ? ': the home indicator' : ': a landscape cutout'}) on this viewport-fit=cover page: it may be hidden or its taps taken by the system. Offset it by env(safe-area-inset-${side})`, target, region, { rule: 'safe-area-target', side, inset });
+      }
+    }
+  }
+  // target-offscreen: a control in a fixed box does not scroll into view, so the part of it outside the viewport is
+  // never shown: entirely outside, it cannot be used (E_A11Y_TARGET_OFFSCREEN); partly outside, it is cut off
+  // (W_A11Y_TARGET_PARTLY_OFFSCREEN). Content in the flow scrolls into view (negative offsets in it: focus-offscreen).
+  if (block && viewportBlock) {
+    const fixedAt = row => { for (let p = row.path; p; p = parentPath(p)) if (rowAt(p)?.fixed) return true; return false; };
+    // (A control that a :focus rule moves, the skip link at top: -40px that slides in, is hidden until focused on
+    // purpose: focus-offscreen checks that it does show then.)
+    for (const target of placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path) && fixedAt(row) && !(row.focusStates ?? []).some(state => state.origin || state.originUnknown))) {
+      const zero = scalar(0);
+      const entirely = [atMost(target.region, right(target), zero), atMost(target.region, domainWidth, target.origin.inline), atMost(target.region, bottom(target), zero), atMost(target.region, viewportBlock, target.origin.block)];
+      const partly = [['top', below(target.region, target.origin.block, zero)], ['left', below(target.region, target.origin.inline, zero)], ['right', below(target.region, domainWidth, right(target))], ['bottom', below(target.region, viewportBlock, bottom(target))]];
+      let done = [];
+      for (const region of entirely.filter(Boolean)) {
+        for (const piece of done.reduce((rest, d) => rest.flatMap(r => subtract(r, d)), [region])) report(findings, 'E_A11Y_TARGET_OFFSCREEN', 'error', `${target.box.label} is in a fixed box but lies entirely outside the viewport: it never scrolls into view and cannot be used`, target, piece, { rule: 'target-offscreen' });
+        done.push(region);
+      }
+      for (const [side, region] of partly) {
+        if (!region) continue;
+        for (const piece of done.reduce((rest, d) => rest.flatMap(r => subtract(r, d)), [region])) report(warnings, 'W_A11Y_TARGET_PARTLY_OFFSCREEN', 'warning', `${target.box.label} is in a fixed box and reaches past the viewport's ${side} edge: that part never scrolls into view (it is cut off)`, target, piece, { rule: 'target-offscreen', side });
+        done.push(region);
       }
     }
   }
