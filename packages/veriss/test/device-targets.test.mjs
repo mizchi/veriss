@@ -91,3 +91,31 @@ test('target-offscreen: a fixed control outside or partly outside the viewport',
   const flow = analyzeHTML(`<html lang="en"><head>${plain}</head><body><main class="page"><p class="t">text</p><button class="x" aria-label="Close"></button></main></body></html>`, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}.page{background:#fff;color:#000;padding-top:2000px}.t{height:20px}.x{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;width:24px;height:24px;background:#246}`, viewport: {min: 393, max: 393, height: {min: 600, max: 852}}, accessibility: true, boxes: {'.t': {minInlineSize: 1, intrinsicBlockSize: 20}}});
   assert.deepEqual(codes(flow), []);
 });
+
+// A control (or its wrapper) fixed only on one side of a breakpoint and in the flow on the other: the fixed-box
+// checks apply where it is fixed, not where it scrolls with the page.
+test('target-offscreen and safe-area-target: position fixed on one side of a breakpoint only', () => {
+  const cover = '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">';
+  const run = (html, css, meta = plain, options = {}) => analyzeHTML(`<html lang="en"><head>${meta}</head><body><main class="page"><p class="t">text</p>${html}</main></body></html>`, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}.page{background:#fff;color:#000;padding-top:2000px}.t{height:20px}.x{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;width:24px;height:24px;background:#246}${css}`, viewport: {min: 300, max: 800, height: {min: 600, max: 600}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}], boxes: {'.t': {minInlineSize: 1, intrinsicBlockSize: 20}}, ...options});
+  const spans = (r, code) => [...r.diagnostics, ...r.accessibility.warnings].filter(d => d.code === code).map(d => [d.range.minExact, d.range.maxExact]).sort();
+  const self = '<button class="x" aria-label="Close"></button>', wrapped = `<div class="w">${self}</div>`;
+  // Fixed above the top edge below 500px; in the flow (2000px down the page, it scrolls into view) from 500px.
+  assert.deepEqual(spans(run(self, '@media (max-width:499px){.x{position:fixed;top:-30px;left:8px}}'), 'E_A11Y_TARGET_OFFSCREEN'), [['300', '499']]);
+  assert.deepEqual(spans(run(self, '@media (min-width:500px){.x{position:fixed;top:-30px;left:8px}}'), 'E_A11Y_TARGET_OFFSCREEN'), [['500', '800']]);
+  assert.deepEqual(spans(run(wrapped, '@media (max-width:499px){.w{position:fixed;top:-30px;left:8px;width:40px}}'), 'E_A11Y_TARGET_OFFSCREEN'), [['300', '499']]);
+  assert.deepEqual(spans(run(wrapped, '@media (min-width:500px){.w{position:fixed;top:-30px;left:8px;width:40px}}'), 'E_A11Y_TARGET_OFFSCREEN'), [['500', '800']]);
+  // Safe area: at the page's top in the flow it scrolls out of the notch's band; fixed there, it stays.
+  const top = {safeArea: {top: 59, right: 0, bottom: 34, left: 0}}, flow = '.page{padding-top:0}';
+  assert.deepEqual(spans(run(self, `${flow}@media (max-width:499px){.x{position:fixed;top:8px;left:8px}}`, cover, top), 'W_A11Y_SAFE_AREA_TARGET'), [['300', '499']]);
+  assert.deepEqual(spans(run(self, `${flow}@media (min-width:500px){.x{position:fixed;top:8px;left:8px}}`, cover, top), 'W_A11Y_SAFE_AREA_TARGET'), [['500', '800']]);
+  assert.deepEqual(spans(run(wrapped, `${flow}@media (max-width:499px){.w{position:fixed;top:8px;left:8px;width:40px}}`, cover, top), 'W_A11Y_SAFE_AREA_TARGET'), [['300', '499']]);
+  assert.deepEqual(spans(run(wrapped, `${flow}@media (min-width:500px){.w{position:fixed;top:8px;left:8px;width:40px}}`, cover, top), 'W_A11Y_SAFE_AREA_TARGET'), [['500', '800']]);
+  // Fixed everywhere: the whole range.
+  assert.deepEqual(spans(run(self, '.x{position:fixed;top:-30px;left:8px}'), 'E_A11Y_TARGET_OFFSCREEN'), [['300', '800']]);
+});
+
+// A control in a corner reaches into two safe-area bands: one warning per side, not one per range.
+test('safe-area-target: a corner control is reported for each side it reaches into', () => {
+  const r = run(cover, 'top:8px;left:8px', {safeArea: {top: 59, right: 0, bottom: 34, left: 40}});
+  assert.deepEqual(r.accessibility.warnings.filter(d => d.code === 'W_A11Y_SAFE_AREA_TARGET').map(d => d.side).sort(), ['left', 'top']);
+});

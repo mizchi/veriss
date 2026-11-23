@@ -473,8 +473,9 @@
 - [x] **H16. 端末の safe area に入る操作部品**(`W_A11Y_SAFE_AREA_TARGET`、オプション `safeArea`): `viewport-fit=cover` のページで、fixed / sticky の箱の中の
   操作部品が safe area の帯(上: ノッチ・Dynamic Island・ステータスバー、下: ホームインジケーター、横向きの左右: 切り欠き)に入る範囲。流れの中の
   要素はスクロールで帯から出るので報告しない。`viewport-fit=cover` のないページはブラウザーが safe area の内側に収めるので出ない。端末の形はどの
-  ブラウザーにもないので、Chromium の `Emulation.setSafeAreaInsetsOverride` で `env()` と位置を照合した(e2e `layout-devices`、6 通り)。
-  Firefox・WebKit は照合できない。直し方の `calc(env(safe-area-inset-top) + 4px)` の inset も読む(今までは Unknown)
+  ブラウザーにもないので、Chromium の `Emulation.setSafeAreaInsetsOverride` で `env()` と位置を照合した(e2e `layout-devices`、7 通り。
+  角の部品は上と左の両方の帯で 1 件ずつ)。Firefox・WebKit は照合できない。直し方の `calc(env(safe-area-inset-top) + 4px)` の inset も読む
+  (今までは Unknown)。fixed / sticky かは幅の範囲ごとに見る(ブレークポイントの片側だけ fixed なら、その側だけで報告する。H19 も同じ)
 - [x] **H17. 2 画面の端末のヒンジの下の操作部品**(`W_A11Y_HINGE_TARGET`、オプション `hinge`): ヒンジの帯は表示されずタップも届かない。Chromium の
   `Emulation.setDeviceMetricsOverride` の `displayFeature`(viewport segments)で 5 通り照合した。Firefox・WebKit は照合できない
 - [x] **H18. 端末のプロファイル**([devices.md](devices.md)): StatCounter の普及率(日本・世界)、Playwright の端末定義、safe area とヒンジ(手で書いた値、
@@ -483,7 +484,8 @@
   スクロールで画面に入らないので、viewport の外の部分は二度と見えない。全部が外ならエラー、一部ならどの辺かを付けて警告(高さの範囲で分かれる)。
   流れの中の要素はスクロールで届くので出ない。`:focus` の規則で位置が動く部品(フォーカスで出てくるスキップリンク)は、意図した隠し方なので出さない
   (フォーカスしても見えないときは `focus-offscreen`)。Chromium・Firefox・WebKit で 9 通り × 2 つの高さを、部品の矩形と viewport で照合
-  (e2e `layout-devices`)
+  (e2e `layout-devices`)。部品か祖先がブレークポイントの片側だけ fixed のときは、fixed の幅だけで報告する(4 通り × 2 つの幅を、
+  スクロールの先頭と末尾の両方で外にあるかで 3 ブラウザーと照合)
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 

@@ -17,6 +17,7 @@ test('safe-area-target matches where the control sits against Chromium\'s safe-a
   const cases = [
     [{width: 393, height: 852}, {top: 59, right: 0, bottom: 34, left: 0}, 'top:8px;right:8px'], [{width: 393, height: 852}, {top: 59, right: 0, bottom: 34, left: 0}, 'top:60px;right:8px'],
     [{width: 393, height: 852}, {top: 59, right: 0, bottom: 34, left: 0}, 'bottom:8px;left:8px'], [{width: 393, height: 852}, {top: 59, right: 0, bottom: 34, left: 0}, 'top:calc(env(safe-area-inset-top) + 4px);right:8px'],
+    [{width: 393, height: 852}, {top: 59, right: 0, bottom: 34, left: 40}, 'top:8px;left:8px'],
     [{width: 852, height: 393}, {top: 0, right: 59, bottom: 21, left: 59}, 'top:100px;right:8px'], [{width: 852, height: 393}, {top: 0, right: 59, bottom: 21, left: 59}, 'top:100px;right:calc(env(safe-area-inset-right) + 4px)'],
   ];
   for (const [vp, insets, x] of cases) {
@@ -65,4 +66,30 @@ test('target-offscreen matches where each browser puts a fixed control', async (
     compared++;
   }
   expect(compared).toBe(cases.length * 2);
+});
+
+// A control (or its wrapper) fixed above the top edge on one side of a breakpoint only, and in the flow 2000px down the
+// page on the other. Each browser at both widths: outside the viewport at the top and the bottom of the scroll (fixed)
+// or scrolled into view (in the flow); the static check reports E_A11Y_TARGET_OFFSCREEN only at the widths where it is
+// fixed.
+test('target-offscreen follows a breakpoint that makes the control fixed in each browser', async ({page}) => {
+  const flow = `*{box-sizing:border-box;margin:0}html,body,.page{${g}}.page{background:#fff;color:#000;padding-top:2000px}.t{height:20px}.x{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;width:24px;height:24px;background:#246}`;
+  const self = '<button class="x" aria-label="Close"></button>', wrapped = `<div class="w">${self}</div>`;
+  const cases = [[self, '@media (max-width:499px){.x{position:fixed;top:-30px;left:8px}}'], [self, '@media (min-width:500px){.x{position:fixed;top:-30px;left:8px}}'],
+    [wrapped, '@media (max-width:499px){.w{position:fixed;top:-30px;left:8px;width:40px}}'], [wrapped, '@media (min-width:500px){.w{position:fixed;top:-30px;left:8px;width:40px}}']];
+  const verdicts = new Set();
+  for (const [html, rule] of cases) {
+    const doc = `<main class="page"><p class="t">text</p>${html}</main>`;
+    const report = analyzeHTML(`<html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${doc}</body></html>`, {name: 'P', css: flow + rule, viewport: {min: 300, max: 800, height: {min: 600, max: 600}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}], boxes: {'.t': {minInlineSize: 1, intrinsicBlockSize: 20}}});
+    const found = report.diagnostics.filter(d => d.code === 'E_A11Y_TARGET_OFFSCREEN');
+    for (const width of [400, 600]) {
+      await page.setViewportSize({width, height: 600});
+      await page.setContent(`<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html{scrollbar-width:none}${flow}${rule}</style></head><body>${doc}</body></html>`);
+      const browser = await page.evaluate(() => [0, document.documentElement.scrollHeight].every(y => { scrollTo(0, y); const r = document.querySelector('.x').getBoundingClientRect(); return r.right <= 0 || r.left >= innerWidth || r.bottom <= 0 || r.top >= innerHeight; }));
+      const statics = found.some(d => d.range.min <= width && width <= d.range.max);
+      expect(statics, `${rule} at ${width}px`).toBe(browser);
+      verdicts.add(browser);
+    }
+  }
+  expect([...verdicts].sort()).toEqual([false, true]);
 });
