@@ -21,6 +21,10 @@ export interface LayoutOptions {
   hostInset?: number;
   hostBlockInset?: number;
   boxes?: Record<string, LayoutBoxContract>;
+  /** The device's safe-area insets in px, read by env(safe-area-inset-*) and the safe-area-target rule on a viewport-fit=cover page. */
+  safeArea?: { top?: number; right?: number; bottom?: number; left?: number };
+  /** A dual-screen device's hinge in viewport px: what lies under it is not shown (the hinge-target rule). */
+  hinge?: { left: number; top: number; width: number; height: number };
 }
 export interface LayoutBoxContract {
   /** Trusted sufficient content-width bound for every allowed input/font. */

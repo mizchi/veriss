@@ -154,6 +154,8 @@ export const recommended = {
   E_A11Y_FOCUS_VISIBLE: ['error', 'keep a visible focus indicator'],
   E_A11Y_TARGET_SIZE: ['error', 'make the target at least 24×24 px'],
   W_A11Y_BAR_COVERED: ['warning', 'give the bar a z-index'],
+  W_A11Y_SAFE_AREA_TARGET: ['warning', 'offset the fixed control by env(safe-area-inset-*) (calc(env(safe-area-inset-top) + 8px))'],
+  W_A11Y_HINGE_TARGET: ['warning', 'keep the control in one viewport segment (@media (horizontal-viewport-segments: 2))'],
   W_A11Y_INERT_SHOWN: ['warning', 'remove inert while the control is shown on top (an inert box takes no click: it reaches what is under it), or hide it'],
   W_A11Y_BAR_TRANSPARENT: ['warning', 'give the bar an opaque background'],
   W_A11Y_LABEL_POINTER: ['warning', 'remove pointer-events: none from the label'],

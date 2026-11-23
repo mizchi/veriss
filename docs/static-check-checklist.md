@@ -470,6 +470,15 @@
   `inert` の操作部品の上に何も描かれていない(見えている)範囲は、押せるように見えて押せないので警告する。モーダルのライブラリが広告や通知を含む兄弟要素を
   `inert` にしたまま、それが最前面に見えているときに起きる。暗幕の後ろの `inert` な背面(意図した使い方)は覆われているので報告しない。
   e2e `inert layers and controls match hit testing` で 4 通り
+- [x] **H16. 端末の safe area に入る操作部品**(`W_A11Y_SAFE_AREA_TARGET`、オプション `safeArea`): `viewport-fit=cover` のページで、fixed / sticky の箱の中の
+  操作部品が safe area の帯(上: ノッチ・Dynamic Island・ステータスバー、下: ホームインジケーター、横向きの左右: 切り欠き)に入る範囲。流れの中の
+  要素はスクロールで帯から出るので報告しない。`viewport-fit=cover` のないページはブラウザーが safe area の内側に収めるので出ない。端末の形はどの
+  ブラウザーにもないので、Chromium の `Emulation.setSafeAreaInsetsOverride` で `env()` と位置を照合した(e2e `layout-devices`、6 通り)。
+  Firefox・WebKit は照合できない。直し方の `calc(env(safe-area-inset-top) + 4px)` の inset も読む(今までは Unknown)
+- [x] **H17. 2 画面の端末のヒンジの下の操作部品**(`W_A11Y_HINGE_TARGET`、オプション `hinge`): ヒンジの帯は表示されずタップも届かない。Chromium の
+  `Emulation.setDeviceMetricsOverride` の `displayFeature`(viewport segments)で 5 通り照合した。Firefox・WebKit は照合できない
+- [x] **H18. 端末のプロファイル**([devices.md](devices.md)): StatCounter の普及率(日本・世界)、Playwright の端末定義、safe area とヒンジ(手で書いた値、
+  iOS Simulator の実測スクリプト付き)から、端末 × 向きの検査を作る `deviceChecks` / `analyzeDevices`
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
