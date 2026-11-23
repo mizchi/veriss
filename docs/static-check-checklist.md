@@ -423,6 +423,80 @@
   `::before`・`::after` の content や子の要素(アイコン)がなければ、開いているかどうかを示すものがない。
 - [x] **F10. 要素(擬似要素でない)の `content`**: 文字列は何もしない(既存の `W_LAYOUT_DECLARATION_INERT` が出していた)。
   `url()` は要素を画像で置き換えるので効く(3 つのブラウザーで測った)。
+## H. ダイアログの閉じるボタンを覆うもの
+
+- [x] **H1. 閉じるボタンを覆う層と、その理由**(`E_A11Y_OCCLUDED` の文言): 覆う箱が opacity 0(自身か祖先)なら「見えないがクリックを受ける」と書き、
+  `pointer-events: none` か `display: none` を勧める。ボタン(か、比べる文脈より内側の文脈)の z-index が、外側の stacking context
+  (z-index・`position: fixed`・`transform` など)の中でしか効かないときは、その z-index と文脈の箱と理由を書く。
+  e2e(`what covers a dialog close button`)で、Chromium・Firefox・WebKit の `elementFromPoint` と 11 通りを照合した:
+  背景の暗幕がダイアログより上、ボタンの z-index 2147483647 がダイアログの文脈(`fixed` + z-index 5)に閉じ込められる、
+  上の層・opacity 0 の層(覆う)、`pointer-events: none` か `visibility: hidden` の層(覆わない)、最大の z-index が同じなら DOM の後ろが勝つ、
+  `transform` の文脈の中の z-index 99。対照として、ダイアログが暗幕より上・z-index が 1 つ小さい層では覆われない
+- [x] **H2. 開いた `aria-modal` のダイアログの外**: ダイアログが描かれる範囲(viewport の幅と高さの領域)では、その外の要素が覆われる・隠れることを
+  `E_A11Y_OCCLUDED`・`E_A11Y_FOCUS_OBSCURED`・`E_A11Y_FOCUS_SCROLLED_UNDER`・`E_A11Y_FIXED_HIDES(_PART)` として報告しない
+  (背面に届かないのが意図。3 つのブラウザーとも背面のボタンは暗幕に覆われることを e2e で確かめた)。フォーカスが外へ出るのは
+  従来どおり `W_A11Y_MODAL_BACKGROUND`。`aria-modal` のない箱は従来どおり報告する
+- [x] **H3. opacity 0 の層は見た目を隠さない**: 自身か祖先が opacity 0 の箱は、`E_A11Y_FOCUS_OBSCURED`・固定・sticky のバーの規則・文字の被りの覆いにしない
+  (何も描かない)。ヒットテストは受けるので `E_A11Y_OCCLUDED` には残す
+- [x] **H4. 幅だけの `border`**: `border: 5px`・`medium`・`0px` は style が初期値の none に戻り、使われる幅は 0(`border: 0` と同じ。
+  Chromium・Firefox・WebKit で button と inline-block の箱が `border: 0` と同じ形・同じ描画になることを実測。対照の `5px solid` は箱が変わる)。
+  解析は今まで `0` と `none` だけを受けて、ほかを Unknown にしていた。`%` と負の長さは幅ではない(宣言ごと捨てられる)ので Unknown のまま
+- [x] **H5. 覆いを全部並べる**: 同じ viewport の範囲で同じ要素に重なる、ほかの覆いを `alsoCoveredBy` と文言に並べる(1 つ目の覆いだけ直しても押せないことが分かる)。
+  報告の件数は今までどおり範囲ごとに 1 つ
+- [x] **H6. 横の inset のない絶対配置(静的位置)**: 包含ブロックが親そのものの block コンテナなら、内容の端(ltr は `padding-left`、rtl は `padding-right`)。
+  grid コンテナが包含ブロックなら padding の端(既存)。Chromium・Firefox・WebKit で 2 つの幅と 6 通りを照合(e2e `absolute boxes with auto inline insets`)。
+  もとの display が inline 系の箱(`text-align` で動く。inline-block で 206px)、% の padding、flex の親、`margin-left` のある箱は Unknown のまま
+- [x] **H7. 高さが auto の絶対配置**: 包含ブロックに伸ばさず、中身の高さ(CSS 2 §10.6.4)。`top` で置く箱は、高さが決まる前でも中身に位置が出る
+  (`bottom` で置く箱の中身は、高さが決まるまで位置なし)。`min-height` / `max-height` との組は Unknown。3 ブラウザーで 10 通り、子と孫を含めて 22 の矩形を照合
+- [x] **H8. スクロールロックの body**(`body { position: fixed; left: 0; right: 0 }`、`top` は auto): html の内容の端(html の `padding-top`)に置く。
+  包含ブロックが grid 自身でないときの静的位置は grid の内容の端(grid の html に padding があると body は padding の分下がる。3 ブラウザーで実測)。
+  html に margin か border がある、rtl、px でない padding は Unknown
+- [x] **H9. 決して効かない `vw` / `vh` の上限**: 幅が中身で決まり伸びない flex アイテムの `max-width: Nvw` は、中身の max-content 幅が最小の viewport 幅 × N% 以下なら効かない
+  (中身 300px・`100vw`・幅 320〜:3 ブラウザーで 300px。360px か `50vw` なら効くので Unknown)。高さが auto の箱の `max-height: Nvh` は、決まった高さが
+  viewport の高さ × N% を超えうる範囲があれば Unknown、なければ効かない
+- [x] **H10. 中身の高さで寄せる flex アイテムの子の位置**: `align-items: center` などで寄せる箱の高さが中身で決まるとき、子は上端から並べ、高さが決まったら子孫を
+  寄せの量だけずらす(高さが決まらなければ子孫の位置を出さない)。中央寄せのダイアログの中の閉じるボタンが覆われるかを判定できる。3 ブラウザーで 3 つの大きさで照合。
+  `:focus` で動く子孫のフォーカス時の位置も同じだけずらす(高さが決まらなければ Unknown)。以前は寄せる前の位置のままで、200px の viewport の中央の
+  100px の箱で `top: -30px` に出るスキップリンク(実際は 20px)を `E_A11Y_FOCUS_OFFSCREEN` と誤っていた。3 ブラウザーで 6 通り × 2 つの高さを照合
+- [x] **H11. 小数の桁**: px の値は小数点以下 20 桁まで正確な有理数として読む(スクリプトが書く `26.666666666666668px`)。今までは 6 桁を超えると Unknown。
+  解析器が計算して px として書き戻す値(rem・em の px への換算、表の列幅、相殺した margin など)は、正確な小数(20 桁まで)のときだけ書く。
+  `String(number(v))` は double に丸めた別の値になる(`26.666666666666668px` の `1.1em` は 29.3333333333333348px で、double の
+  29.333333333333336 ではない)。有限の小数にならない値は rem・em のまま残すか Unknown
+- [x] **H12. `filter`**: `none` 以外は、スタッキングコンテキスト(中の z-index 99 の子が外の z-index 2 の兄弟の下になる)と、fixed の子孫の包含ブロック
+  (`brightness(1)` でも)を作る。ヒットテストの範囲と配置は変えない(`drop-shadow` の影はクリックを受けない)。Chromium・Firefox・WebKit で実測し、
+  e2e `filter traps a z-index` で 5 通りをヒットテストと照合。色は変わるので、filter の下のコントラストは Unknown。`url()` の filter は Unknown のまま
+- [x] **H13. 幅が auto の絶対配置・fixed の箱(shrink-to-fit)**: 横の inset が片方だけのとき、中身の max-content 幅を `max-width` / `min-width` で挟んだ値
+  (CSS 2 §10.3.7)。max-content 幅が inset の残す幅を超えうる範囲があれば Unknown。3 ブラウザーで 2 つの幅と 6 通りを照合
+  (中身が絶対配置の子だけで `min-width: 180px` → 180、`content-box` の padding を含めて 60 など)。決めた幅は border-box の値だが、`box-sizing` は
+  宣言のまま残す(`content-box` なら padding と border を引いた幅にする)。縦の `height` / `min-height` / `max-height` は宣言どおりの box-sizing で読む
+  (`height: 20px; padding: 10px; box-sizing: content-box` は 40px。以前は border-box に変えて 20px と誤っていた)。高さも含めて 4 通りを足して照合
+- [x] **H14. 高さが auto の絶対配置の箱の `min-height` / `max-height`**: 中身の高さで一度解き、範囲を分けて、下回るところは最小、上回るところは最大の高さで
+  解き直す(最小が勝つ。`min-height: 100px; max-height: 50px` は 100px で、最大で詰め直さない。以前は 50px と誤っていた)。H7 で Unknown にしていた組。
+  e2e `absolute boxes with an auto height` に最小が最大より大きい組と、最大の内側の組を足して 3 ブラウザーで照合
+- [x] **H15. `inert` とヒットテスト**(`W_A11Y_INERT_SHOWN`): `inert` の部分木はヒットテストで透明(クリックと `elementFromPoint` は下の要素に届く)で、中の
+  操作部品はクリックを受けない(Chromium・Firefox・WebKit で、`inert` のある層とない層を対照に実測)。`inert` の箱は覆いにならない(`E_A11Y_OCCLUDED`)。
+  `inert` の操作部品の上に何も描かれていない(見えている)範囲は、押せるように見えて押せないので警告する。モーダルのライブラリが広告や通知を含む兄弟要素を
+  `inert` にしたまま、それが最前面に見えているときに起きる。暗幕の後ろの `inert` な背面(意図した使い方)は覆われているので報告しない。
+  e2e `inert layers and controls match hit testing` で 4 通り
+- [x] **H16. 端末の safe area に入る操作部品**(`W_A11Y_SAFE_AREA_TARGET`、オプション `safeArea`): `viewport-fit=cover` のページで、fixed / sticky の箱の中の
+  操作部品が safe area の帯(上: ノッチ・Dynamic Island・ステータスバー、下: ホームインジケーター、横向きの左右: 切り欠き)に入る範囲。流れの中の
+  要素はスクロールで帯から出るので報告しない。`viewport-fit=cover` のないページはブラウザーが safe area の内側に収めるので出ない。端末の形はどの
+  ブラウザーにもないので、Chromium の `Emulation.setSafeAreaInsetsOverride` で `env()` と位置を照合した(e2e `layout-devices`、7 通り。
+  角の部品は上と左の両方の帯で 1 件ずつ)。Firefox・WebKit は照合できない。直し方の `calc(env(safe-area-inset-top) + 4px)` の inset も読む
+  (今までは Unknown)。fixed / sticky かは幅の範囲ごとに見る(ブレークポイントの片側だけ fixed なら、その側だけで報告する。H19 も同じ)
+- [x] **H17. 2 画面の端末のヒンジの下の操作部品**(`W_A11Y_HINGE_TARGET`、オプション `hinge`): ヒンジの帯は表示されずタップも届かない。Chromium の
+  `Emulation.setDeviceMetricsOverride` の `displayFeature`(viewport segments)で 5 通り照合した。Firefox・WebKit は照合できない
+- [x] **H18. 端末のプロファイル**([devices.md](devices.md)): StatCounter の普及率(日本・世界)、Playwright の端末定義、safe area とヒンジ(手で書いた値、
+  iOS Simulator の実測スクリプト付き)から、端末 × 向きの検査を作る `deviceChecks` / `analyzeDevices`
+- [x] **H19. viewport の外に出る固定された操作部品**(`E_A11Y_TARGET_OFFSCREEN` / `W_A11Y_TARGET_PARTLY_OFFSCREEN`): fixed の箱の中の操作部品は
+  スクロールで画面に入らないので、viewport の外の部分は二度と見えない。全部が外ならエラー、一部ならどの辺かを付けて警告(高さの範囲で分かれる)。
+  流れの中の要素はスクロールで届くので出ない。`:focus` の規則で位置が動く部品(フォーカスで出てくるスキップリンク)は、意図した隠し方なので出さない
+  (フォーカスしても見えないときは `focus-offscreen`)。Chromium・Firefox・WebKit で 9 通り × 2 つの高さを、部品の矩形と viewport で照合
+  (e2e `layout-devices`)。部品か祖先がブレークポイントの片側だけ fixed のときは、fixed の幅だけで報告する(4 通り × 2 つの幅を、
+  スクロールの先頭と末尾の両方で外にあるかで 3 ブラウザーと照合)
+- 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
+  `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
+
 ## 済み(このチェックリストを作る前に済んだもの)
 
 - [x] easing の行き過ぎ(cubic-bezier、`linear()`)の極値でのシフト検査と CLS の上限、終わりの戻り、relative のオフセット、

@@ -140,8 +140,14 @@ export function flexItem(style, { empty = false, axis = 'inline', contentSizes }
   // max-width on a row's main axis (px): items above it freeze there (§9.7). Others stay outside the subset.
   if (style[axis === 'inline' ? 'max-inline-size' : 'max-block-size'] !== 'none') {
     const max = style[axis === 'inline' ? 'max-inline-size' : 'max-block-size'];
-    if (axis !== 'inline' || !/^\d+(?:\.\d+)?px$/.test(max)) unknown(`A flex item's max size ${max} is outside the subset (px max-width on a row only)`);
-    item.maximum = outer(px(max), own, contentBox);
+    // A vw max-width on a content-sized item that does not grow: the engine's content probe has proved the content no
+    // wider than that fraction of the narrowest viewport (else Unknown there), so the item never reaches it.
+    const neverCaps = axis === 'inline' && /^\d+(?:\.\d+)?vw$/.test(String(max)) && contentSizes && (basis === 'auto' || basis === 'content') && style[n.size] === 'auto' && cmp(grow, q(0)) === 0;
+    if (neverCaps) item.maxNeverCaps = true;
+    if (!neverCaps) {
+      if (axis !== 'inline' || !/^\d+(?:\.\d+)?px$/.test(max)) unknown(`A flex item's max size ${max} is outside the subset (px max-width on a row only)`);
+      item.maximum = outer(px(max), own, contentBox);
+    }
   }
   if (style[n.min] !== 'auto') item.minimum = outer(px(style[n.min]), own, contentBox);
   else if (!automatic) item.minimum = own;

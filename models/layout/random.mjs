@@ -1,5 +1,12 @@
 // Random configurations inside L1 (a seeded generator, so a failing case can be replayed by its seed).
-export function rng(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 2 ** 32; }; }
+// xorshift32. A small seed gives tiny first outputs (seed 1..200 made every Flex configuration a single item and every
+// Grid one column): the seed is scrambled and the first outputs dropped.
+export function rng(seed) {
+  let s = (Math.imul(seed >>> 0, 0x9e3779b1) ^ 0x5bd1e995) >>> 0 || 1;
+  const next = () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 2 ** 32; };
+  for (let i = 0; i < 8; i++) next();
+  return next;
+}
 const pick = (r, xs) => xs[Math.floor(r() * xs.length)];
 const int = (r, a, b) => a + Math.floor(r() * (b - a + 1));
 export function randomGrid(seed) {

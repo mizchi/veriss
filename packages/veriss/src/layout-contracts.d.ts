@@ -7,6 +7,8 @@ export interface LayoutOptions {
   scrollbars?: readonly LayoutScrollbarProfile[];
   /** Static counterparts of vlmkit's box-model integrity rules (ADR-0012). */
   integrity?: boolean | LayoutIntegrityOptions;
+  /** Accessibility rules (WCAG); the report's `accessibility` member. */
+  accessibility?: boolean | LayoutAccessibilityOptions;
   css: string;
   cssFile?: string;
   /** Ordered reset sources, before css in the same author cascade. */
@@ -21,14 +23,26 @@ export interface LayoutOptions {
   hostInset?: number;
   hostBlockInset?: number;
   boxes?: Record<string, LayoutBoxContract>;
+  /** The device's safe-area insets in px, read by env(safe-area-inset-*) and the safe-area-target rule on a viewport-fit=cover page. */
+  safeArea?: { top?: number; right?: number; bottom?: number; left?: number };
+  /** A dual-screen device's hinge in viewport px: what lies under it is not shown (the hinge-target rule). */
+  hinge?: { left: number; top: number; width: number; height: number };
 }
 export interface LayoutBoxContract {
-  /** Trusted sufficient content-width bound for every allowed input/font. */
+  /** Trusted sufficient content-width bound for every allowed input/font (the min-content width). */
   minInlineSize?: number;
+  /**
+   * Trusted max-content width: the content laid out on one unbroken line. Needs a `minInlineSize` no larger than it.
+   * Sizes boxes that shrink-wrap their content (automatic table columns, flex items with an auto basis or width).
+   */
+  maxInlineSize?: number;
+  /** Width of a text field's placeholder measured with its font; wider than the field's content box is W_A11Y_PLACEHOLDER_CLIPPED. */
+  placeholderInlineSize?: number;
   minBlockSize?: number;
   /** Trusted exact auto content height, or an ascending inline-width profile. */
   intrinsicBlockSize?: number | readonly { atLeastInlineSize: number; blockSize: number }[];
-  wrap?: 'normal' | 'anywhere' | 'nowrap';
+  /** `'one-line'`: CSS may wrap, but the text is expected on one line; narrower widths are E_LAYOUT_CONTENT. */
+  wrap?: 'normal' | 'anywhere' | 'nowrap' | 'one-line';
   overflow?: 'fit' | 'scroll' | 'clip' | 'visible';
   overflowBlock?: 'fit' | 'scroll' | 'clip' | 'visible';
   /** Font the size bounds were measured with (`/text`); the computed CSS font must match or the box is Unknown. */
@@ -37,6 +51,8 @@ export interface LayoutBoxContract {
   textMetrics?: { kind: 'content'; text: string; width: number; font?: object; allowance?: string }
     | { kind: 'domain'; characters: string; maxLength: number; perCharacter: number; pairAdjustment: number; widest: string; bounds: number[]; font?: object; allowance?: string }
     | { kind: 'lines'; text: string; width: number; minContent: number; overflowWrap: 'normal' | 'anywhere' | 'break-word'; profile: { atLeastInlineSize: number; lines: number | null }[]; lang?: string; font?: object; allowance?: string };
+  /** A table cell's anonymous text blocks, in DOM order: one contract per text run. */
+  textRuns?: readonly Omit<LayoutBoxContract, 'textRuns'>[];
 }
 export interface CheckedLayoutBoxContract extends Omit<LayoutBoxContract, 'overflow' | 'overflowBlock'> {
   overflow?: 'fit' | 'clip' | 'scroll';
@@ -96,6 +112,29 @@ export interface LayoutIntegrityOptions {
   /** 'all' parents (default) or only those with a border or background, as vlmkit judges. */
   protrusion?: 'all' | 'painted';
 }
+export interface LayoutAccessibilityOptions {
+  contrast?: 'AA' | 'AAA';
+  targetLevel?: 'AA' | 'AAA';
+  /** Target size in CSS px (default 24, or 44 with targetLevel 'AAA'). */
+  targetSize?: number;
+  /** 'all' rules (default) or the 'core' ones. */
+  profile?: 'all' | 'core';
+}
+/** An accessibility warning: a diagnostic row reported beside `diagnostics`. */
+export interface LayoutAccessibilityWarning extends Omit<LayoutDiagnostic, 'severity' | 'witness'> {
+  severity: 'warning';
+  /** A sample viewport inside the region. */
+  witness?: { viewport: number; viewportExact: string; viewportHeight?: number; viewportHeightExact?: string };
+  rule?: string;
+  /** Usefulness tier of the rule ('core', 'heuristic', 'dom', ...). */
+  tier?: string;
+  /** The region's constraints when the analysis has a block axis. */
+  regionConstraints?: (LayoutAffine & { strict: boolean })[];
+  /** Rule-specific details (side, inset, ratio, ...). */
+  [detail: string]: unknown;
+}
+/** A finding a rule would report but does not, with the reason (user agent control, essential, equivalent). */
+export interface LayoutAccessibilityExemption { code: string; rule: string; box: string; path: string; range: LayoutRange; heightRange?: LayoutRange; region?: LayoutRegion; reason: string; equivalent?: string }
 export interface LayoutIntegrityRow { code: string; severity: 'error' | 'warning'; rule: string; message: string; box: string; path: string; range: LayoutRange; heightRange?: LayoutRange; other?: string; parent?: string; axis?: 'inline' | 'block'; reason?: string }
 export interface LayoutCSSCondition { kind:'media'|'container'; name?:string; params:string; css:{file:string;line:number} }
 export interface LayoutCSSOrigin { file:string; line:number; selector:string; layer?:string; specified:string; conditions?:LayoutCSSCondition[] }
@@ -133,6 +172,8 @@ export interface LayoutSummary {
   scrollbars?: {box:string;path:string;inlineSize:number;blockSize:number;viewport:boolean;variant?:number;scrollbarProfile?:string;range:LayoutRange;heightRange?:LayoutRange;region?:LayoutRegion}[];
   invalidSubstitutions?: LayoutInvalidSubstitution[];
   integrity?: { rules: string[]; targetSize: number; protrusion: 'all' | 'painted'; warnings: LayoutIntegrityRow[]; exempted: LayoutIntegrityRow[] };
+  /** Present when options.accessibility is set. */
+  accessibility?: { rules: string[]; profile: 'all' | 'core'; contrast: 'AA' | 'AAA'; targetLevel: 'AA' | 'AAA'; targetSize: number; warnings: LayoutAccessibilityWarning[]; exempted: LayoutAccessibilityExemption[]; notes: string[] };
   version: 1; ok: boolean; status: 'verified' | 'violated' | 'unknown'; component: string;
   scope: { axis: 'inline' | 'both'; viewport: LayoutRange & { height?: LayoutRange | null }; hostInset: number; hostBlockInset?: number; closedCSS: true; browserRounding: false; blockSizing: boolean; scrollbarProfiles?:readonly LayoutScrollbarProfile[] };
   assumptions: string[];

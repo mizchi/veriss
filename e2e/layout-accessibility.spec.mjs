@@ -1157,6 +1157,75 @@ test('z-index and opacity stacking decide occlusion like Chromium', async ({page
   }
 });
 
+// A dialog's close button: a backdrop or overlay over it, a z-index trapped in the dialog's context, an invisible
+// layer that still takes the pointer, a tie at the top z-index. The page behind an open aria-modal dialog is covered by
+// its backdrop in every browser and is not reported (being out of reach is the intent).
+test('what covers a dialog close button decides occlusion as hit testing does', async ({page}) => {
+  const html = '<main class="page"><button class="open" aria-label="Open"></button><div class="bd"></div><div class="m" role="dialog" aria-modal="true" aria-label="Notice"><button class="x" aria-label="Close"></button></div><div class="o"></div></main>';
+  const base = `${reset}.page{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:40px;background:#fff}.open,.x{${button}inline-size:24px;block-size:24px}.bd{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:10}.m{position:fixed;left:20px;top:100px;inline-size:200px;block-size:100px;background:#fff;z-index:11;display:grid;grid-template-columns:24px}.o{position:fixed;left:0;top:90px;inline-size:100px;block-size:50px;background:#eee;z-index:1}`;
+  for (const [extra, covered] of [['', false], ['.m{z-index:5}', true], ['.m{z-index:5}.x{position:relative;z-index:2147483647}', true], ['.x{position:relative;z-index:-1}', false],
+    ['.o{z-index:12}', true], ['.o{z-index:12;opacity:0}', true], ['.o{z-index:12;opacity:0;pointer-events:none}', false], ['.o{z-index:12;visibility:hidden}', false],
+    ['.m{z-index:2147483647}.o{z-index:2147483647}', true], ['.m{z-index:2147483647}.o{z-index:2147483646}', false], ['.m{transform:scale(1)}.x{position:relative;z-index:99}.o{z-index:12}', true]]) {
+    const css = base + extra;
+    const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
+    expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
+    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))];
+    await page.setViewportSize({width: 800, height: 800});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
+    const blocked = await page.evaluate(() => ['.open', '.x'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
+    expect(blocked.includes('.open'), `${extra}: the backdrop covers the page`).toBe(true);
+    expect(blocked.includes('.x'), extra || 'none').toBe(covered);
+    expect(statics, extra || 'none').toEqual(covered ? ['.x'] : []);
+  }
+});
+
+// filter: a stacking context (a z-index 99 child stays under a z-index 2 sibling), the same hit area (the drop shadow
+// takes no pointer). The static occlusion verdict matches hit testing for each filter and the none control.
+test('filter traps a z-index and keeps the hit area, as hit testing does', async ({page}) => {
+  const html = '<main class="page"><div class="a"><button class="b" aria-label="B"></button></div><div class="s"></div><button class="c" aria-label="C"></button></main>';
+  const base = `${reset}.page{display:grid;grid-template-columns:200px;grid-auto-rows:40px;position:relative;background:#fff}.a{display:grid;grid-template-columns:minmax(0,1fr);position:relative}.b,.c{${button}}.b{position:relative;z-index:99}.s{position:absolute;left:0;top:0;inline-size:120px;block-size:30px;z-index:2;background:#eee}.c{inline-size:40px}`;
+  for (const [filter, covered] of [['none', false], ['drop-shadow(30px 30px 4px black)', true], ['blur(3px)', true], ['brightness(1)', true], ['opacity(.5) saturate(2)', true]]) {
+    const css = `${base}.a{filter:${filter}}`;
+    const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
+    expect(report.status === 'unknown', `${filter}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
+    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))].sort();
+    await page.setViewportSize({width: 800, height: 800});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
+    const blocked = await page.evaluate(() => ['.b', '.c'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
+    expect(blocked.includes('.b'), filter).toBe(covered);
+    // The drop shadow of .a reaches .c (30px down) but takes no pointer.
+    expect(blocked.includes('.c'), filter).toBe(false);
+    expect(statics, filter).toEqual(blocked.sort());
+  }
+});
+
+// inert: skipped by hit testing. An inert layer covers nothing (the page button under it takes the click), and its own
+// control takes none: W_A11Y_INERT_SHOWN where nothing (not inert) paints over it. The inert page behind a modal
+// backdrop is not reported. Each verdict is compared with the click the browser delivers.
+test('inert layers and controls match hit testing; an inert control on top is reported', async ({page}) => {
+  const html = (layerInert, pageInert) => `<main class="page"><div class="bg"${pageInert ? ' inert' : ''}><button class="under" aria-label="Under"></button></div><div class="layer"${layerInert ? ' inert' : ''}><button class="x" aria-label="X"></button></div></main>`;
+  const css = `${reset}.page{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:40px;background:#fff}.bg{display:grid;grid-template-columns:40px}.under,.x{${button}inline-size:40px;block-size:40px}.layer{position:fixed;left:0;top:0;right:0;bottom:0;z-index:10;background:rgba(0,0,0,.9)}.x{position:absolute;left:200px;top:0}`;
+  for (const [layerInert, pageInert, occluded, shown] of [[false, false, ['.under'], []], [true, false, [], ['.x']], [false, true, [], []], [true, true, [], ['.x']]]) {
+    const report = analyzeHTML(html(layerInert, pageInert), {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
+    expect(report.status === 'unknown', JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))).toBe(false);
+    const statics = {occluded: [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))], shown: [...new Set(report.accessibility.warnings.filter(d => d.code === 'W_A11Y_INERT_SHOWN').map(d => d.box))]};
+    await page.setViewportSize({width: 800, height: 800});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html(layerInert, pageInert)}</body></html>`);
+    // Which buttons take a click at their centre (the browser's verdict).
+    const takes = await page.evaluate(() => Object.fromEntries(['.under', '.x'].map(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); return [sel, document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === b]; })));
+    const label = `layer inert ${layerInert}, page inert ${pageInert}`;
+    expect(statics.occluded, label).toEqual(occluded);
+    expect(statics.shown, label).toEqual(shown);
+    // The browser: a reported (covered) page button takes no click; an inert control shown on top takes none either,
+    // while a non-inert one does.
+    for (const sel of occluded) expect(takes[sel], `${label} ${sel}`).toBe(false);
+    for (const sel of shown) expect(takes[sel], `${label} ${sel}`).toBe(false);
+    expect(takes['.x'], label).toBe(!layerInert);
+    // Under an inert layer the page button takes the click unless it is inert itself.
+    if (layerInert) expect(takes['.under'], label).toBe(!pageInert);
+  }
+});
+
 // dir=auto follows the first strong character in DOM order (text and children interleaved), as Chromium does.
 test('dir=auto resolves in DOM order like Chromium', async ({page}) => {
   const cases = ['hello <span>שלום</span>', '<span>שלום</span> hello', '123 <span>abc</span> שלום', '<span dir="ltr">abc</span> שלום x', '<b>12</b> <i>مرحبا</i> abc', '123 !'];

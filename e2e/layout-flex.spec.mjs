@@ -206,6 +206,14 @@ const cases = [
     css: '.col{display:grid;grid-template-columns:minmax(0,1fr);align-content:start}.c{display:flex;flex-direction:column;align-items:flex-start}.s{display:block;width:20px;height:6px}.b{width:150px;height:6px}.r{height:6px;position:relative}.r::before{content:"";position:absolute;inset:0}.e{height:6px;padding:0 10px;max-width:10px}', widths: [210, 300]},
   {name: 'a column item whose min-content is wider than the container overflows, aligned unsafely', html: '<main class="col"><div class="c s1"><div class="a"><div class="w"><i></i><i></i><i></i></div></div></div><div class="c s2"><div class="a"><div class="w"><i></i><i></i><i></i></div></div></div></main>',
     css: '.col{display:grid;grid-template-columns:minmax(0,1fr);align-content:start}.c{display:flex;flex-direction:column;width:100px}.w{display:flex;flex-wrap:wrap;column-gap:5px}.w i{display:block;flex:none;width:120px;height:2px}.a{height:6px;flex-shrink:0}.s1{align-items:center}.s2{align-items:flex-end}', expected: 'violated'},
+  // Issue #7: an auto basis with a px min-width keeps its content size (0 for an empty box, plus padding) as the base;
+  // the min-width only clamps it. s2 tells the two apart: from a 120px base the 1:2 split would differ.
+  {name: 'row flex items with an auto basis and a px min-width: the content size is the base, the min-width clamps it', html: '<main class="col"><div class="s"><div class="f"></div><div class="b"></div></div><div class="s"><div class="f"></div><div class="h"></div></div><div class="s"><div class="f p"></div><div class="h"></div></div><div class="s"><div class="f n"></div><div class="b"></div></div></main>',
+    css: '.col{display:grid;grid-template-columns:minmax(0,1fr);align-content:start}.s{display:flex}.f{flex:1 0 auto;min-width:100px;height:8px}.b{flex:none;width:80px;height:8px}.h{flex:2 0 auto;min-width:40px;height:8px}.p{min-width:60px;padding:0 50px}.n{flex:1 1 auto}'},
+  // PR #10 review: max-width does not cap the content base (400px here), only the hypothetical size; from a 100px
+  // base the shrink would split differently (60 / 240 at 300px). min-width 20px, 0 and auto, and a growing B.
+  {name: 'row flex items with a max-width under their max-content width: the uncapped content size is the base', html: '<main class="col"><div class="s"><div class="f"><div class="w"></div></div><div class="b"></div></div><div class="s"><div class="f z"><div class="w"></div></div><div class="b"></div></div><div class="s"><div class="f a"><div class="w"></div></div><div class="b"></div></div><div class="s"><div class="f"><div class="w"></div></div><div class="b g"></div></div></main>',
+    css: '.col{display:grid;grid-template-columns:minmax(0,1fr);align-content:start}.s{display:flex}.f{flex:1 1 auto;min-width:20px;max-width:100px}.z{min-width:0}.a{min-width:auto}.w{width:400px;height:8px}.b{flex:0 1 400px;min-width:0;height:8px}.g{flex:1 1 50px}', widths: [300], expected: 'violated'},
   {name: 'aspect-ratio with a px height: grid and block-flow items take the ratio width, stretch and column flex fill', html: '<main class="col"><div class="a"></div><div class="b"></div><div class="c"></div><section class="blk"><div class="a"></div></section><div class="fc"><div class="a"></div></div></main>',
     css: '.col{display:grid;grid-template-columns:minmax(0,1fr);align-content:start}.a{aspect-ratio:1;height:40px}.b{aspect-ratio:2;height:30px;padding:3px;box-sizing:content-box}.c{aspect-ratio:3;height:20px;justify-self:stretch}.blk{display:block}.fc{display:flex;flex-direction:column}'},
   {name: 'block flow: margins collapse through several plain block levels', html: '<main class="col"><div class="o"><div class="m"></div><section class="s"><div class="t"><div class="a"></div></div></section><section class="s s2"><div class="t"><div class="t u"><div class="a b"></div></div></div></section><section class="s"><div class="t p"><div class="a"></div></div></section><div class="n"></div></div></main>',
@@ -327,3 +335,51 @@ for (const sample of cases) {
     expect(compared).toBeGreaterThanOrEqual(8);
   });
 }
+
+// A centred, content-sized dialog box with max-width: 100vw and max-height: 100vh: where its content is no larger than
+// the smallest viewport, the caps do nothing and the box is where the browser puts it; where they may bind, Unknown.
+test('vw / vh caps that never bind on a content-sized flex item', async ({page}) => {
+  const html = '<div class="bg"><div class="c"><div class="i"></div><div class="k"></div></div></div>';
+  const css = (max, k) => `*{box-sizing:border-box;margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.bg{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center}.c{position:relative;${max}}.i{display:block;width:16px;height:16px}.k{width:${k[0]}px;height:${k[1]}px}`;
+  const cases = [['max-width:100vw;max-height:100vh', [300, 250], true], ['max-width:100vw', [320, 250], true], ['max-height:100vh', [300, 464], true], ['max-width:90vw', [280, 250], true], ['max-width:90vw', [300, 250], false],
+    ['max-width:100vw;max-height:100vh', [360, 250], false], ['max-width:50vw', [300, 250], false], ['max-height:100vh', [300, 500], false], ['max-height:30vh', [300, 250], false]];
+  const n = t => { const [a, b = '1'] = String(t ?? '0').split('/'); return Number(a) / Number(b); };
+  for (const [max, k, known] of cases) {
+    const r = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: css(max, k), viewport: {min: 320, max: 1280, height: {min: 480, max: 900}}, accessibility: true});
+    expect(r.status !== 'unknown', `${max} ${k}: ${JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message))}`).toBe(known);
+    if (!known) continue;
+    // The centred box and its content (laid out from the start edge, then moved by the centring offset).
+    for (const [w, h] of [[320, 480], [800, 600], [1280, 900]]) {
+      const v = x => n(x.constant) + w * n(x.coefficient) + h * n(x.heightCoefficient);
+      await page.setViewportSize({width: w, height: h});
+      await page.setContent(`<!doctype html><html lang="en"><head><style>${css(max, k)}</style></head><body>${html}</body></html>`);
+      for (const sel of ['.c', '.i', '.k']) {
+        const s = r.sizes.find(s => s.box === sel && s.rect)?.rect;
+        expect(s, `${sel} has a rectangle`).toBeTruthy();
+        const b = await page.evaluate(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }, sel);
+        expect([v(s.inlineStart), v(s.blockStart), v(s.inlineSize), v(s.blockSize)], `${max} ${k} ${sel} at ${w}×${h}`).toEqual(b);
+      }
+    }
+  }
+});
+
+// A focused position inside the centred, content-sized box: a skip link moved by a :focus rule is laid out from the
+// box's start edge and moved by the centring offset with the rest of the box. Each browser focuses it and reads where
+// it is; the static check reports E_A11Y_FOCUS_OFFSCREEN exactly where it is above the viewport.
+test('a focused position inside a centred content-sized box moves with the box', async ({page}) => {
+  const html = '<div class="bg"><div class="c"><a class="s" href="#k">Skip</a><div class="k" id="k"></div></div></div>';
+  const css = (focus, c) => `*{box-sizing:border-box;margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.bg{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;background:#fff;color:#000}.c{position:relative;${c}}.k{width:300px;height:100px}.s{position:absolute;left:0;top:-500px;width:60px;height:24px;display:block;color:#000;background:#fff;font-size:16px;line-height:24px}.s:focus{${focus}}`;
+  const cases = [['top:-30px', ''], ['top:-50px', ''], ['top:-130px', ''], ['top:-30px', 'align-self:flex-end'], ['top:-90px', 'align-self:flex-end'], ['transform:translateY(470px)', '']];
+  const verdicts = new Set();
+  for (const [focus, c] of cases) for (const h of [200, 400]) {
+    const r = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: css(focus, c), viewport: {min: 400, max: 400, height: {min: h, max: h}}, accessibility: true, boxes: {'.s': {minInlineSize: 40, intrinsicBlockSize: 24, maxInlineSize: 40}}});
+    expect(r.status === 'unknown', `${focus} ${c}: ${JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message))}`).toBe(false);
+    await page.setViewportSize({width: 400, height: h});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css(focus, c)}</style></head><body>${html}</body></html>`);
+    await page.focus('.s');
+    const browser = await page.evaluate(() => document.querySelector('.s').getBoundingClientRect().bottom <= 0);
+    expect(r.diagnostics.some(d => d.code === 'E_A11Y_FOCUS_OFFSCREEN'), `${focus} ${c} at height ${h}`).toBe(browser);
+    verdicts.add(browser);
+  }
+  expect([...verdicts].sort()).toEqual([false, true]);
+});
