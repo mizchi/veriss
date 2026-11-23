@@ -57,6 +57,11 @@ const report = analyzeLayout(
 );
 ```
 
+`boxes` maps a simple selector to a `LayoutBoxContract`: `minInlineSize`
+(min-content width), `maxInlineSize` (trusted max-content width, one unbroken
+line), `intrinsicBlockSize`, `wrap`, and the other keys in
+`src/layout-contracts.d.ts`.
+
 Trees are cloned before analysis. Cycles, shared nodes, invalid fields and
 ambiguous paths are rejected. Adapters must faithfully describe the concrete
 structure, text presence, class/id values, ancestors, and stylesheet cascade.
@@ -80,6 +85,10 @@ scrollbar profiles, and explicitly sized local absolute positioning. It checks
 continuous regions, including boundaries and fractional widths. It does not
 prove arbitrary CSS, font metrics, browser pixel rounding, ink overflow, CLS, or
 contrast. `minInlineSize` / `minBlockSize` are **trusted sufficient content bounds**;
+`maxInlineSize` is the **trusted max-content** width (the content on one
+unbroken line, no smaller than `minInlineSize`); boxes that shrink-wrap their
+content, such as automatic table columns and flex items with an auto basis,
+need it. `wrap: 'one-line'` expects one line where CSS would allow wrapping.
 `intrinsicBlockSize` is a **trusted exact** height or width-dependent height
 profile. They are assumptions supplied by a caller, not facts verified from text.
 
