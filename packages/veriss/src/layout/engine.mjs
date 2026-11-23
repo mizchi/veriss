@@ -1230,8 +1230,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           // (An auto basis with a px min-width: the base is still the content size; the min-width only clamps the
           // hypothetical size, issue #7. Measured in Chromium, Firefox and WebKit.)
           const autoBasis = ['auto', 'content'].includes(String(child.style['flex-basis']));
+          // (An aspect-ratio: its content size comes from the cross size through the ratio, not from its content — an
+          // empty `aspect-ratio: 2; height: 40px` item has an 80px base in Chromium, Firefox and WebKit. Not derived
+          // here: Unknown.)
           const contentSized = main === 'inline' && (autoBasis || /%$/.test(String(child.style['flex-basis'])) || pxBasis) && child.style['inline-size'] === 'auto'
-            && (['auto', '0', '0px'].includes(String(child.style['min-inline-size'])) || (autoBasis && /^\d+(?:\.\d+)?px$/.test(String(child.style['min-inline-size'])))) && ['visible', 'clip'].includes(child.style['overflow-x']) && !['inline-size', 'size'].includes(child.style['container-type']);
+            && (['auto', '0', '0px'].includes(String(child.style['min-inline-size'])) || (autoBasis && /^\d+(?:\.\d+)?px$/.test(String(child.style['min-inline-size'])))) && ['visible', 'clip'].includes(child.style['overflow-x']) && !['inline-size', 'size'].includes(child.style['container-type'])
+            && (child.style['aspect-ratio'] ?? 'auto') === 'auto';
           const contentSizes = contentSized ? frAutoMinimums(child.box, child.style, state.region, [...parents, { box, style }], /%$/.test(String(child.style['flex-basis'])) || pxBasis ? 'min' : true) : null;
           let item = flexItem(child.style, { empty: !child.box.text && !child.box.children.length, axis: main, ...(contentSizes ? { contentSizes } : {}) });
           const marginMain = main === 'inline' ? add(margins.left, margins.right) : add(margins.top, margins.bottom);
@@ -2739,7 +2743,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     };
     // probe 'min': only the min-content width is needed (a percentage flex-basis sets the base; the minimum caps it).
     if (probe === 'min') return { min: clampMax(style, minContent(box, style, parents)) };
-    if (probe) return { min: clampMax(style, minContent(box, style, parents)), max: clampMax(style, minContent(box, style, parents, true)) };
+    // The max-content width is a flex base size, which max-width does not cap (Flexbox §9.2 C): the max-width clamps
+    // only the hypothetical size (flexItem's maximum). The minimum (the content size suggestion) is capped (§4.5).
+    if (probe) return { min: clampMax(style, minContent(box, style, parents)), max: minContent(box, style, parents, true) };
     const n = tokens.length, mins = tokens.map(() => zero), minContents = tokens.map(() => zero), maxContents = tokens.map(() => zero);
     let next = 0;
     for (const item of (box.children ?? []).filter(k => !k.pseudo && !k.anonymous)) {

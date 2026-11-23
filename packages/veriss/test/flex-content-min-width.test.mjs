@@ -33,3 +33,23 @@ test('text with a max-content contract: the base is the max-content width, not t
 test('text without a max-content width stays Unknown', () => {
   assert.equal(run('.f{flex:1 0 auto;min-width:100px;height:32px}', '<div class="f">hello</div>').status, 'unknown');
 });
+
+// PR #10 review: an empty item with aspect-ratio and a px height has a ratio-derived content size (here 40 × 2 = 80px),
+// not 0. Chromium, Firefox and WebKit give 190 / 110 in a 300px row, whatever the min-width (20px, 0 or auto). The
+// model does not derive it: Unknown, never the 150 / 150 of a 0 base. The same items without aspect-ratio stay known.
+for (const min of ['20px', '0', 'auto']) test(`aspect-ratio on an auto-basis item stays Unknown (min-width ${min})`, () => {
+  const r = run(`.f{flex:1 0 auto;min-width:${min};height:40px;aspect-ratio:2}.g{flex:1 0 auto;min-width:${min};height:40px}`, two);
+  assert.equal(r.status, 'unknown');
+  const plain = run(`.f{flex:1 0 auto;min-width:${min};height:40px}.g{flex:1 0 auto;min-width:${min};height:40px}`, two);
+  assert.notEqual(plain.status, 'unknown', JSON.stringify(plain.diagnostics.map(d => d.message)));
+  assert.deepEqual(at(plain, 300), [[0, 150], [150, 150]]);
+});
+
+// PR #10 review: the flex base size is the max-content width, not capped by max-width; the max-width clamps only the
+// hypothetical and target sizes (Flexbox §9.2 C, §9.7). A (max-content 400px, max-width 100px) and B (flex: 0 1 400px)
+// in a 300px row: browsers give 100 / 200 for min-width 20px, 0 and auto; from a 100px base the shrink would be 60 / 240.
+for (const min of ['20px', '0', 'auto']) test(`max-width does not cap the content base (min-width ${min})`, () => {
+  const r = run(`.f{flex:1 1 auto;min-width:${min};max-width:100px}.f>div{width:400px;height:10px}.b{flex:0 1 400px;min-width:0;height:10px}`, '<div class="f"><div></div></div><div class="b"></div>');
+  assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.map(d => d.message)));
+  assert.deepEqual(at(r, 300), [[0, 100], [100, 200]]);
+});
