@@ -34,15 +34,15 @@ export function parseCondition(params, kind) {
         atoms.push({ feature, preference: v });
       }
       // Device resolution: dppx (x), dpi (÷ 96), dpcm (× 2.54 ÷ 96), and the -webkit- device-pixel-ratio forms.
-      else if (kind === 'media' && (m = value.match(/^(min-|max-)?resolution\s*:\s*(\d+(?:\.\d{1,6})?)(dppx|x|dpi|dpcm)$/i))) {
+      else if (kind === 'media' && (m = value.match(/^(min-|max-)?resolution\s*:\s*(\d+(?:\.\d{1,20})?)(dppx|x|dpi|dpcm)$/i))) {
         const n = q(m[2]), unit = m[3].toLowerCase(), dppx = unit === 'dpi' ? div(n, q(96)) : unit === 'dpcm' ? div(mul(n, q('2.54')), q(96)) : n;
         atoms.push({ feature: 'resolution', relation: !m[1] ? '=' : m[1].toLowerCase() === 'min-' ? '>=' : '<=', value: dppx });
       }
-      else if (kind === 'media' && (m = value.match(/^-webkit-(min-|max-)?device-pixel-ratio\s*:\s*(\d+(?:\.\d{1,6})?)$/i))) atoms.push({ feature: 'resolution', relation: !m[1] ? '=' : m[1].toLowerCase() === 'min-' ? '>=' : '<=', value: q(m[2]) });
+      else if (kind === 'media' && (m = value.match(/^-webkit-(min-|max-)?device-pixel-ratio\s*:\s*(\d+(?:\.\d{1,20})?)$/i))) atoms.push({ feature: 'resolution', relation: !m[1] ? '=' : m[1].toLowerCase() === 'min-' ? '>=' : '<=', value: q(m[2]) });
       else if (kind === 'media' && (m = value.match(/^orientation\s*:\s*(portrait|landscape)$/i))) atoms.push({ feature: 'orientation', relation: m[1].toLowerCase() === 'portrait' ? '>=' : '>', value: q(0), orientation: m[1].toLowerCase() });
-      else if ((m = value.match(/^(min|max)-(width|height|inline-size|block-size)\s*:\s*(\d+(?:\.\d{1,6})?)px$/i))) push(m[2], m[1].toLowerCase() === 'min' ? '>=' : '<=', m[3]);
-      else if ((m = value.match(/^(width|height|inline-size|block-size)\s*(<=|>=|<|>|=)\s*(\d+(?:\.\d{1,6})?)px$/i))) push(m[1], m[2], m[3]);
-      else if ((m = value.match(/^(\d+(?:\.\d{1,6})?)px\s*(<=|<)\s*(width|height|inline-size|block-size)(?:\s*(<=|<)\s*(\d+(?:\.\d{1,6})?)px)?$/i))) {
+      else if ((m = value.match(/^(min|max)-(width|height|inline-size|block-size)\s*:\s*(\d+(?:\.\d{1,20})?)px$/i))) push(m[2], m[1].toLowerCase() === 'min' ? '>=' : '<=', m[3]);
+      else if ((m = value.match(/^(width|height|inline-size|block-size)\s*(<=|>=|<|>|=)\s*(\d+(?:\.\d{1,20})?)px$/i))) push(m[1], m[2], m[3]);
+      else if ((m = value.match(/^(\d+(?:\.\d{1,20})?)px\s*(<=|<)\s*(width|height|inline-size|block-size)(?:\s*(<=|<)\s*(\d+(?:\.\d{1,20})?)px)?$/i))) {
         push(m[3], m[2] === '<' ? '>' : '>=', m[1]); if (m[4]) push(m[3], m[4], m[5]);
       } else throw new Error(`Unsupported ${kind} condition: ${params}`);
       if (kind === 'media' && atoms.some(atom => atom.feature.includes('-size'))) throw new Error('Media queries use width/height, not logical size features');

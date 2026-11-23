@@ -126,10 +126,6 @@
     {
       "reason": "ASSUMPTION: 1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked",
       "count": 1
-    },
-    {
-      "reason": "U_A11Y_TARGET_SIZE: .X is under Npx and its position is not proved, so the spacing exception cannot be checked",
-      "count": 1
     }
   ],
   "rows": [
@@ -2685,7 +2681,7 @@
       "file": "tag-input.svelte",
       "framework": "svelte",
       "intent": "A tag input: removable tag chips followed by a text entry.",
-      "status": "unknown",
+      "status": "violated",
       "expected": [
         {
           "code": "E_A11Y_NAME",
@@ -2703,11 +2699,6 @@
       "unconfirmed": [],
       "environment": [],
       "notChecked": [
-        {
-          "code": "U_A11Y_TARGET_SIZE",
-          "reason": ".X is under Npx and its position is not proved, so the spacing exception cannot be checked",
-          "line": 2
-        },
         {
           "code": "ASSUMPTION",
           "reason": "the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own defaul"

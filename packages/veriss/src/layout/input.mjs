@@ -5,7 +5,7 @@ export const boxTags = new Set('canvas template datalist dialog details summary 
 // Form controls and images have UA intrinsic sizes and padding: checked only with resets and explicit sizes.
 export const controlTags = new Set(['button', 'input', 'select', 'textarea']), replacedTags = new Set(['img', 'input', 'select', 'textarea']);
 const ancestorTags=new Set([...boxTags].filter(tag=>!['button', 'img', 'input', 'select', 'textarea'].includes(tag)));
-const supportedOptions = new Set(['ua', 'knownFonts', 'scope', 'reportTextFonts', 'defaultFontSize', 'defaultColors', 'scrollIntent', 'name', 'css', 'cssFile', 'reset', 'ancestors', 'viewport', 'hostInset', 'hostBlockInset', 'block', 'boxes', 'scrollbars', 'integrity', 'accessibility', 'selectors', 'images', 'devicePixelRatios', '$devicePixelRatio', '$animationFrame', '$slideVariant', 'safeArea']);
+const supportedOptions = new Set(['hinge', 'ua', 'knownFonts', 'scope', 'reportTextFonts', 'defaultFontSize', 'defaultColors', 'scrollIntent', 'name', 'css', 'cssFile', 'reset', 'ancestors', 'viewport', 'hostInset', 'hostBlockInset', 'block', 'boxes', 'scrollbars', 'integrity', 'accessibility', 'selectors', 'images', 'devicePixelRatios', '$devicePixelRatio', '$animationFrame', '$slideVariant', 'safeArea']);
 export const supportedContract = new Set(['placeholderInlineSize', 'minInlineSize', 'maxInlineSize', 'minBlockSize', 'intrinsicBlockSize', 'wrap', 'overflow', 'overflowBlock', 'font', 'textMetrics', 'textRuns']);
 function finiteSize(value, name) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1_000_000) throw new Error(`Invalid layout ${name}`);
@@ -28,6 +28,8 @@ export function validateOptions(options) {
   // $animationFrame (internal): the re-layout of one box at one keyframe's layout declarations.
   if (options.$animationFrame !== undefined && (typeof options.$animationFrame?.path !== 'string' || typeof options.$animationFrame?.css !== 'string')) throw new Error('Invalid layout options');
   if (options.$slideVariant !== undefined && options.$slideVariant !== true) throw new Error('Invalid layout options');
+  // hinge: a dual-screen device's hinge in viewport px ({left, top, width, height}): what lies under it is not shown.
+  if (options.hinge !== undefined && (!options.hinge || typeof options.hinge !== 'object' || Object.keys(options.hinge).some(k => !['left', 'top', 'width', 'height'].includes(k)) || ['left', 'top', 'width', 'height'].some(k => typeof options.hinge[k] !== 'number' || !Number.isFinite(options.hinge[k]) || options.hinge[k] < 0))) throw new Error('Invalid hinge');
   // safeArea: the device's safe-area insets in px ({top, right, bottom, left}), used by env(safe-area-inset-*) when the
   // page declares viewport-fit=cover.
   if (options.safeArea !== undefined && (!options.safeArea || typeof options.safeArea !== 'object' || Object.keys(options.safeArea).some(k => !['top', 'right', 'bottom', 'left'].includes(k)) || Object.values(options.safeArea).some(v => !Number.isInteger(v) || v < 0 || v > 200))) throw new Error('Invalid safeArea option: {top, right, bottom, left} in whole px (0 to 200)');

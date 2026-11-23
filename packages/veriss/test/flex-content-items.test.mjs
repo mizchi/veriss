@@ -25,3 +25,32 @@ for (const [name, [css, html, widths]] of Object.entries(cases)) test(name, () =
 test('text without a max-content width stays Unknown', () => {
   assert.equal(run('', '<div class="a">text</div><div class="b"></div>').status, 'unknown');
 });
+
+// max-width in vw on a content-sized flex item: where the content is no wider than that fraction of the narrowest
+// viewport, it never caps (a 300px dialog with max-width: 100vw from 320px: measured 300px wide at 320 and 800 in
+// Chromium, Firefox and WebKit). Where it may cap (360px content, or 50vw) it stays Unknown.
+test('a vw max-width that never caps the content width of a flex item', () => {
+  const html = '<html lang="en"><body><div class="bg"><div class="c"><div class="i"></div><div class="k"></div></div></div></body></html>';
+  const css = (max, k) => `*{box-sizing:border-box;margin:0}html,body{${g}}.bg{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center}.c{position:relative;${max}}.i{display:block;width:16px;height:16px}.k{width:${k}px;height:250px}`;
+  const at = (max, k) => analyzeHTML(html, {name: 'P', css: css(max, k), viewport: {min: 320, max: 1280, height: {min: 480, max: 900}}, accessibility: true});
+  const r = at('max-width:100vw', 300);
+  assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message)));
+  const c = r.sizes.find(s => s.box === '.c' && s.rect).rect;
+  assert.deepEqual([c.inlineSize.constant, c.inlineSize.coefficient], ['300', '0']);
+  // Centred: (width − 300) / 2.
+  assert.deepEqual([c.inlineStart.constant, c.inlineStart.coefficient], ['-150', '1/2']);
+  for (const [max, k] of [['max-width:100vw', 360], ['max-width:50vw', 300]]) assert.equal(at(max, k).status, 'unknown', `${max} ${k}`);
+});
+
+// max-height in vh on an auto-height box: where its height never exceeds that fraction of the viewport height, the
+// clamp does nothing; where it may, Unknown.
+test('a vh max-height that never caps an auto height', () => {
+  const html = '<html lang="en"><body><div class="bg"><div class="c"><div class="i"></div><div class="k"></div></div></div></body></html>';
+  const css = (max, k) => `*{box-sizing:border-box;margin:0}html,body{${g}}.bg{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center}.c{position:relative;max-width:100vw;${max}}.i{display:block;width:16px;height:16px}.k{width:300px;height:${k}px}`;
+  const at = (max, k) => analyzeHTML(html, {name: 'P', css: css(max, k), viewport: {min: 320, max: 1280, height: {min: 480, max: 900}}, accessibility: true});
+  const r = at('max-height:100vh', 250);
+  assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message)));
+  const c = r.sizes.find(s => s.box === '.c' && s.rect).rect;
+  assert.deepEqual([c.blockSize.constant, c.blockStart.constant, c.blockStart.heightCoefficient], ['266', '-133', '1/2']);
+  for (const [max, k] of [['max-height:100vh', 500], ['max-height:30vh', 250]]) assert.equal(at(max, k).status, 'unknown', `${max} ${k}`);
+});

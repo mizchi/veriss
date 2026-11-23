@@ -71,10 +71,6 @@
     {
       "reason": "U_LAYOUT_TABLE: .X in a table cell must be a static block-level box (block flow of inline content is not modeled)",
       "count": 1
-    },
-    {
-      "reason": "U_A11Y_TARGET_SIZE: .X is under Npx and its position is not proved, so the spacing exception cannot be checked",
-      "count": 1
     }
   ],
   "rows": [
@@ -968,7 +964,7 @@
           "reason": "rem (and a root font-size in %, em or medium) resolved at a Npx browser default font size; other user settings are not checked"
         }
       ],
-      "errors": 3,
+      "errors": 5,
       "warnings": 0,
       "assumptions": [
         "3 text box(es) measured with the given font files (Roboto): their widths and line breaks are derived, not assumed",
@@ -2797,7 +2793,7 @@
       "file": "before.svelte",
       "framework": "svelte",
       "intent": "A tag input: removable tag chips followed by a text entry.",
-      "status": "unknown",
+      "status": "violated",
       "expected": [
         {
           "code": "E_A11Y_NAME",
@@ -2818,11 +2814,6 @@
       "unconfirmed": [],
       "environment": [],
       "notChecked": [
-        {
-          "code": "U_A11Y_TARGET_SIZE",
-          "reason": ".X is under Npx and its position is not proved, so the spacing exception cannot be checked",
-          "line": 2
-        },
         {
           "code": "ASSUMPTION",
           "reason": "the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own defaul"
