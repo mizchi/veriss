@@ -14,45 +14,65 @@ const kindsAll = ['phone', 'tablet', 'desktop', 'foldable', 'dual-screen'];
  * - region: 'jp' | 'worldwide', which share decides minShare.
  * - minShare: the least screen share (percent) a profile needs; foldable and dual-screen profiles are kept whatever
  *   their share when `special` is true (their share is not in the statistics).
- * - mode: 'browser' (Safari's bars over the top inset in portrait) or 'fullscreen' (an in-app web view or a
- *   home-screen web app: every inset reaches a viewport-fit=cover page).
+ * - mode: 'browser' (Safari: its bars cover the top inset in portrait, and the viewport is the browser's) or
+ *   'fullscreen' (an in-app web view or a home-screen web app: every inset reaches a viewport-fit=cover page, and on an
+ *   iPhone the page gets the whole screen, so the landscape width is the screen's height).
+ * Each check owns its objects (devices, safeArea, hinge): changing one does not change deviceData or another check.
  */
 export function deviceChecks({ region = 'jp', kinds = kindsAll, minShare = 1, orientations = ['portrait', 'landscape'], mode = 'browser', special = true } = {}) {
   if (!['jp', 'worldwide'].includes(region)) throw new TypeError(`Unknown region: ${region}`);
   if (!['browser', 'fullscreen'].includes(mode)) throw new TypeError(`Unknown mode: ${mode}`);
   const checks = [];
+  const range = height => ({ min: height.min, max: height.max });
   for (const profile of data.profiles) {
     if (!kinds.includes(profile.kind)) continue;
     const isSpecial = ['foldable', 'dual-screen'].includes(profile.kind);
     if (!(special && isSpecial) && profile.screenShare[region] < minShare) continue;
     for (const orientation of orientations) {
-      const size = profile[orientation];
+      const size = viewportOf(profile, orientation, mode);
       if (!size) continue;
+      const safeArea = profile.safeArea;
       checks.push({
-        id: `${profile.id}/${orientation}`, profile: profile.id, devices: profile.devices, kind: profile.kind, orientation,
+        id: `${profile.id}/${orientation}`, profile: profile.id, devices: [...profile.devices], kind: profile.kind, orientation,
         screenShare: profile.screenShare[region],
-        viewport: { min: size.width, max: size.width, height: { min: size.height.min, max: size.height.max } },
-        // An iPhone without a known safe area (safeArea null) leaves a viewport-fit=cover page Unknown.
-        ...(profile.safeArea ? { safeArea: profile.safeArea[mode][orientation], safeAreaMeasured: profile.safeArea.measured, cutout: profile.safeArea.cutout } : {}),
+        viewport: { min: size.width, max: size.width, height: range(size.height) },
+        // An iPhone without a known safe area (safeArea null) gets none: the safe-area-target rule does not run on it,
+        // and a viewport-fit=cover page that reads env(safe-area-inset-*) is Unknown there.
+        ...(safeArea ? { safeArea: { ...safeArea[mode][orientation] }, safeAreaMeasured: safeArea.measured[mode], cutout: safeArea.cutout } : {}),
       });
     }
     if (profile.spanned && orientations.includes('portrait')) {
       const s = profile.spanned;
-      checks.push({ id: `${profile.id}/spanned`, profile: profile.id, devices: profile.devices, kind: profile.kind, orientation: 'spanned',
-        screenShare: profile.screenShare[region], viewport: { min: s.width, max: s.width, height: { min: s.height.min, max: s.height.max } }, hinge: s.hinge });
+      checks.push({ id: `${profile.id}/spanned`, profile: profile.id, devices: [...profile.devices], kind: profile.kind, orientation: 'spanned',
+        screenShare: profile.screenShare[region], viewport: { min: s.width, max: s.width, height: range(s.height) }, hinge: { ...s.hinge } });
     }
   }
   return checks;
 }
 
+// The viewport of a profile in an orientation. In 'fullscreen' an iPhone's page (a profile with a safeArea entry,
+// null when unknown) covers the whole screen: the width is the screen's, and the height runs from the browser's
+// shortest (kept, so a web view with its own toolbar is still covered) to the screen's.
+function viewportOf(profile, orientation, mode) {
+  const size = profile[orientation];
+  if (!size || mode !== 'fullscreen' || !('safeArea' in profile)) return size;
+  const [width, height] = orientation === 'portrait' ? [profile.screen.width, profile.screen.height] : [profile.screen.height, profile.screen.width];
+  return { width, height: { min: Math.min(size.height.min, height), max: height } };
+}
+
 /**
  * Analyze one page on every check. Returns each check with its report, and the diagnostics grouped by code and box
  * with the checks they appear on.
+ * The viewport, safe area and hinge come from the check, never from options: a check's own safeArea and hinge are
+ * used, and a check without one (a device whose safe area is unknown, an Android phone, a spanned dual screen) gets
+ * none, so a viewport-fit=cover page that reads env(safe-area-inset-*) stays Unknown there. options.safeArea and
+ * options.hinge are ignored; to analyze one device with other insets, pass checks that carry them.
  */
 export function analyzeDevices(html, options, checks = deviceChecks()) {
+  const { viewport: _viewport, safeArea: _safeArea, hinge: _hinge, ...shared } = options;
   const results = checks.map(check => {
     const { safeArea, hinge, viewport } = check;
-    const report = analyzeHTML(html, { ...options, viewport, ...(safeArea ? { safeArea } : {}), ...(hinge ? { hinge } : {}) });
+    const report = analyzeHTML(html, { ...shared, viewport, ...(safeArea ? { safeArea } : {}), ...(hinge ? { hinge } : {}) });
     return { check, report };
   });
   const findings = new Map();

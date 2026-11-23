@@ -6,13 +6,14 @@
 //     rebuild is reproducible; --offline reads them instead of fetching.
 //   - Playwright's device descriptors (viewport with the browser's toolbars shown, screen, device scale factor, touch).
 //   - tools/devices/curated.json: safe-area insets (notch, Dynamic Island, home indicator) and dual-screen hinges,
-//     which no machine-readable source carries ('measured': false until tools/devices/measure-safe-area.mjs reads them
-//     in the iOS Simulator).
+//     which no machine-readable source carries ('measured': {browser, fullscreen}, each false until the insets of that
+//     mode are read in the iOS Simulator; tools/devices/measure-safe-area.mjs reads the browser mode in Mobile Safari).
 // The output has no dependency on Playwright: packages/veriss/src does not import it.
 import {mkdirSync, readFileSync, writeFileSync, existsSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
+import {validatedCSV, shareOf as shareIn, safeAreaOf as curatedSafeAreaOf} from './lib.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
@@ -37,44 +38,31 @@ const statcounterURL = (region, kind) => {
   const q = new URLSearchParams({device: kinds[kind], device_hidden: kind, statType_hidden: 'resolution', region_hidden: r.code, granularity: 'monthly', statType: 'Screen Resolution', region: r.name, fromInt: int, toInt: int, fromMonthYear: month, toMonthYear: month, csv: '1'});
   return `https://gs.statcounter.com/screen-resolution-stats/${kind}/${r.path}/chart.php?${q}`;
 };
-const parseCSV = text => text.trim().split('\n').slice(1).map(line => line.match(/^"(\d+)x(\d+)",([\d.]+)$/)).filter(Boolean)
-  .map(([, w, h, share]) => ({width: Number(w), height: Number(h), share: Number(share)}));
-
 const resolutions = {};
 for (const region of Object.keys(regions)) {
   resolutions[region] = {};
   for (const kind of Object.keys(kinds)) {
     const file = join(csvDir, `${region}-${kind}-${month}.csv`);
+    const label = `${region} ${kind} ${month}`;
     if (!offline) {
       const response = await fetch(statcounterURL(region, kind), {headers: {'user-agent': 'veriss-device-update'}});
-      if (!response.ok) throw new Error(`StatCounter ${region} ${kind}: HTTP ${response.status}`);
-      writeFileSync(file, await response.text());
+      if (!response.ok) throw new Error(`StatCounter ${label}: HTTP ${response.status}`);
+      const text = await response.text();
+      // Validate before replacing the cache: a failed fetch keeps the CSV already there.
+      resolutions[region][kind] = validatedCSV(text, label);
+      writeFileSync(file, text);
+      continue;
     }
     if (!existsSync(file)) throw new Error(`missing ${file} (run without --offline)`);
-    const rows = parseCSV(readFileSync(file, 'utf8'));
-    if (!rows.length) throw new Error(`StatCounter ${region} ${kind} ${month}: no rows (the CSV format may have changed)`);
-    resolutions[region][kind] = rows;
+    resolutions[region][kind] = validatedCSV(readFileSync(file, 'utf8'), label);
   }
 }
 
 // Device kind from the descriptor: Playwright has no field for it.
 const kindOf = (name, d) => /^Desktop/.test(name) ? 'desktop' : /Galaxy Z (Fold|Flip)/.test(name) ? 'foldable' : /iPad|Tab |Nexus (7|10)|Kindle|PlayBook/.test(name) ? 'tablet' : d.isMobile ? 'phone' : 'desktop';
-const shareOf = (kind, width, height) => Object.fromEntries(Object.keys(regions).map(region => {
-  const list = resolutions[region][kind === 'foldable' || kind === 'phone' ? 'mobile' : kind];
-  const row = list.find(r => (r.width === width && r.height === height) || (r.width === height && r.height === width));
-  return [region, row ? row.share : 0];
-}));
-const safeAreaOf = name => {
-  const group = curated.safeAreas.find(g => g.models.includes(name));
-  if (!group) return null;
-  const {portrait: p, landscape: l} = group;
-  // browser: Safari shows its own bars at the top in portrait, so only the home indicator reaches the page there;
-  // fullscreen: a viewport-fit=cover page in a full-screen web view (an in-app browser, a home-screen web app) gets
-  // every inset. In landscape the cutout may be on either side.
-  return {cutout: group.cutout, measured: group.measured,
-    browser: {portrait: {top: 0, right: 0, bottom: p.bottom, left: 0}, landscape: {top: 0, right: l.side, bottom: l.bottom, left: l.side}},
-    fullscreen: {portrait: {top: p.top, right: 0, bottom: p.bottom, left: 0}, landscape: {top: 0, right: l.side, bottom: l.bottom, left: l.side}}};
-};
+const shareOf = (kind, width, height) => Object.fromEntries(Object.keys(regions).map(region =>
+  [region, shareIn(resolutions[region][kind === 'foldable' || kind === 'phone' ? 'mobile' : kind], width, height)]));
+const safeAreaOf = name => curatedSafeAreaOf(curated, name);
 
 const out = [];
 for (const [name, d] of Object.entries(devices)) {
