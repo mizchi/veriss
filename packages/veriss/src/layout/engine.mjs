@@ -1257,8 +1257,15 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           // are its flex base size and automatic minimum.
           // (A px basis with min-width auto too: its automatic minimum is the min-content width, §4.5.)
           const pxBasis = /^\d+(?:\.\d+)?px$/.test(String(child.style['flex-basis'])) && child.style['min-inline-size'] === 'auto';
-          const contentSized = main === 'inline' && (['auto', 'content'].includes(String(child.style['flex-basis'])) || /%$/.test(String(child.style['flex-basis'])) || pxBasis) && child.style['inline-size'] === 'auto'
-            && ['auto', '0', '0px'].includes(String(child.style['min-inline-size'])) && ['visible', 'clip'].includes(child.style['overflow-x']) && !['inline-size', 'size'].includes(child.style['container-type']);
+          // (An auto basis with a px min-width: the base is still the content size; the min-width only clamps the
+          // hypothetical size, issue #7. Measured in Chromium, Firefox and WebKit.)
+          const autoBasis = ['auto', 'content'].includes(String(child.style['flex-basis']));
+          // (An aspect-ratio: its content size comes from the cross size through the ratio, not from its content — an
+          // empty `aspect-ratio: 2; height: 40px` item has an 80px base in Chromium, Firefox and WebKit. Not derived
+          // here: Unknown.)
+          const contentSized = main === 'inline' && (autoBasis || /%$/.test(String(child.style['flex-basis'])) || pxBasis) && child.style['inline-size'] === 'auto'
+            && (['auto', '0', '0px'].includes(String(child.style['min-inline-size'])) || (autoBasis && /^\d+(?:\.\d+)?px$/.test(String(child.style['min-inline-size'])))) && ['visible', 'clip'].includes(child.style['overflow-x']) && !['inline-size', 'size'].includes(child.style['container-type'])
+            && (child.style['aspect-ratio'] ?? 'auto') === 'auto';
           const contentSizes = contentSized ? frAutoMinimums(child.box, child.style, state.region, [...parents, { box, style }], /%$/.test(String(child.style['flex-basis'])) || pxBasis ? 'min' : true) : null;
           // A vw max-width that flex.mjs treats as never capping (maxNeverCaps): the max-content width must fit that
           // fraction of the narrowest viewport. Checked here, on the measured max-content width itself, so it does not
@@ -2743,6 +2750,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (vw) { if (cmp(value, borderBox(st, mul(domain.min, div(q(vw[1]), q(100))))) <= 0) return value; unknown(`has an item whose max-width ${m} may cap its content width at the narrowest viewports`); }
       const v = borderBox(st, length(m, 'max-width')); return cmp(value, v) > 0 ? v : value;
     };
+    // A ::before / ::after generated in flow adds its content to the box's (measured: a 100px generated item in a
+    // content-sized flex item makes a 300px row 210 / 90 in Chromium, Firefox and WebKit); its width is not counted
+    // here, so such a box is Unknown. Out of flow it adds nothing. (Same check as the column fit-content probe.)
+    const generatesInFlow = (target, st, at) => ['before', 'after'].some(kind => styles({ ...target, path: `${target.path}/${kind === 'before' ? -1 : (target.children ?? []).length}`, label: `${target.label}::${kind}`, children: [], pseudo: kind }, region, at, st, false, false, new Set([`::${kind}`]))
+      .some(c => !['none', 'normal', undefined].includes(c.style.content) && c.style.display !== 'none' && !['absolute', 'fixed'].includes(c.style.position)));
     // (A button is not replaced: its content is laid out like a block's.)
     const replaced = new Set(['img', 'svg', 'iframe', 'video', 'audio', 'canvas', 'input', 'select', 'textarea', 'embed', 'object']);
     // The min-content (or max-content) width (border box) of a box, or Unknown.
@@ -2757,6 +2769,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (value === undefined) unknown(`has text without a ${max ? 'max' : 'min'}-content width (${target.label}; give it a ${key} contract)`);
         return add(q(String(value)), edges(st));
       }
+      if (!target.pseudo && generatesInFlow(target, st, at)) unknown(`has generated content (${target.label}::before or ::after) whose width is not known`);
+      // An aspect-ratio with an auto width: the width comes from the height through the ratio (measured: an empty
+      // height:40px; aspect-ratio:2 child makes its content-sized flex item 80px wide in Chromium, Firefox and WebKit),
+      // which is not derived here.
+      if ((st['aspect-ratio'] ?? 'auto') !== 'auto' && st['inline-size'] === 'auto') unknown(`has a box with an aspect-ratio (${target.label}) whose width follows its height`);
       const kids = (target.children ?? []).filter(k => !k.pseudo);
       const inner = [...at, { box: target, style: st }];
       if (!kids.length && st.display !== 'grid') return edges(st);
@@ -2812,7 +2829,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     };
     // probe 'min': only the min-content width is needed (a percentage flex-basis sets the base; the minimum caps it).
     if (probe === 'min') return { min: clampMax(style, minContent(box, style, parents)) };
-    if (probe) return { min: clampMax(style, minContent(box, style, parents)), max: clampMax(style, minContent(box, style, parents, true)) };
+    // The max-content width is a flex base size, which max-width does not cap (Flexbox §9.2 C): the max-width clamps
+    // only the hypothetical size (flexItem's maximum). The minimum (the content size suggestion) is capped (§4.5).
+    if (probe) return { min: clampMax(style, minContent(box, style, parents)), max: minContent(box, style, parents, true) };
     const n = tokens.length, mins = tokens.map(() => zero), minContents = tokens.map(() => zero), maxContents = tokens.map(() => zero);
     let next = 0;
     for (const item of (box.children ?? []).filter(k => !k.pseudo && !k.anonymous)) {
@@ -3061,10 +3080,20 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           && ['left', 'right'].filter(side => style[side] !== undefined && style[side] !== 'auto').length === 1) {
           const sizes = frAutoMinimums(box, style, state.region, parents, true);
           const set = ['left', 'right'].find(side => style[side] !== undefined && style[side] !== 'auto');
-          const room = diff(available.containingBlock.inline, insetLength(style[set], available.containingBlock.inline));
-          if (clip(state.region, diff(scalar(sizes.max), room), true)) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width (max-content ${number(sizes.max)}px) may not fit the room its inset leaves; that is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
           const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
-          let used = sizes.max;
+          // The content measurement's max-content width is not capped by the box's own max-width (a flex base size
+          // ignores it): the max-width caps the shrink-to-fit width here (px only; other values stay Unknown).
+          let maxContent = sizes.max;
+          const capText = String(style['max-inline-size'] ?? 'none');
+          if (capText !== 'none') {
+            if (!/^\d+(?:\.\d+)?px$/.test(capText)) throw Object.assign(new Error(`${box.label}: a shrink-to-fit width capped by max-width ${capText} is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+            let cap = style['box-sizing'] === 'content-box' ? add(px(capText), edges) : px(capText);
+            if (cmp(cap, edges) < 0) cap = edges;
+            if (cmp(maxContent, cap) > 0) maxContent = cap;
+          }
+          const room = diff(available.containingBlock.inline, insetLength(style[set], available.containingBlock.inline));
+          if (clip(state.region, diff(scalar(maxContent), room), true)) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width (max-content ${number(maxContent)}px) may not fit the room its inset leaves; that is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+          let used = maxContent;
           if (!['auto', '0', '0px'].includes(String(style['min-inline-size']))) { const m = px(style['min-inline-size']); const outer = style['box-sizing'] === 'content-box' ? add(m, edges) : m; if (cmp(outer, used) > 0) used = outer; }
           // The used width is a border-box width; box-sizing stays as declared (it also sizes the block axis), so a
           // content-box box gets the width less its inline padding and borders.

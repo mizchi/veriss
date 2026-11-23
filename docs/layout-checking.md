@@ -323,7 +323,7 @@ inset がどちらも auto の absolute の箱は、静的位置に置かれる�
 
 `order`(整数): flex の item と、すべて自動配置の grid の item は、`order` で安定に並べ替えた順(order-modified document order)に配置する。在フローの item は重ならないので、描画順の違いは結果に関わらない。明示的に配置した grid の item、transform か相対位置のずれを持つ item がある場合は Unknown にする。Tab の順は DOM の順のままなので、見た目の順との違いは `W_A11Y_ORDER`(visual-order)で報告する。Chromium の照合(`e2e/layout-flex.spec.mjs`)では矩形が一致することを確かめる。
 
-flex の行の item で、`flex-basis` が auto(か content)で幅が auto、`min-width` が auto、スクロールコンテナでないものは、同じ寄与の計算で、max-content の幅を flex の基準の大きさ、min-content の幅を自動の最小とする(Flexbox §9.2、§4.5)。中身のない item は padding と border の幅になる。中身の幅が分からない場合(契約のないテキストなど)は Unknown のまま。
+flex の行の item で、`flex-basis` が auto(か content)で幅が auto、`min-width` が auto、スクロールコンテナでないものは、同じ寄与の計算で、max-content の幅を flex の基準の大きさ、min-content の幅を自動の最小とする(Flexbox §9.2、§4.5)。中身のない item は padding と border の幅になる。中身の幅が分からない場合(契約のないテキストなど)は Unknown のまま。`min-width` が px の場合も(issue #7)、基準の大きさは中身の max-content の幅のままで、`min-width` は仮の大きさを抑えるだけである(§9.7)。中身のない入力欄 `flex: 1 0 auto; min-width: 160px` の基準は 0 になる。伸びる 2 つの item(`flex: 1 0 auto; min-width: 160px` と `flex: 2 0 auto; min-width: 40px`)を 600px に置くと 200px と 400px になり、基準を 160px とした場合の値とは違うことを、Chromium・Firefox・WebKit で確かめた(`e2e/layout-flex.spec.mjs`)。`max-width` も基準の大きさを抑えない(§9.2 C)。max-content が 400px で `max-width: 100px` の item と `flex: 0 1 400px` の item を 300px の行に置くと 100px と 200px になり、基準を 100px とした場合の 60px と 240px とは違う(`min-width` が 20px・0・auto のいずれでも、3 ブラウザーで同じ)。自動の最小(中身の大きさの提案)のほうは `max-width` で抑える(§4.5)。`aspect-ratio` を持つ item は、中身ではなく交差軸の大きさと比から基準が決まる(中身のない `aspect-ratio: 2; height: 40px` の基準は 80px)ので、この道には入れず Unknown のままにする。
 
 flex の行の item の主軸の負の px margin(`margin-right: -12px` で重ねたアバターなど)は、item の外側の大きさをその分だけ小さくして解く(Chromium と矩形を比べた)。交差軸や grid の item の負の margin は Unknown のまま。
 
