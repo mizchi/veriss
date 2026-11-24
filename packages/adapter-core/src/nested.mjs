@@ -16,19 +16,23 @@ import postcss from 'postcss';
 const conditional = new Set(['media', 'supports', 'container']);
 const decl = d => `${d.prop}:${d.value}${d.important ? ' !important' : ''}`;
 
+// & is a parent reference only outside quoted strings and escapes (`[data-label="A&B"]`, `.a\&b` are not one)
+const PARENT = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.)|&/g;
+const hasParent = s => [...s.matchAll(PARENT)].some(m => !m[1]);
+
 // The edge a nested selector adds, written against the resolved parent selector.
 function edge(parent, nested) {
   const s = nested.trim();
   let m;
   if ((m = /^&(\s*([>+~])\s*|\s+)(.+)$/.exec(s))) return { parent, combinator: m[2] ?? ' ', child: m[3].trim() };
   if ((m = /^(.+?)(\s*([>+~])\s*|\s+)&$/.exec(s))) return { parent: m[1].trim(), combinator: m[3] ?? ' ', child: parent };
-  if (s.includes('&')) return null; // &:hover, &.active, & + & … : the same element or a relation the flat selector carries
+  if (hasParent(s)) return null; // &:hover, &.active, & + & … : the same element or a relation the flat selector carries
   if ((m = /^([>+~])\s*(.+)$/.exec(s))) return { parent, combinator: m[1], child: m[2].trim() };
   return { parent, combinator: ' ', child: s };
 }
 
 // & is the parent; a selector without & is relative to it (a descendant, or the combinator it starts with).
-const resolve = (parent, nested) => (nested.includes('&') ? nested.trim().replace(/&/g, parent) : `${parent} ${nested.trim()}`);
+const resolve = (parent, nested) => (hasParent(nested) ? nested.trim().replace(PARENT, (m, keep) => keep ?? parent) : `${parent} ${nested.trim()}`);
 
 export function lowerNested(blocks) {
   const lines = [], map = [];

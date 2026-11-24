@@ -114,3 +114,9 @@ test('relocateFindings: a finding at a column of the lowered CSS is moved to the
   assert.equal(moved[1].css.line, 15);
   assert.deepEqual(moved[2], findings[2]);
 });
+
+test('lowerNested: an & inside a quoted attribute value is not the parent reference', () => {
+  const {css, map} = lowerNested([{selector: '.sc-Card', text: '[data-label="A&B"] { color: red; }', origin: {file: 'f.ts', line: 1, name: 'Card'}}]);
+  assert.equal(css, '.sc-Card [data-label="A&B"]{color:red}');
+  assert.deepEqual(map[0].relation, {parent: '.sc-Card', combinator: ' ', child: '[data-label="A&B"]'});
+});
