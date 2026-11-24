@@ -368,3 +368,48 @@ test('props types: an optional literal-union prop without a default stays option
   const source = `type Size = 'a' | 'b';\nexport default function C({ size }: { size?: Size }) { return <p>{size}</p>; }`;
   assert.deepEqual(expandReact(source).states.map(s => s.html), ['<p>…</p>']);
 });
+
+test('styled-components: a function body of if / return, switch (with fall-through) and const is evaluated per state', () => {
+  const source = `import styled, { css } from 'styled-components';
+const Box = styled.div\`
+  color: \${({ $tone }) => {
+    if ($tone === 'danger') return 'red';
+    if ($tone === 'warn') { return 'orange'; } else if ($tone === 'never') return 'pink';
+    return 'black';
+  }};
+  \${({ $tone }) => {
+    switch ($tone) {
+      case 'danger':
+        return css\`border: 1px solid red;\`;
+      case 'warn':
+      case 'info': {
+        const width = 2;
+        return css\`border: \${width}px solid blue;\`;
+      }
+      default:
+        break;
+    }
+  }}
+\`;
+type P = { tone: 'danger' | 'warn' | 'info' | 'none' };
+export default function C({ tone }: P) { return <Box $tone={tone} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  const rule = tone => { const [, cls] = classOf(states.find(s => s.choices.tone === tone).html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.equal(rule('danger'), 'color:red;border:1px solid red');
+  assert.equal(rule('warn'), 'color:orange;border:2px solid blue');
+  assert.equal(rule('info'), 'color:black;border:2px solid blue');
+  assert.equal(rule('none'), 'color:black');
+});
+
+test('styled-components: a statement the evaluator does not model makes that interpolation Unknown, naming the statement', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  display: block;
+  color: \${({ $on }) => { for (const x of []) {} return $on ? 'red' : 'blue'; }};
+\`;
+export default function C({ on }) { return <Box $on={on} />; }`;
+  const {unknowns, css} = expandReact(source);
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_INTERPOLATION' && /the statement for \(const x of \[\]\) \{\} is not modeled/.test(u.message)), JSON.stringify(unknowns));
+  assert.match(css, /display:block/);
+});

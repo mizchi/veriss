@@ -286,9 +286,51 @@ export function evaluateStyled(def, props, ctx) {
     } else if (param) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: its parameter is not modeled`));
     scopes.push(scope);
     try {
-      const body = fn.body.type === 'BlockStatement' ? fn.body.body.length === 1 && fn.body.body[0].type === 'ReturnStatement' ? fn.body.body[0].argument : null : fn.body;
-      return body ? ev(body) : one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: a function body other than one return`));
+      if (fn.body.type !== 'BlockStatement') return ev(fn.body);
+      // falling off the end returns undefined
+      return run(fn.body.body).map(p => ({ v: p.done ? p.v : undefined, choices: p.choices }));
     } finally { scopes.pop(); }
+  };
+
+  // A function body, statement by statement: paths of {done (returned or broke), v, choices}. Modeled: return, if /
+  // else, blocks, switch on literal cases (fall-through and break), and const / let bindings; any other statement
+  // makes the path Unknown.
+  const thread = (p, rs) => rs.map(r => { const choices = merge(p.choices, r.choices); return choices && { ...r, choices }; }).filter(Boolean);
+  const run = (stmts, start = [{ done: false, choices: {} }]) => stmts.reduce((paths, st) => paths.flatMap(p => p.done ? [p] : thread(p, step(st))), start);
+  const notModeled = st => [{ done: true, v: unknownValue('U_STYLED_INTERPOLATION', `the statement ${src(st).split('\n')[0]} is not modeled`), choices: {} }];
+  const step = st => {
+    switch (st.type) {
+      case 'ReturnStatement': return (st.argument ? ev(st.argument) : one(undefined)).map(r => ({ done: true, v: r.v, choices: r.choices }));
+      case 'BlockStatement': return run(st.body);
+      case 'EmptyStatement': return [{ done: false, choices: {} }];
+      case 'IfStatement': return ev(st.test).flatMap(t => truth(t.v).flatMap(b => {
+        const choices = merge(t.choices, b.choices); if (!choices) return [];
+        if (isUnknown(b.v)) return [{ done: true, v: b.v, choices }];
+        const branch = b.v ? st.consequent : st.alternate;
+        return thread({ choices }, branch ? step(branch) : [{ done: false, choices: {} }]);
+      }));
+      case 'VariableDeclaration': {
+        if (st.kind === 'var' || !st.declarations.every(d => d.id.type === 'Identifier' && d.init)) return notModeled(st);
+        for (const d of st.declarations) scopes[scopes.length - 1].set(d.id.name, ev(d.init));
+        return [{ done: false, choices: {} }];
+      }
+      case 'SwitchStatement': return ev(st.discriminant).flatMap(dr => valueOf(dr.v).flatMap(x => {
+        const choices = merge(dr.choices, x.choices); if (!choices) return [];
+        if (isUnknown(x.v)) return [{ done: true, v: x.v, choices }];
+        // the first case whose literal test equals the value, else default; then its statements and those after it
+        const tests = st.cases.map(c => c.test && ev(c.test));
+        if (tests.some(t => t && (t.length !== 1 || isUnknown(t[0].v) || isSym(t[0].v)))) return thread({ choices }, notModeled(st));
+        let at = tests.findIndex(t => t && unwrap(t[0].v) === unwrap(x.v));
+        if (at < 0) at = st.cases.findIndex(c => !c.test);
+        if (at < 0) return [{ done: false, choices }];
+        const body = [];
+        for (const c of st.cases.slice(at)) body.push(...c.consequent);
+        // break ends the switch (a path that broke goes on after it)
+        return thread({ choices }, run(body)).map(p => p.broke ? { done: false, choices: p.choices } : p);
+      }));
+      case 'BreakStatement': return st.label ? notModeled(st) : [{ done: true, broke: true, choices: {} }];
+      default: return notModeled(st);
+    }
   };
 
   // a template's text variants: each interpolation is a function of the props, a value, or a css fragment
