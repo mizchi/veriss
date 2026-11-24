@@ -235,17 +235,18 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       if (b?.kind !== 'def') { unknown('U_STYLED_BASE', `${d.name} extends ${d.base}, which is not a styled component${b?.kind === 'missing' ? ` (${b.message})` : ''}; its markup is analysed with that component`); return null; }
       d = b.def;
     }
-    let props = new Map(), forwarded = null;
+    // overridden: attributes written before the spread, which a prop the spread carries replaces (the later one wins)
+    let props = new Map(), forwarded = null, overridden = new Set();
     for (const a of node.openingElement.attributes) {
       if (a.type === 'JSXSpreadAttribute') {
         // the component's own props spread on: {...rest} carries what was not destructured by name, {...props} all
         const arg = a.argument.type === 'Identifier' ? a.argument.name : null;
-        if (arg && arg === restName) forwarded = destructuredNames;
-        else if (arg && arg === propsName) forwarded = new Set();
+        if (arg && (arg === restName || arg === propsName)) { forwarded = arg === restName ? destructuredNames : new Set(); overridden = new Set(props.keys()); }
         else unknown('U_STYLED_PROPS', `<${name}> spreads ${text(a.argument)}; the props its styles read are not known`);
         continue;
       }
       const key = a.name.name, value = a.value?.type === 'JSXExpressionContainer' ? a.value.expression : a.value;
+      overridden.delete(key);
       if (key === 'as' || key === 'forwardedAs') { unknown('U_STYLED_AS', `<${name} ${key}> renders another element`); continue; }
       if (value === null || value === undefined) props.set(key, [{ v: true, choices: {} }]);
       else if (['StringLiteral', 'NumericLiteral', 'BooleanLiteral'].includes(value.type)) props.set(key, [{ v: value.value, choices: {} }]);
@@ -263,7 +264,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     let perDef = null;
     if (forwarded) {
       const given = props, excluded = forwarded, through = new Map(given);
-      through.get = key => given.has(key) ? given.get(key) : excluded.has(key) || key === 'children' ? undefined : [{ v: symbolOf(key, key), choices: {} }];
+      const carried = key => !excluded.has(key) && key !== 'children';
+      through.get = key => given.has(key) && !(overridden.has(key) && carried(key)) ? given.get(key) : carried(key) ? [{ v: symbolOf(key, key), choices: {} }] : undefined;
       const spread = evaluated(through);
       // too many variants (many props read only for their values): the spread's props are read as absent
       if (spread.reduce((n, vs) => n * vs.length, 1) > maxStates) unknown('U_STYLED_PROPS', `<${name}>: the props its spread carries make more than ${maxStates} variants of its styles; they are read as absent`);

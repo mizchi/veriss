@@ -1046,3 +1046,20 @@ export default function C({ open }) { return <section><W>{open ? <i /> : <b />}<
   assert.deepEqual(states.map(s => Object.keys(s.choices)), [['open'], ['open']]);
   for (const s of states) assert.equal(shape(s.html), shape((await renderStyled(source, s.choices)).html), JSON.stringify(s.choices));
 });
+
+test('styled props: a spread after an attribute overrides it; an attribute after the spread wins', async () => {
+  const {renderStyled} = await import('./ssr.mjs');
+  const make = attrs => `import styled from 'styled-components';
+const Box = styled.div\`
+  width: \${({ size }) => (size === 'small' ? '10px' : '20px')};
+\`;
+type P = { size: 'small' | 'large' };
+export default function C(props: P) { return <Box ${attrs} />; }`;
+  const widths = source => { const {states, css} = expandReact(source); return states.map(s => { const [, cls] = classOf(s.html, 'div'); return [s.choices.size, new RegExp(`\\.${cls}\\{width:(\\w+)\\}`).exec(css)?.[1]]; }).sort(); };
+  const before = make('size="small" {...props}');
+  assert.deepEqual(widths(before), [['large', '20px'], ['small', '10px']]);
+  assert.match((await renderStyled(before, {size: 'large'})).css, /width:20px/);
+  const after = make('{...props} size="small"');
+  assert.deepEqual(widths(after), [[undefined, '10px']]);
+  assert.match((await renderStyled(after, {size: 'large'})).css, /width:10px/);
+});
