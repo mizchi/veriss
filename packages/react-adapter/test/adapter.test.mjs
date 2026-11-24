@@ -162,3 +162,17 @@ test('a JSX child expression other than literal text is the caller\'s content: m
   const {states} = expandReact(source);
   assert.match(states[0].html, /^<button class="b">…<!--isle-boundary:children-->/);
 });
+
+test('checked and selected are written only where React writes them (input, option), like react-dom/server', async () => {
+  const {render} = await import('./ssr.mjs');
+  const source = `export default function C({ on }) {
+  return <div><span checked={on} /><label checked disabled /><input type="checkbox" checked={on} readOnly /><select><option selected={on}>a</option></select><div selected={on} /></div>;
+}`;
+  const {states} = expandReact(source);
+  for (const s of states) {
+    assert.doesNotMatch(s.html, /<(?:span|label|div)[^>]*\s(?:checked|selected)\b/, s.html);
+    const real = await render(source, s.choices);
+    const attrs = html => [...html.matchAll(/<(\w+)([^>]*)>/g)].map(m => `${m[1]}:${[...m[2].matchAll(/\s([\w-]+)/g)].map(x => x[1]).filter(n => ['checked', 'selected', 'disabled', 'readonly', 'readOnly'].includes(n)).map(n => n.toLowerCase()).sort().join(',')}`);
+    assert.deepEqual(attrs(s.html), attrs(real), JSON.stringify(s.choices));
+  }
+});

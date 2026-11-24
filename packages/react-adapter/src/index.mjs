@@ -320,6 +320,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       const key = a.name.type === 'JSXNamespacedName' ? `${a.name.namespace.name}:${a.name.name.name}` : a.name.name;
       // a styled component's transient props ($x) style it and never reach the DOM
       if (scLists && (key.startsWith('$') || key === 'as' || key === 'forwardedAs')) continue;
+      // React writes checked only on <input> and selected only on <option> (a property elsewhere, no attribute)
+      if ((key === 'checked' && tag !== 'input') || (key === 'selected' && tag !== 'option')) continue;
       if (/^on[A-Z]/.test(key) || ['key', 'ref', 'children', 'dangerouslySetInnerHTML'].includes(key)) { if (key === 'dangerouslySetInnerHTML') unknown('U_REACT_HTML', 'dangerouslySetInnerHTML inserts markup that is not known statically'); continue; }
       const value = a.value?.type === 'JSXExpressionContainer' ? a.value.expression : a.value;
       if (key === 'className') { const variants = classVariants(value); classLists = classLists.flatMap(l => variants.map(v => { const choices = merge(l.choices, v.choices); return choices && { classes: [...l.classes, ...v.classes], choices }; })).filter(Boolean); continue; }
@@ -340,7 +342,9 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       // HTML attribute is present or absent; each value is a state on the condition (shared with classes on it).
       const booleanValued = (value.type === 'BinaryExpression' && ['===', '!==', '==', '!=', '<', '>', '<=', '>='].includes(value.operator)) || (value.type === 'UnaryExpression' && value.operator === '!');
       const booleanAttrs = ['disabled', 'checked', 'hidden', 'required', 'readOnly', 'open', 'inert', 'selected', 'multiple', 'autoFocus'];
-      if (booleanValued && (/^(?:aria|data)-/.test(key) || booleanAttrs.includes(key))) {
+      // a boolean HTML attribute given a prop or a variable (disabled={disabled}) is present when it is truthy
+      const truthy = booleanAttrs.includes(key) && ['Identifier', 'MemberExpression', 'OptionalMemberExpression', 'LogicalExpression'].includes(value.type);
+      if ((booleanValued && (/^(?:aria|data)-/.test(key) || booleanAttrs.includes(key))) || truthy) {
         attrLists.push([true, false].map(v => ({ html: /^(?:aria|data)-/.test(key) ? ` ${attrName(key)}="${v}"` : v ? ` ${attrName(key)}` : '', choices: choice(value, v) })));
         continue;
       }
