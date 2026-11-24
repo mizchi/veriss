@@ -90,7 +90,7 @@ export function accessibilityFacts(tag, attributes) {
 export const phrasingTags = new Set(['a', 'span', 'strong', 'em', 'b', 'i', 'small', 'img', 'output']);
 const phrasing = box => phrasingTags.has(box.tag) && (box.children ?? []).every(phrasing) && !(box.inline ?? []).length;
 
-const fields=new Set(['canvasSize','notAttributes','placeholderAttr','inertAttributes','restructured','implied','disabledAttr','boundaries','autofocus','metaViewport','tag','id','lang','named','ariaHidden','focusable','references','labelledBy','tabIndex','equivalent','essential','alt','inputType','labelFor','placeholder','role','inputName','headers','ariaLabel','href','textContent','aria','nameSource','value','autocomplete','scope','controls','autoplay','muted','trackKind','accessKey','ismap','colSpan','rowSpan','hiddenAttr','inert','popover','inlineStyle','dirAttr','runs','target','buttonType','nativeStates','imageSize','svgSize','detailsOpen','dialogOpen','attributes','classes','children','text','whitespace','path','source','owner','documentRoot','layoutContracts','targets','targetIdentity']);
+const fields=new Set(['adapterUnknowns','canvasSize','notAttributes','placeholderAttr','inertAttributes','restructured','implied','disabledAttr','boundaries','autofocus','metaViewport','tag','id','lang','named','ariaHidden','focusable','references','labelledBy','tabIndex','equivalent','essential','alt','inputType','labelFor','placeholder','role','inputName','headers','ariaLabel','href','textContent','aria','nameSource','value','autocomplete','scope','controls','autoplay','muted','trackKind','accessKey','ismap','colSpan','rowSpan','hiddenAttr','inert','popover','inlineStyle','dirAttr','runs','target','buttonType','nativeStates','imageSize','svgSize','detailsOpen','dialogOpen','attributes','classes','children','text','whitespace','path','source','owner','documentRoot','layoutContracts','targets','targetIdentity']);
 const object=value=>value!==null && typeof value==='object' && !Array.isArray(value);
 
 /** Clone the supplied model: analysis must never attach facts to caller state. */
@@ -132,7 +132,11 @@ export function normalizeTree(tree,name) {
       ...(input.layoutContracts ? {layoutContracts:structuredClone(input.layoutContracts)} : {}),
       ...(input.boundaries ? {boundaries:input.boundaries.map(b=>({...b}))} : {})};
     box.label=box.id ? `#${box.id}` : box.classes.length ? box.classes.map(c=>`.${c}`).join('') : `${box.tag}@${path}`;
-    const unknown=(code,message)=>diagnostics.push({code,severity:'unknown',message,box:box.label,path,source:box.source});
+    // What is not modeled on this box: Unknown where the layout reaches it (the engine throws there), so the rest of the
+    // page is still laid out and a hidden box changes nothing.
+    if(input.adapterUnknowns!==undefined && (!Array.isArray(input.adapterUnknowns) || input.adapterUnknowns.some(u=>!object(u) || typeof u.code!=='string' || typeof u.message!=='string'))) throw new TypeError('Invalid box adapterUnknowns');
+    if(input.adapterUnknowns?.length) box.$unknowns=input.adapterUnknowns.map(u=>({code:u.code,message:u.message}));
+    const unknown=(code,message)=>(box.$unknowns ??= []).push({code,message});
     if(!boxTags.has(box.tag)) unknown('U_LAYOUT_ELEMENT',`Native or foreign element needs a size adapter: ${box.tag}`);
     box.children=(input.children ?? []).map((child,i)=>visit(child,path,i,depth+1));
     // Phrasing children of a text leaf are inline content of that leaf (not layout children).
@@ -144,6 +148,9 @@ export function normalizeTree(tree,name) {
       box.children=input.runs.map(run=>typeof run==='number' ? box.children[run] : {tag:'#anonymous',classes:[],anonymous:true,text:true,textContent:run,children:[],path:`${path}/t${k}`,label:`${box.label}::text(${k++})`,owner:box.owner});
       box.anonymousRuns=k; box.text=false;
     }
+    // A select's options are not laid out as boxes, but its size depends on them: what is not modeled in them is
+    // Unknown on the select.
+    if(box.tag==='select') { const inner=[]; (function walk(b){ for(const c of b.children ?? []) { if(c.$unknowns) inner.push(...c.$unknowns); walk(c); } })(box); if(inner.length) (box.$unknowns ??= []).push(...inner); }
     if(box.text && box.children.length) unknown('U_LAYOUT_STRUCTURE',`${box.label} mixes text with child elements: wrap the text in its own element (a span) so it is not an anonymous box (anonymous flex, grid and block boxes beside elements are not modeled)`);
     return box;
   }
