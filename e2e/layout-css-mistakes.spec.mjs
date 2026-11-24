@@ -328,6 +328,13 @@ test('F28: presentational attributes on elements they do not map to change nothi
   expect(await shot('<span class="a" width="100" bgcolor="red">x</span>')).toBe(await shot('<span class="a">x</span>'));
   // Where they map, they do something (the check is not vacuous).
   expect(await shot('<table class="a" width="300" bgcolor="red"><tr><td>x</td></tr></table>')).not.toBe(await shot('<table class="a"><tr><td>x</td></tr></table>'));
+  // size, color and align where they do not map (a component library's props leaked to the DOM), and names that are
+  // not HTML attributes at all, change nothing; where size, color and align map they do.
+  expect(await shot('<span class="a" size="18" color="red" align="center">x</span>')).toBe(await shot('<span class="a">x</span>'));
+  expect(await shot('<div class="a" placement="top" position="relative" _size="small" hastoasts="true" variant="primary">x</div>')).toBe(plain);
+  expect(await shot('<hr class="a" size="12" color="red">')).not.toBe(await shot('<hr class="a">'));
+  expect(await shot('<p class="a" align="center">x</p>')).not.toBe(await shot('<p class="a">x</p>'));
+  expect(await shot('<input class="a" size="3">')).not.toBe(await shot('<input class="a">'));
 });
 
 test('F29: :empty does not match an element holding whitespace', async ({page}) => {

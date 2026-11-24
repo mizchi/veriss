@@ -301,6 +301,24 @@ test('F28: presentational attributes on elements they do not map to', () => {
   // Where they map (a table's width, a div's align) they still need an adapter: Unknown, no warning.
   assert.equal(codes(run('', '<div class="a" align="center"></div>'), 'W_HTML_ATTRIBUTE_INERT').length, 0);
   assert.equal(codes(run('', '<table width="300"><tr><td>x</td></tr></table>'), 'W_HTML_ATTRIBUTE_INERT').length, 0);
+  // size, color and align on an element that does not take them (a component library's props leaked to the DOM).
+  const leaked = run('.a{height:20px}', '<span class="a" size="18" color="red" align="center">x</span>');
+  assert.deepEqual(codes(leaked, 'W_HTML_ATTRIBUTE_INERT')[0]?.attributes, ['size', 'color', 'align']);
+  assert.deepEqual(leaked.diagnostics.filter(d => d.code === 'U_LAYOUT_HTML'), []);
+  // Where size maps (a text field's width in characters) it still needs an adapter.
+  assert.ok(run('', '<input class="a" size="5" aria-label="n">').diagnostics.some(d => d.code === 'U_LAYOUT_HTML' && /size/.test(d.message)));
+});
+
+test('a name that is not an HTML attribute (a framework prop leaked to the DOM) renders nothing; CSS still selects by it', () => {
+  const r = run('.a{height:20px}', '<div class="a" placement="top" position="relative" _size="small" hastoasts="true" variant="primary"></div>');
+  assert.deepEqual(r.diagnostics.filter(d => d.code === 'U_LAYOUT_HTML'), []);
+  assert.deepEqual(codes(r, 'W_HTML_ATTRIBUTE_INERT'), []);
+  const height = r2 => r2.sizes.find(x => x.box === '.a' && x.rect)?.rect;
+  const selected = run('.a{height:20px}.a[placement="top"]{height:30px}', '<div class="a" placement="top"></div>');
+  assert.equal(selected.diagnostics.filter(d => d.code === 'U_LAYOUT_HTML').length, 0);
+  assert.equal(JSON.stringify(height(selected)).includes('30'), true, JSON.stringify(height(selected)));
+  // An attribute that renders on some element is still an adapter's (contenteditable makes a box focusable and editable).
+  assert.ok(run('', '<div class="a" contenteditable="true"></div>').diagnostics.some(d => d.code === 'U_LAYOUT_HTML'));
 });
 
 test('F29: :empty does not match an element holding whitespace', () => {
