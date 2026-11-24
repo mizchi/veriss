@@ -81,6 +81,8 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - Unknown になる(`… a state or pseudo-element before a combinator`)。
   - 代わりに、状態を持つ要素自身か、スタイルを当てる要素に属性を付けて、属性セレクターで書く。
     例: `<span data-checked="true">` と `[data-checked="true"]::before`。属性セレクターは veriss が読める。属性の値をどう展開して検査するかは、アダプターの対応範囲([component-lint.md](component-lint.md))による。
+- `:has()` の引数は、先頭の結合子(`>`、`+`、`~`、なしは子孫)のあと、`>` と子孫の結合子で下へたどれる(`.btn:has(> span:only-child > svg)`)。
+  引数の中で状態を使うものと、2 つ目以降に `+` / `~` を使うものは Unknown になる。
 
 ## 6. 擬似要素
 
