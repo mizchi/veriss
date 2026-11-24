@@ -1338,6 +1338,17 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // their appearance: it stays 'ua' until the author sets the margin.
   // With a UA profile the margins are known (WebKit: 3px 2px on both).
   if (!box.pseudo && box.tag === 'input' && ['checkbox', 'radio'].includes(box.inputType)) ['top', 'right', 'bottom', 'left'].forEach((side, i) => { values[`margin-${side}`] = uaProfile ? uaProfile[box.inputType].margin[i] : 'ua'; });
+  // An iframe's UA border: 2px inset on every side (Chromium, Firefox and WebKit, measured). frameborder is a
+  // presentational hint that zeroes the widths (not the style): "0" and "no" (any case) in all three engines; other
+  // values the integer parse reads as non-zero keep the border; the rest (an integer error such as "yes", "" or "0px")
+  // drops it in Chromium and WebKit and keeps it in Firefox, so it needs a UA profile that names the engine.
+  if (!box.pseudo && box.tag === 'iframe') {
+    values.$uaBorder = true; values.$uaBorderStyled = true;
+    const fb = box.frameBorder, zero = fb === undefined ? false : fb === 'dynamic' ? null : /^(?:0|no)$/i.test(fb) ? true
+      : /^\s*[+-]?\d/.test(fb) && Number.parseInt(fb, 10) !== 0 ? false : uaProfile ? uaProfile.engine !== 'firefox' : null;
+    if (zero === null) throw Object.assign(new Error(fb === 'dynamic' ? `${box.label}: a dynamic frameborder may or may not drop the iframe's UA border` : `${box.label}: frameborder="${fb}" drops the iframe's UA border in Chromium and WebKit but not in Firefox; write frameborder="0" (or a CSS border), or pass a ua profile`), { code: 'U_LAYOUT_HTML' });
+    for (const side of ['left', 'right', 'top', 'bottom']) values[`border-${side}`] = zero ? '0' : '2px';
+  }
   // The control's UA box rules are not its ::before/::after's.
   if(!box.pseudo && ['button', 'input', 'select', 'textarea'].includes(box.tag)) {
     values.$uaBorder = true;
@@ -1591,7 +1602,8 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     if (!sources[bw] && !sources[bs]) { delete values[bw]; delete values[bs]; continue; }
     // A control's UA border has a style of its own (known widths from a UA profile included): an author width alone
     // keeps that style and draws at the author width (a reset's border-width: 1px on a textarea).
-    const uaStyled = values[`border-${side}`] === 'ua' || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
+    // (An iframe's border keeps its inset style when frameborder zeroed the width: $uaBorderStyled.)
+    const uaStyled = values[`border-${side}`] === 'ua' || values.$uaBorderStyled || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
     const style = sources[bs] ? values[bs] : (uaStyled ? 'ua' : 'none');
     const width = sources[bw] ? values[bw] : (uaStyled ? values[`border-${side}`] : '3px');
     values[`border-${side}`] = ['none', 'hidden', 'none-implied'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
