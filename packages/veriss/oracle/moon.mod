@@ -9,5 +9,5 @@ description = "Development-only differential cascade oracle for @mizchi/veriss, 
 preferred_target = "js"
 
 import {
-  "mizchi/css@0.8.2",
+  "mizchi/css@0.8.3",
 }

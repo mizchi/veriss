@@ -8,8 +8,8 @@ import {tracks} from '../src/layout/grid.mjs';
 import {normalizeTree} from '../src/tree.mjs';
 import {cmp, q} from '../src/layout/linear.mjs';
 
-// Every difference fails. mizchi/css 0.8.2 differs on border widths where the final style is none (the corpus
-// generates every border form since 2026-11); mizchi/css#15 fixes it, and the import moves to the release with it.
+// Every difference fails. The corpus generates every border form; mizchi/css before 0.8.3 differs on border widths
+// where the final style is none.
 // CSS_ORACLE_JS points at another build, e.g. one linked to an unreleased mizchi/css checkout.
 export const oraclePath = process.env.CSS_ORACLE_JS ?? fileURLToPath(new URL('./_build/js/release/build/computed_oracle/computed_oracle.js', import.meta.url));
 
