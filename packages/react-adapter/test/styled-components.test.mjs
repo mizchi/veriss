@@ -339,3 +339,32 @@ export default function C({ tag }) { return <A as={tag}>x</A>; }`;
   assert.ok(unknowns.some(u => u.code === 'U_STYLED_AS'));
   assert.doesNotMatch(states[0].html, / as=/);
 });
+
+const typedDir = new URL('../fixtures/typed-props/', import.meta.url);
+const typedSource = name => readFileSync(new URL(name, typedDir), 'utf8');
+const typedResolver = (specifier) => {
+  if (!specifier.startsWith('./')) return null;
+  const file = `${specifier.slice(2)}.ts`;
+  try { return {file, source: typedSource(file)}; } catch { return null; }
+};
+
+test('props types across modules: forwardRef<Ref, Props>, an imported interface with extends, an imported union alias and a defaulted optional prop', () => {
+  const {states, css, unknowns, assumptions} = expandReact(typedSource('Banner.tsx'), {file: 'Banner.tsx', resolveModule: typedResolver});
+  assert.deepEqual(unknowns, []);
+  // tone: 'info' | 'danger' (via extends and export type { } from), size: 'small' | 'medium' (optional, default 'medium')
+  assert.deepEqual(states.map(s => `${s.choices.tone}/${s.choices.size}`).sort(), ['danger/medium', 'danger/small', 'info/medium', 'info/small']);
+  assert.match(css, /\{display:grid;padding:8px;color:#c00\}/);
+  assert.match(css, /\{display:grid;padding:16px;color:#036\}/);
+  assert.ok(assumptions.some(a => /literal unions \((?=.*tone)(?=.*size)/.test(a)), JSON.stringify(assumptions));
+});
+
+test('props types across modules: React.FC<Props> on the declaration and an intersection type', () => {
+  const {states, unknowns} = expandReact(typedSource('Pill.tsx'), {file: 'Pill.tsx', resolveModule: typedResolver});
+  assert.deepEqual(unknowns, []);
+  assert.equal(states.length, 4);
+});
+
+test('props types: an optional literal-union prop without a default stays optional (not a choice of its values)', () => {
+  const source = `type Size = 'a' | 'b';\nexport default function C({ size }: { size?: Size }) { return <p>{size}</p>; }`;
+  assert.deepEqual(expandReact(source).states.map(s => s.html), ['<p>…</p>']);
+});

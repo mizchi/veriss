@@ -13,8 +13,9 @@
 // spreads other than stylex.props, and more states than maxStates.
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
-import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree, lowerNested, relocateSelectorWarnings } from '@mizchi/veriss-adapter-core';
+import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings } from '@mizchi/veriss-adapter-core';
 import { loadModule, binding, styledTag, evaluateStyled, symbolOf, symbolInfo, styledClass } from './styled-components.mjs';
+import { typeMembers, literalValues, isTextType } from './types.mjs';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = s => escapeText(s).replace(/"/g, '&quot;');
@@ -372,19 +373,24 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // The component: the named one, else the default export; its returned JSX.
   const functions = [];
   // forwardRef(fn) / memo(fn) (React.-qualified or not) wrap the component; `x as T` and `x!` are only types.
-  const unwrapComponent = node => {
+  // The props type may be given there instead of on the parameter: forwardRef<Ref, Props>(…), memo<Props>(…).
+  const typeArgs = node => (node.typeArguments ?? node.typeParameters)?.params ?? [];
+  const unwrapComponent = (node, found = {}) => {
     while (node && ['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression', 'ParenthesizedExpression'].includes(node.type)) node = node.expression;
-    if (node?.type === 'CallExpression' && /^(?:React\.)?(?:forwardRef|memo)$/.test(text(node.callee))) return unwrapComponent(node.arguments[0]);
+    const m = node?.type === 'CallExpression' && /^(?:React\.)?(forwardRef|memo)$/.exec(text(node.callee));
+    if (m) { found.propsType ??= typeArgs(node)[m[1] === 'forwardRef' ? 1 : 0]; return unwrapComponent(node.arguments[0], found); }
     return node;
   };
-  const visitFn = (name, fn) => { fn = unwrapComponent(fn); if (fn && ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(fn.type)) functions.push({ name, fn }); };
+  // const C: React.FC<Props> = …  (FC, VFC, FunctionComponent; React.-qualified or not)
+  const declaredProps = id => { const t = id?.typeAnnotation?.typeAnnotation; return t?.type === 'TSTypeReference' && /^(?:React\.)?(?:FC|VFC|FunctionComponent)$/.test(text(t.typeName)) ? typeArgs(t)[0] : undefined; };
+  const visitFn = (name, fn, propsType) => { const found = {}; fn = unwrapComponent(fn, found); if (fn && ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(fn.type)) functions.push({ name, fn, propsType: found.propsType ?? propsType }); };
   for (const stmt of ast.program.body) {
     const defaultDecl = stmt.type === 'ExportDefaultDeclaration' ? unwrapComponent(stmt.declaration) : null;
     if (defaultDecl && defaultDecl.type !== 'Identifier') visitFn('default', defaultDecl);
     if (defaultDecl?.type === 'Identifier') functions.push({ name: 'default', ref: defaultDecl.name });
     const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
     if (decl?.type === 'FunctionDeclaration') visitFn(decl.id.name, decl);
-    if (decl?.type === 'VariableDeclaration') for (const d of decl.declarations) visitFn(d.id.name, d.init);
+    if (decl?.type === 'VariableDeclaration') for (const d of decl.declarations) visitFn(d.id.name, d.init, declaredProps(d.id));
   }
   let target = component ? functions.find(f => f.name === component) : functions.find(f => f.name === 'default');
   if (target?.ref) target = functions.find(f => f.name === target.ref);
@@ -393,13 +399,25 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const param = target.fn.params?.[0];
   // Destructured without renaming ({ status }) or read as props.status.
   const local = param?.type === 'ObjectPattern' ? new Set(param.properties.filter(p => p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'Identifier' && p.key.name === p.value.name).map(p => p.key.name)) : null;
+  // destructured with a literal default ({ size = 'medium' })
+  const defaults = new Map((param?.type === 'ObjectPattern' ? param.properties : []).filter(p => p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier' && p.value.left.name === p.key.name && ['StringLiteral', 'NumericLiteral'].includes(p.value.right.type)).map(p => [p.key.name, p.value.right.value]));
   if (param?.type === 'Identifier') propsName = param.name;
   if (param?.type === 'ObjectPattern') restName = param.properties.find(p => p.type === 'RestElement')?.argument.name ?? null;
-  const members = propsMembers(param?.typeAnnotation?.typeAnnotation, ast.program.body);
-  literalProps = literalUnionProps(members, name => Boolean(propsName) || Boolean(local?.has(name)));
+  // Its members: from the annotation on the parameter or the wrapper, through aliases, interfaces (with extends) and
+  // intersections, in this module or the modules it imports types from.
+  const members = typeMembers(param?.typeAnnotation?.typeAnnotation ?? target.propsType, sc).filter(({ member: m }) => m.type === 'TSPropertySignature' && m.key?.type === 'Identifier');
+  // Props typed as literal unions are a choice of their values: required ones, and optional ones with a default (which
+  // is one of the values). An optional prop without a default may be absent and is left out.
+  literalProps = new Map();
+  for (const { member: m, mod } of members) {
+    const name = m.key.name;
+    if (!(propsName || local?.has(name) || defaults.has(name))) continue;
+    if (m.optional && !defaults.has(name)) continue;
+    const values = literalValues(m.typeAnnotation?.typeAnnotation, mod);
+    if (values && (!m.optional || values.includes(defaults.get(name)))) literalProps.set(name, values);
+  }
   // props typed as strings or numbers (literals, unions of them, optional or not) are text, never the caller's elements
-  const textType = t => ['TSStringKeyword', 'TSNumberKeyword', 'TSLiteralType'].includes(t?.type) || (t?.type === 'TSUnionType' && t.types.every(x => textType(x) || x.type === 'TSUndefinedKeyword' || x.type === 'TSNullKeyword'));
-  textProps = new Set((members ?? []).filter(m => m.type === 'TSPropertySignature' && m.key?.type === 'Identifier' && textType(m.typeAnnotation?.typeAnnotation)).map(m => m.key.name));
+  textProps = new Set(members.filter(({ member: m, mod }) => isTextType(m.typeAnnotation?.typeAnnotation, mod)).map(({ member: m }) => m.key.name));
   // A prop with a literal default ({ label = 'Save changes' }): its default is a state of its own (the prop left out).
   for (const p of param?.type === 'ObjectPattern' ? param.properties : []) if (p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier' && p.value.left.name === p.key.name && ['StringLiteral', 'NumericLiteral'].includes(p.value.right.type) && !literalProps.has(p.key.name)) defaultProps.set(p.key.name, p.value.right.value);
   if (defaultProps.size) assumptions.add(`props with a literal default (${[...defaultProps.keys()].join(', ')}) are checked with that default and with placeholder text for any other value`);
