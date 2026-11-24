@@ -52,7 +52,7 @@ test('shared semantics agree on a grid with gap, padding and a media override', 
   assert.equal(row(result, 'Doc/0/0/0', 'min-inline-size').oracle, '80px');
 });
 
-// Behaviors that differed in mizchi/css 0.8.0/0.8.1 and were fixed in 0.8.1/0.8.2. Both
+// Behaviors that differed in mizchi/css 0.8.0–0.8.2 and were fixed in 0.8.1–0.8.3. Both
 // engines must keep agreeing on the CSS-specified value.
 const agreed = [
   ['higher-specificity shorthand beats a later longhand', '.a.b{padding:2px} div{padding-left:9px}', [{tag: 'div', classes: ['a', 'b']}], 'Doc/0/0', 'padding-left', '2px'],
@@ -68,6 +68,8 @@ const agreed = [
   ['flex-basis content is not auto', '.b{flex-basis:content}', [{tag: 'div', classes: ['b']}], 'Doc/0/0', 'flex-basis', 'content'],
   ['flex-flow resets the omitted wrap', '.b.b{flex-flow:column} .b{flex-wrap:wrap}', [{tag: 'div', classes: ['b']}], 'Doc/0/0', 'flex-wrap', 'nowrap'],
   ['custom properties inherit their computed value', ':root{--g:1px;--h:var(--g)} .a{--g:7px} .b{padding-left:var(--h)}', [{tag: 'div', classes: ['b']}], 'Doc/0/0', 'padding-left', '1px'],
+  ['a border width without a style computes to 0', '.b{border:2px}', [{tag: 'div', classes: ['b']}], 'Doc/0/0', 'border-top', '0px'],
+  ['a later style keeps an earlier width', '.b{border-top:2px} .b{border-top-style:solid}', [{tag: 'div', classes: ['b']}], 'Doc/0/0', 'border-top', '2px'],
 ];
 for (const [name, css, children, path, property, value] of agreed) {
   test(`both engines agree: ${name}`, () => {

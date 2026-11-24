@@ -8,7 +8,8 @@ import {tracks} from '../src/layout/grid.mjs';
 import {normalizeTree} from '../src/tree.mjs';
 import {cmp, q} from '../src/layout/linear.mjs';
 
-// mizchi/css 0.8.2 has no known divergence on this corpus; every difference fails.
+// Every difference fails. The corpus generates every border form; mizchi/css before 0.8.3 differs on border widths
+// where the final style is none.
 // CSS_ORACLE_JS points at another build, e.g. one linked to an unreleased mizchi/css checkout.
 export const oraclePath = process.env.CSS_ORACLE_JS ?? fileURLToPath(new URL('./_build/js/release/build/computed_oracle/computed_oracle.js', import.meta.url));
 
@@ -93,7 +94,15 @@ export function compareCase(oracle, {css, tree, width, height = 768, name = 'Doc
     try { style = computeStyle(rules, box, active, inherited); }
     catch (error) { failure = `${box.path}: ${error.message}`; return; }
     const theirs = oracleRows.get(box.path);
+    // A box a declaration the verifier does not model applies to: its layout is Unknown there, so it is not compared
+    // (before, the unread declaration made the whole case unsupported).
+    if (style.$unmodeled?.length) { rows.push({path: box.path, status: 'verifier-unsupported', reason: style.$unmodeled[0].message}); for (const child of box.children) visit(child, style); return; }
     for (const property of comparedProperties) {
+      // A declaration the verifier drops on purpose (it does nothing for the layout: overflow on an inline box, F57) keeps
+      // its computed value in the other engine: not compared.
+      // (The two overflow axes go together: one axis's computed value depends on the other, visible becoming auto.)
+      const dropped = (style.$dropped ?? []).find(d => d.property === property || (/^overflow-/.test(d.property) && /^overflow-/.test(property)));
+      if (dropped) { rows.push({path: box.path, property, status: 'verifier-dropped', reason: dropped.reason}); continue; }
       const ours = normalizeVerifier(property, style[property]);
       if (ours.unsupported) { rows.push({path: box.path, property, status: 'verifier-unsupported', reason: ours.unsupported}); continue; }
       const other = normalizeOracle(property, theirs?.[property]);
@@ -126,6 +135,13 @@ function declaration(r) {
     () => `padding-${r.pick(['left', 'right', 'top', 'bottom', 'inline-start', 'block-end'])}: ${px()}`,
     () => `padding-${r.pick(['inline', 'block'])}: ${Array.from({length: r.int(1, 2)}, px).join(' ')}`,
     () => `border: ${r.chance(0.2) ? '0' : `${px()} solid red`}`,
+    // Border widths and styles in every form: the computed width is 0 where the final style is none or hidden, and an
+    // omitted width is medium (3px).
+    () => { const parts = [r.chance(0.7) ? px() : null, r.chance(0.7) ? r.pick(['solid', 'dashed', 'none', 'hidden']) : null, r.chance(0.3) ? 'red' : null].filter(Boolean); if (!parts.length) parts.push(px()); for (let i = parts.length - 1; i > 0; i--) { const j = r.int(0, i); [parts[i], parts[j]] = [parts[j], parts[i]]; } return `${r.pick(['border', 'border-top', 'border-right', 'border-bottom', 'border-left'])}: ${parts.join(' ')}`; },
+    () => `border-width: ${Array.from({length: r.int(1, 4)}, px).join(' ')}`,
+    () => `border-${r.pick(['top', 'right', 'bottom', 'left'])}-width: ${px()}`,
+    () => `border-style: ${Array.from({length: r.pick([1, 2, 4])}, () => r.pick(['solid', 'none', 'dotted', 'hidden'])).join(' ')}`,
+    () => `border-${r.pick(['top', 'right', 'bottom', 'left'])}-style: ${r.pick(['solid', 'none', 'double', 'hidden'])}`,
     () => `min-width: ${px()}`,
     () => `width: ${r.chance(0.3) ? `${r.pick([25, 50, 100])}%` : px()}`,
     () => `height: ${px()}`,
@@ -170,7 +186,7 @@ export function generateCase(seed) {
     const selector = r.chance(0.2) ? `${r.pick(selectors)}, ${r.pick(selectors)}` : r.pick(selectors);
     // The verifier rejects overlapping shorthand/longhand writes in one rule
     // (E_CSS_SHORTHAND_CONFLICT); keep one declaration per family per rule.
-    const family = text => /^padding/.test(text) ? 'padding' : /^(?:gap|column-gap|row-gap)\b/.test(text) ? 'gap' : /^flex(?:-grow|-shrink|-basis)?:/.test(text) ? 'flex' : /^flex-(?:flow|direction|wrap)\b/.test(text) ? 'flex-flow' : text.split(':')[0];
+    const family = text => /^padding/.test(text) ? 'padding' : /^border/.test(text) ? 'border' : /^(?:gap|column-gap|row-gap)\b/.test(text) ? 'gap' : /^flex(?:-grow|-shrink|-basis)?:/.test(text) ? 'flex' : /^flex-(?:flow|direction|wrap)\b/.test(text) ? 'flex-flow' : text.split(':')[0];
     const seen = new Set(), list = [];
     for (const text of Array.from({length: r.int(1, 3)}, () => declaration(r))) if (!seen.has(family(text))) { seen.add(family(text)); list.push(text); }
     const body = `${selector} { ${list.join('; ')} }`;
