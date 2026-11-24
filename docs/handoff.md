@@ -1,10 +1,16 @@
-# 引き継ぎ(2026-11-20)
+# 引き継ぎ(2026-11-24)
 
 isle から切り出した CSS 検証器(veriss)を、別のマシンで続けて開発するための文書。今どこにいて、何をどう続けるか。
 
 ## 今どこにいるか
 
 - `main` に全部入っている(このセッションの作業も)。isle は veriss を git 依存で使う利用者になった(isle の `package.json` の `@mizchi/veriss` が commit を指す)
+- **押せない部品の検査(2026-11-23〜24、PR #14・#15)**: 覆い(見えない層、stacking context に閉じ込められた z-index、`filter`)、`inert`、
+  端末の safe area とヒンジ、fixed の箱の viewport 外。チェックリストの H1〜H20。端末のプロファイル(StatCounter・Playwright・手で書いた safe area)は
+  [docs/devices.md](devices.md)。safe area とヒンジの照合は Chromium の DevTools Protocol でしかできない(Firefox・WebKit は未照合)
+- **幅の測定(`frAutoMinimums`)の抜け**: PR #10・#11 と #14 のレビューで、測れないもの(流れの中の擬似要素、`aspect-ratio` の子孫、閉じた
+  `details`、1 行に並ぶ inline-level の兄弟、`max-width` が掛かったままの base)を 0 や誤った値として使う型の抜けを直した。どれも Unknown にした。
+  18 通りの子の形を 3 ブラウザーと比べる調べで、verified の値はすべて一致(残る抜けは見つかっていない)
 - **静的検査のパターン**: [docs/static-check-checklist.md](static-check-checklist.md) に F1〜F133。カテゴリごとの進み具合と残りの観点は [TODO.md](../TODO.md)(89 / 90)
   - F26 の見逃しを直した(PR #2): 補われた tbody をセレクタの途中で飛ばす `.t > .r > td` も報告する(3 ブラウザーで照合済み)
   - F126 の健全性の修正: `clip` の横のスクロール値で `clip` が `hidden` になるのは Firefox・WebKit だけ(Chromium 156 は `clip`)。解析は Unknown
@@ -77,6 +83,12 @@ tools/gate.sh                                     # push の前に毎回。20〜
   - isle の `package.json` が veriss の API を `@isle/prototype/layout/*` として公開し直している。残すか、利用者に veriss を直接使ってもらうか
 
 ## 落とし穴(このセッションで踏んだもの)
+
+- worktree に `node_modules` をシンボリックリンクでつながない。worktree で pnpm を動かすと、元の作業ツリーの `node_modules/.pnpm/node_modules`
+  のリンクがその worktree 基準に張り替えられ、worktree を消すと壊れる(react-adapter のテストが `@babel/plugin-syntax-jsx` を見失った)。
+  worktree ごとに `pnpm install --frozen-lockfile` する
+- `tools/gate.sh` は Node 24 の `ℹ fail` を数えるようになった(以前は `# fail` だけで、単体テストの失敗を見落としていた)。root の 2 件
+  (MoonBit の文字幅の較正、"compared 0")はこの環境で main でも落ちる
 
 - ゲートの実行中に作業ツリーを変えると、結果がどの版のものか分からなくなる。ゲートの間はツリーの外(一時ディレクトリ)で準備する
 - `css-mistakes.test.mjs` は 1 ファイルで 20 秒以上かかる(止まっているのではない)

@@ -2150,6 +2150,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const shift = o => o ? { inline: sum(o.inline, dx), block: o.block } : o;
           for (const row of rows.filter(row => moved(row) && !row.$mirrored?.has(box.path))) {
             row.origin = shift(row.origin); row.clipOrigin = shift(row.clipOrigin);
+            // A focused position (a :focus rule moving the box by its insets) was laid out with the box: it moves with it.
+            if (row.focusStates) row.focusStates = row.focusStates.map(state => state.origin ? { ...state, origin: shift(state.origin) } : state);
             if (row.bounds) row.bounds = row.bounds.map(piece => ({ ...piece, outer: piece.outer && { ...piece.outer, origin: shift(piece.outer.origin) }, inner: piece.inner && { ...piece.inner, origin: shift(piece.inner.origin) } }));
             (row.$mirrored ??= new Set()).add(box.path);
           }
@@ -2174,7 +2176,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const centre = { inline: sum(sum(origin.inline, times(inline, half)), move(0)), block: sum(sum(origin.block, times(blockSize, half)), move(1)) };
         const own = geometry.findLast(row => row.path === box.path && intersectRegions(row.region, region));
         if (own) own.rotatedBounds = { origin: { inline: diff(centre.inline, extentInline), block: diff(centre.block, extentBlock) }, inline: times(extentInline, q(2)), block: times(extentBlock, q(2)) };
-        if (box.$starts) for (const row of geometry.slice(box.$starts.geometry).filter(row => isDescendant(box.path, row.path) && intersectRegions(row.region, region))) { row.origin = null; row.clipOrigin = null; row.rotatedBy = box.path; }
+        // (A focused position goes with them: unknown, as the descendant's own.)
+        if (box.$starts) for (const row of geometry.slice(box.$starts.geometry).filter(row => isDescendant(box.path, row.path) && intersectRegions(row.region, region))) {
+          row.origin = null; row.clipOrigin = null; row.rotatedBy = box.path;
+          if (row.focusStates) row.focusStates = row.focusStates.map(state => state.origin ? (({ origin, inline, block, ...rest }) => ({ ...rest, originUnknown: true }))(state) : state);
+        }
       }
       // A scale maps the painted descendants too: r ↦ C + s·(r − C) about the box's centre C (affine, s constant).
       const matrix = linearOf(style);
@@ -2183,6 +2189,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const map = mapper(matrix, { inline: sum(origin.inline, times(inline, half)), block: sum(origin.block, times(blockSize, half)) });
         const inside = row => isDescendant(box.path, row.path) && intersectRegions(row.region, region);
         for (const row of geometry.slice(box.$starts.geometry).filter(inside)) {
+          // A focused position (a :focus rule moving the box by its insets) is painted through the same transform.
+          if (row.focusStates) row.focusStates = row.focusStates.map(state => {
+            if (!state.origin) return state;
+            const focused = map({ origin: state.origin, inline: state.inline ?? row.inline, block: state.block ?? row.block });
+            return focused?.origin ? { ...state, origin: focused.origin, inline: focused.inline, block: focused.block } : (({ origin, inline, block, ...rest }) => ({ ...rest, originUnknown: true }))(state);
+          });
           Object.assign(row, map(row));
           if (row.bounds) row.bounds = row.bounds.map(piece => ({ ...piece, outer: piece.outer && map(piece.outer), inner: piece.inner && map(piece.inner) }));
         }

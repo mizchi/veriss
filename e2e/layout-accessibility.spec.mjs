@@ -1226,6 +1226,25 @@ test('inert layers and controls match hit testing; an inert control on top is re
   }
 });
 
+// A focused skip link (a :focus rule moving an absolute box by its insets) moves with what moves its box: an rtl
+// container mirroring its containing block, and a scale painting it. focus-offscreen matches where each browser puts
+// the focused link (entirely before the start edge or not).
+test('focused positions follow rtl mirroring and scales, as each browser paints them', async ({page}) => {
+  const g = 'display:grid;grid-template-columns:minmax(0,1fr)';
+  const body = '<main class="page"><div class="row"><div class="c"><a class="l" href="/x" aria-label="skip"></a></div></div></main>';
+  const css = (t, w) => `*{margin:0;box-sizing:border-box}html,body,.page{${g}}.page{background:#fff;padding-top:60px}.row{display:grid;grid-template-columns:${w}px;grid-auto-rows:30px}.c{position:relative;transform:${t}}.l{position:absolute;left:-60px;top:-40px;width:40px;height:20px;background:#246}.l:focus{top:0}`;
+  for (const [dir, t, w] of [['rtl', 'none', 50], ['ltr', 'none', 50], ['ltr', 'scale(0.5)', 100], ['ltr', 'scale(2)', 100], ['rtl', 'scale(0.5)', 100]]) {
+    const html = `<html lang="en" dir="${dir}"><body>${body}</body></html>`;
+    const report = analyzeHTML(html, {name: 'Page', css: css(t, w), viewport: {min: 400, max: 400, height: {min: 600, max: 600}}, accessibility: true});
+    const statics = report.diagnostics.some(d => d.code === 'E_A11Y_FOCUS_OFFSCREEN');
+    await page.setViewportSize({width: 400, height: 600});
+    await page.setContent(`<!doctype html><html lang="en" dir="${dir}"><head><style>${css(t, w)}</style></head><body>${body}</body></html>`);
+    await page.focus('.l');
+    const offscreen = await page.evaluate(() => document.querySelector('.l').getBoundingClientRect().right <= 0);
+    expect(statics, `${dir} ${t}`).toBe(offscreen);
+  }
+});
+
 // dir=auto follows the first strong character in DOM order (text and children interleaved), as Chromium does.
 test('dir=auto resolves in DOM order like Chromium', async ({page}) => {
   const cases = ['hello <span>שלום</span>', '<span>שלום</span> hello', '123 <span>abc</span> שלום', '<span dir="ltr">abc</span> שלום x', '<b>12</b> <i>مرحبا</i> abc', '123 !'];
