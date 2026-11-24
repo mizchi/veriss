@@ -71,10 +71,11 @@ veriss が判定できる形で書くための規約である。エンジンが�
     `opacity`、`visibility`、`cursor`
   - `transform` / `translate` / `scale` / `rotate` で箱を動かす
 - `:hover` と `:focus` でレイアウトを変えるルールは、veriss が hover・focus した状態で配置し直して検査する。
+- `:active` でレイアウトを変えるルール(押したときに中身を下げる `padding-top` など)は、veriss が押した状態(マウスとキー)で配置し直して検査する。
+  押した状態だけで起きる違反は「押している間」として報告する。押したときのずれは、入力に続くずれなので報告しない。
   - hover で別の箱がずれれば `E_LAYOUT_HOVER_SHIFT`、focus でずれれば `W_LAYOUT_FOCUS_SHIFT` になる。
-- それ以外の状態(`:active`、`:checked`、`:disabled` との組み合わせなど)で、レイアウトを変えない。
+- それ以外の状態(`:checked`、`:target`、`:disabled` との組み合わせなど)で、レイアウトを変えない。
   - 変えると Unknown になる(`State selector rules may only change paint …`)。
-  - 押したときに中身を下げる(`padding-top: 2px`)代わりに、`transform: translateY(2px)` と書く。
 - 1 つの複合セレクターに書ける状態は 1 つ(`.btn:hover:not([disabled])` は可、`.btn:hover:focus` は Unknown)。
 - 状態を結合子の前に置かない(`.check:checked + span::before`、`.row:hover > td`)。
   - Unknown になる(`… a state or pseudo-element before a combinator`)。

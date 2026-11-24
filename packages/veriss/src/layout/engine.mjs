@@ -219,8 +219,12 @@ function length(value, parent, style) {
 export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSheets=[], inputDiagnostics=[], preferences=[]) {
   // A hovered re-layout (hover-at:<path>) still needs its own untransformed re-layout, so it keeps a pristine copy.
   const hovered = preferences.find(p => p.startsWith('hover-at:'))?.slice(9);
+  // A pressed re-layout (active-at:<path>, with hover-at for a pointer press): the box and its ancestors match :active.
+  const pressed = preferences.find(p => p.startsWith('active-at:'))?.slice(10);
+  // In a state re-layout (hovered or pressed) the checks that compare against other layouts are not run again.
+  const relayout = hovered ?? pressed;
   const carouselIn = box => /^carousel$/i.test(String(box.aria?.['aria-roledescription'] ?? '').trim()) || (box.children ?? []).some(carouselIn);
-  const pristine = (options.accessibility || options.integrity || /:hover|@(?:-webkit-)?keyframes|@starting-style/i.test(String(options.css ?? '')) || inlineSheets.length || carouselIn(root)) && preferences.every(p => p.startsWith('hover-at:')) ? structuredClone(root) : null;
+  const pristine = (options.accessibility || options.integrity || /:hover|:active|@(?:-webkit-)?keyframes|@starting-style/i.test(String(options.css ?? '')) || inlineSheets.length || carouselIn(root)) && preferences.every(p => p.startsWith('hover-at:')) ? structuredClone(root) : null;
   // The untransformed re-layout (CSS transforms removed): the layout boxes, which is what a layout shift compares.
   const untransformed = preferences.includes('untransformed');
   let sawTransform = false;
@@ -380,7 +384,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         message: `${sel.source}: ${code} is a country code, not a language code, so :lang(${part.value}) matches lang="${code}" only — the language is ${country[code]}. Write :lang(${country[code].split(' ')[0]})` });
     } }
   layoutWarnings.push(...syntaxWarnings(notes, syntaxNoteOrder.filter(code => code !== 'W_CSS_MARKER_IGNORED')));
-  if (rules.some(rule => rule.stateLayout && !rule.hoverLayout) && !options.accessibility) unknown('U_LAYOUT_SELECTOR', 'A :focus rule changes the layout; the focused layout is modeled for the accessibility checks only');
+  if (rules.some(rule => rule.stateLayout && !rule.hoverLayout && !rule.activeLayout) && !options.accessibility) unknown('U_LAYOUT_SELECTOR', 'A :focus rule changes the layout; the focused layout is modeled for the accessibility checks only');
   if (rules.some(rule => rule.stateGeometry) && !options.accessibility && !options.integrity) unknown('U_LAYOUT_SELECTOR', 'A state rule moves a box (focus insets or a transform); that is modeled for the accessibility and integrity checks only');
   // style attributes: each element's declarations as a rule that matches only it, element-attached in the cascade.
   for (const box of boxes.filter(box => box.inlineStyle !== undefined)) {
@@ -498,6 +502,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (focusAt !== undefined && !box.pseudo && (box.path === focusAt || focusAt.startsWith(box.path + '/'))) state = new Set([...(state ?? []), 'focus-within', ...(box.path === focusAt ? ['focus', 'focus-visible'] : [])]);
     // The hovered re-layout: the hovered box and its ancestors match :hover.
     if (hovered !== undefined && !box.pseudo && (box.path === hovered || hovered.startsWith(box.path + '/'))) state = new Set([...(state ?? []), 'hover']);
+    if (pressed !== undefined && !box.pseudo && (box.path === pressed || pressed.startsWith(box.path + '/'))) state = new Set([...(state ?? []), 'active']);
     // :checked holds for a checkbox/radio with the checked attribute unless the unchecked state is asked for.
     if (box.nativeStates?.checked && !state?.has('unchecked')) state = new Set([...(state ?? []), 'checked']);
     const relevant = rules.filter(rule => rule.selectors.some(selector => matches(selector, box, state)));
@@ -1778,7 +1783,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // that is an ordinary long page. With overflow-y visible and a classic scrollbar profile the scrollbar would
         // appear and narrow the page, which is not laid out, so the root is still required to fit there. A hidden or
         // clipped root cannot scroll: content below the viewport is unreachable (the obligation stays).
-        if (box.documentRoot && available.root && available.block && blockSize && !hovered && !options.$animationFrame) {
+        if (box.documentRoot && available.root && available.block && blockSize && relayout === undefined && !options.$animationFrame) {
           const overflows = Boolean(clip(region, diff(blockSize, available.block), true)), fits = Boolean(clip(region, diff(available.block, blockSize)));
           pageScroll = { fits: (pageScroll?.fits ?? false) || fits, overflows: (pageScroll?.overflows ?? false) || overflows, stable: String(style['scrollbar-gutter']).startsWith('stable') || ['scroll', 'hidden', 'clip'].includes(style['overflow-y']) };
         }
@@ -3792,7 +3797,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // the mistakes in the CSS are reported whatever the layout makes of them (and wherever it is Unknown). Each warning
   // is reported once per box. Re-layouts of the same page (hover, animation frames, slides, untransformed) skip it.
   // It runs where the layout ran or something is Unknown (not on input the layout refused with an error).
-  if ((laidOut || diagnostics.some(d => d.severity === 'unknown')) && hovered === undefined && !options.$animationFrame && !options.$slideVariant && !untransformed) {
+  if ((laidOut || diagnostics.some(d => d.severity === 'unknown')) && relayout === undefined && !options.$animationFrame && !options.$slideVariant && !untransformed) {
     // With accessibility on, it also keeps a row per box and state that is shown (not in a closed details): its paint
     // facts and its ancestors' chain, for the rules that need no geometry (rules/contrast.mjs) where the layout is Unknown.
     const chainOf = (environment, ancestors, next, style) => [...environment.paint, ...ancestors.map((a, i) => captionBackdrop(a, ancestors[i + 1]?.box ?? next, paintFacts(a.style))), paintFacts(style)];
@@ -3852,14 +3857,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   diagnostics.push(...merged.map(({ signature, ...finding }) => finding));
   let integrityWarnings = [], integrityExempted = [], accessibilityWarnings = [], accessibilityNotes = [], accessibilityExempted = [];
-  if (options.integrity && !untransformed && hovered === undefined && !options.$animationFrame && !options.$slideVariant && !diagnostics.some(d => d.severity === 'unknown')) {
+  if (options.integrity && !untransformed && relayout === undefined && !options.$animationFrame && !options.$slideVariant && !diagnostics.some(d => d.severity === 'unknown')) {
     const judged = judgeIntegrity({ geometry, waived }, { block, targetSize: options.integrity.targetSize ?? 24, protrusion: options.integrity.protrusion ?? 'all', ranges });
     diagnostics.push(...judged.findings);
     integrityWarnings = judged.warnings; integrityExempted = judged.exempted;
   }
   // The UA canvas and text colors when the caller states them (defaultColors), unless a dark scheme may apply.
   const uaDefaultColors = options.defaultColors && !preferences.includes('prefers-color-scheme:dark') && !rules.some(rule => rule.declarations.some(d => d.property === 'color-scheme' && /dark/.test(String(d.value)))) ? { canvas: '#ffffff', canvastext: '#000000' } : null;
-  const accessibilityRuns = options.accessibility && !untransformed && hovered === undefined && !options.$animationFrame && !options.$slideVariant;
+  const accessibilityRuns = options.accessibility && !untransformed && relayout === undefined && !options.$animationFrame && !options.$slideVariant;
   const placedAccessibility = accessibilityRuns && !diagnostics.some(d => d.severity === 'unknown');
   // ADR-0016 M7: where the layout is Unknown, the rules that read paint facts only run on the style stage's rows
   // (judgeContrastUnplaced: a low contrast is a warning there, not an error).
@@ -3946,7 +3951,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // or link with no text, no image text and no naming attribute has no name whatever its geometry. It is reported
   // only when no CSS rule could hide it (display: none, visibility hidden/collapse, content-visibility: hidden) or
   // give it generated text (content), and no ancestor hides it from the accessibility tree.
-  else if (options.accessibility && !untransformed && hovered === undefined && !options.$animationFrame && !options.$slideVariant
+  else if (options.accessibility && !untransformed && relayout === undefined && !options.$animationFrame && !options.$slideVariant
     && !rules.some(rule => rule.declarations.some(d => d.property === 'content' || (d.property === 'display' && String(d.value) === 'none') || (d.property === 'visibility' && /hidden|collapse/.test(String(d.value))) || (d.property === 'content-visibility' && String(d.value) === 'hidden')))) {
     const speaks = box => box.text || box.inline?.length || (box.textContent ?? '').trim() || (box.tag === 'img' && (box.alt ?? '').trim()) || box.alt === undefined && box.tag === 'img' || (box.tag === 'svg' && box.named) || (box.children ?? []).some(speaks) || (box.inline ?? []).some(speaks);
     // label elements by for= (a field is labelled by a wrapping label or label[for=id] whose text is present).
@@ -3998,7 +4003,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // Layout shifts from :hover rules that change layout: each box such a rule matches is hovered in a re-layout, and
   // every box's layout start position (inlineStart, blockStart) is compared on the same condition region. An affine
   // difference vanishes on a convex region exactly when it vanishes at its vertices, so the check is exact.
-  if (pristine && hovered === undefined && !options.$animationFrame && !options.$slideVariant && rules.some(rule => rule.hoverLayout) && !diagnostics.some(d => d.severity === 'unknown')) {
+  if (pristine && relayout === undefined && !options.$animationFrame && !options.$slideVariant && rules.some(rule => rule.hoverLayout) && !diagnostics.some(d => d.severity === 'unknown')) {
     const hoverRules = rules.filter(rule => rule.hoverLayout);
     const targets = []; (function walk(box) { if (hoverRules.some(rule => rule.selectors.some(selector => matches(selector, box, new Set(['hover']))))) targets.push(box); for (const child of box.children ?? []) walk(child); })(root);
     // Rows correspond by path and condition polygon (its vertices; constraints may repeat redundant bounds).
@@ -4029,11 +4034,31 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       }
     }
   }
+  // :active rules that change layout: each box such a rule matches is laid out again pressed, by a pointer (:active and
+  // :hover) and by a key (:active alone), and that layout is checked like the base one. A shift is not reported: it follows
+  // a pointer or key press, which Chromium excuses from layout shifts (hadRecentInput). Findings of the pressed layout that
+  // the base layout does not have are reported for the pressed state; an undecided pressed layout is Unknown.
+  if (pristine && relayout === undefined && !options.$animationFrame && !options.$slideVariant && rules.some(rule => rule.activeLayout) && !diagnostics.some(d => d.severity === 'unknown')) {
+    const activeRules = rules.filter(rule => rule.activeLayout);
+    const targets = []; (function walk(box) { if (activeRules.some(rule => rule.selectors.some(selector => matches(selector, box, new Set(['active', 'hover'])) || matches(selector, box, new Set(['active']))))) targets.push(box); for (const child of box.children ?? []) walk(child); })(root);
+    const seen = new Set(diagnostics.map(d => `${d.code}|${d.path}|${d.message}`));
+    for (const target of targets.slice(0, 64)) for (const press of [[`hover-at:${target.path}`, `active-at:${target.path}`], [`active-at:${target.path}`]]) {
+      const active = analyzeBoxTree(pristine, options, scrollbarProfile, budget, inlineSheets, [], press);
+      const how = press.length === 2 ? 'with a pointer' : 'with a key';
+      if (active.status === 'unknown') { diagnostics.push({ code: 'U_LAYOUT_ACTIVE', severity: 'unknown', box: target.label, path: target.path, pressed: target.label, message: `${target.label}: its pressed layout (:active, ${how}) is not decided (${active.diagnostics.find(d => d.severity === 'unknown')?.message ?? 'unknown'})` }); break; }
+      for (const d of active.diagnostics.filter(d => d.severity === 'error')) {
+        const id = `${d.code}|${d.path}|${d.message}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        diagnostics.push({ ...d, pressed: target.label, pressedPath: target.path, message: `While ${target.label} is pressed (:active, ${how}): ${d.message}` });
+      }
+    }
+  }
   // Layout shifts from CSS animations of layout properties (margin, size, insets, padding, …; transform and opacity
   // never shift, measured): the page is laid out at each keyframe's declarations, and any box whose layout start
   // moves where the animation runs is reported. Frames between keyframes are not enumerated: a shift at a keyframe
   // is a shift every iteration (an infinite animation shifts every frame; docs/cls-evaluation.md).
-  if (pristine && hovered === undefined && !options.$animationFrame && !options.$slideVariant && animated.length && !diagnostics.some(d => d.severity === 'unknown')) {
+  if (pristine && relayout === undefined && !options.$animationFrame && !options.$slideVariant && animated.length && !diagnostics.some(d => d.severity === 'unknown')) {
     const r = v => { const [n, d = '1'] = String(v ?? '0').split('/'); return div(q(n), q(d)); };
     const at = (a, w, h) => add(add(r(a.constant), mul(r(a.coefficient), w)), mul(r(a.heightCoefficient), h));
     const rect = row => row.layoutRect !== undefined ? row.layoutRect : row.rect;
@@ -4151,7 +4176,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // A sticky box that cannot stick: its containing block (the parent's content box) ends at or before its own bottom,
   // so there is no scroll range in which it stays at top: 0 (a sticky header wrapped in a box of its own height).
-  if (block && hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.sticky?.parent && row.origin && row.block)) {
+  if (block && relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.sticky?.parent && row.origin && row.block)) {
     const parent = geometry.find(other => other.path === row.sticky.parent && other.origin && other.contentBlockSize && intersect(other.region, row.region));
     if (!parent || layoutWarnings.some(w => w.code === 'W_LAYOUT_STICKY_INERT' && w.path === row.path)) continue;
     const room = diff(sum(sum(parent.origin.block, scalar(parent.content.top)), parent.contentBlockSize), sum(row.origin.block, row.block));
@@ -4163,7 +4188,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // An img whose srcset has width descriptors picks its file by the sizes attribute's width (× the pixel ratio): a
   // sizes width below the width the image is laid out at selects a file too small for its box (a blurry image).
   // sizes is evaluated like the layout: its media conditions split the region, its lengths are viewport-affine.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of sizes) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of sizes) {
     const box = boxes.find(b => b.path === row.path);
     const facts = box?.tag === 'img' ? box.imageSize : null;
     if (!facts || typeof facts.srcset !== 'string' || !/\d+w\s*(?:,|$)/.test(facts.srcset) || !row.$shown?.region) continue;
@@ -4212,7 +4237,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // A list item's outside marker is drawn before its start edge (left in ltr): where that edge is at the viewport's left
   // edge, the whole marker lies outside and is not seen (measured). Under a clipping ancestor positions are not
   // tracked, and a small gap that cuts the marker in part depends on the font: neither is reported.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.outsideMarker && (row.origin ?? row.clipOrigin) && !row.box.pseudo)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.outsideMarker && (row.origin ?? row.clipOrigin) && !row.box.pseudo)) {
     if (layoutWarnings.some(w => w.code === 'W_LAYOUT_MARKER_HIDDEN' && w.path === row.path)) continue;
     // (Under a clipping ancestor a row keeps its position as clipOrigin.)
     const at = r => r.origin ?? r.clipOrigin;
@@ -4231,7 +4256,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // An image laid out wider than its widest file: the file's natural width (a single src whose size is known), or the
   // largest w descriptor of its srcset. The browser upscales it — blurry even at a device pixel ratio of 1.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of sizes) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of sizes) {
     const box = boxes.find(b => b.path === row.path), facts = box?.tag === 'img' ? box.imageSize : null;
     if (!facts || !row.$shown?.region || box.pseudo || layoutWarnings.some(w => w.code === 'W_LAYOUT_IMAGE_UPSCALED' && w.path === row.path)) continue;
     const parent = boxes.find(b => (b.children ?? []).includes(box));
@@ -4252,7 +4277,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // object-fit: fill (the initial value) scales an img's picture to its content box on each axis: a box whose ratio
   // differs from the picture's (by more than 2%) draws it stretched. Boxes with padding or borders are not judged.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.imageRatio && !row.imageRatio.follows && row.paint?.objectFit === 'fill' && row.inline && row.block && !row.box.pseudo)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.imageRatio && !row.imageRatio.follows && row.paint?.objectFit === 'fill' && row.inline && row.block && !row.box.pseudo)) {
     if (layoutWarnings.some(w => w.code === 'W_LAYOUT_IMAGE_DISTORTED' && w.path === row.path)) continue;
     if (['left', 'right', 'top', 'bottom'].some(side => cmp(row.borders?.[side] ?? zero, zero) !== 0) || cmp(row.content.left, zero) !== 0 || cmp(row.content.top, zero) !== 0) continue;
     const { width: w, height: h } = row.imageRatio;
@@ -4268,7 +4293,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // A grid whose columns are all px tracks does not shrink: where they (and the gaps) are wider than the container
   // (the inline E_LAYOUT_TRACKS), the fix is flexible tracks.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.fixedTracks)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.fixedTracks)) {
     const failed = diagnostics.find(d => d.code === 'E_LAYOUT_TRACKS' && d.path === row.path && d.axis === 'inline');
     if (!failed || layoutWarnings.some(w => w.code === 'W_LAYOUT_FIXED_TRACKS' && w.path === row.path)) continue;
     layoutWarnings.push({ code: 'W_LAYOUT_FIXED_TRACKS', severity: 'warning', box: row.box.label, path: row.path, columns: row.fixedTracks,
@@ -4276,7 +4301,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // Wrapping text with overflow-wrap: normal breaks only between words: its minimum width is its longest word (a
   // URL, a long compound). Where that does not fit (the inline E_LAYOUT_CONTENT), say so.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.wrapsByWords)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.wrapsByWords)) {
     const failed = diagnostics.find(d => d.code === 'E_LAYOUT_CONTENT' && d.path === row.path && d.axis === 'inline');
     if (!failed || layoutWarnings.some(w => w.code === 'W_LAYOUT_LONG_WORD' && w.path === row.path)) continue;
     layoutWarnings.push({ code: 'W_LAYOUT_LONG_WORD', severity: 'warning', box: row.box.label, path: row.path,
@@ -4284,7 +4309,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // An img (or video) sized by its width attribute with no CSS width or max-width keeps that px width in a narrower
   // container: the inline overflow is explained by the missing max-width: 100%.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.widthFromAttribute)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.widthFromAttribute)) {
     const failed = diagnostics.find(d => d.code === 'E_LAYOUT_ITEM_SIZE' && d.path === row.path && d.axis === 'inline');
     if (!failed || layoutWarnings.some(w => w.code === 'W_LAYOUT_MEDIA_NO_MAX' && w.path === row.path)) continue;
     layoutWarnings.push({ code: 'W_LAYOUT_MEDIA_NO_MAX', severity: 'warning', box: row.box.label, path: row.path, width: row.widthFromAttribute,
@@ -4292,7 +4317,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // width: 100% is the whole area; a px start margin then pushes the box out of it (stretching, width: auto, would
   // have subtracted the margins). Explains the inline E_LAYOUT_ITEM_SIZE.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.fullWidthMargins?.length)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.fullWidthMargins?.length)) {
     const failed = diagnostics.find(d => d.code === 'E_LAYOUT_ITEM_SIZE' && d.path === row.path && d.axis === 'inline');
     if (!failed || layoutWarnings.some(w => w.code === 'W_LAYOUT_FULL_WIDTH_MARGIN' && w.path === row.path)) continue;
     layoutWarnings.push({ code: 'W_LAYOUT_FULL_WIDTH_MARGIN', severity: 'warning', box: row.box.label, path: row.path, properties: row.fullWidthMargins,
@@ -4300,7 +4325,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // width: 100% under box-sizing: content-box is the content width: the padding and border come on top, so the box
   // is wider than its container (the content-box pitfall, the default for most boxes and for text inputs).
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.contentBoxFull?.length)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of geometry.filter(row => row.contentBoxFull?.length)) {
     const failed = diagnostics.find(d => d.code === 'E_LAYOUT_ITEM_SIZE' && d.path === row.path && d.axis === 'inline');
     if (!failed || layoutWarnings.some(w => w.code === 'W_LAYOUT_CONTENT_BOX_FULL' && w.path === row.path)) continue;
     layoutWarnings.push({ code: 'W_LAYOUT_CONTENT_BOX_FULL', severity: 'warning', box: row.box.label, path: row.path, properties: row.contentBoxFull,
@@ -4308,7 +4333,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // A vw width is a share of the whole viewport, the classic scrollbar included: on a scrolling page it is wider
   // than the space beside the scrollbar (100vw → a horizontal scrollbar). Explains the inline E_LAYOUT_ITEM_SIZE.
-  if (hovered === undefined && !options.$animationFrame && !options.$slideVariant && scrollbarProfile?.inlineSize > 0) for (const row of geometry.filter(row => row.vwInline)) {
+  if (relayout === undefined && !options.$animationFrame && !options.$slideVariant && scrollbarProfile?.inlineSize > 0) for (const row of geometry.filter(row => row.vwInline)) {
     const failed = diagnostics.find(d => d.code === 'E_LAYOUT_ITEM_SIZE' && d.path === row.path && d.axis === 'inline');
     if (!failed || layoutWarnings.some(w => w.code === 'W_LAYOUT_VW_SCROLLBAR' && w.path === row.path)) continue;
     layoutWarnings.push({ code: 'W_LAYOUT_VW_SCROLLBAR', severity: 'warning', box: row.box.label, path: row.path, width: row.vwInline, scrollbar: scrollbarProfile.inlineSize,
@@ -4317,7 +4342,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // A lazily loaded image in the initial viewport (its layout top above the viewport height somewhere, at the
   // initial scroll position): it starts loading only after layout, later than an eager one, which delays the largest
   // contentful paint when it is the hero image. Reported as a warning with the region where it is visible.
-  if (block && options.viewport.height && hovered === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of sizes) {
+  if (block && options.viewport.height && relayout === undefined && !options.$animationFrame && !options.$slideVariant) for (const row of sizes) {
     const box = boxes.find(b => b.path === row.path);
     if (box?.tag !== 'img' || box.imageSize?.loading !== 'lazy' || !row.$shown?.origin || !row.$shown.block || layoutWarnings.some(w => w.code === 'W_LAYOUT_LAZY_IN_VIEWPORT' && w.path === row.path)) continue;
     const top = row.$shown.origin.block, bottom = sum(top, row.$shown.block), left = row.$shown.origin.inline;
@@ -4334,7 +4359,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // in turn, nothing outside the slides may move, or switching slides is a layout shift (slides of different heights
   // move the content below; measured). The shown slide is the one without the hidden attribute, or the one carrying
   // a class no other slide has; each variant moves that marker to another slide.
-  if (pristine && hovered === undefined && !options.$animationFrame && !options.$slideVariant && !diagnostics.some(d => d.severity === 'unknown')) {
+  if (pristine && relayout === undefined && !options.$animationFrame && !options.$slideVariant && !diagnostics.some(d => d.severity === 'unknown')) {
     const role = (box, name) => String(box.aria?.['aria-roledescription'] ?? '').trim().toLowerCase() === name;
     const carousels = []; (function walk(box) { if (role(box, 'carousel')) carousels.push(box); for (const child of box.children ?? []) walk(child); })(root);
     for (const carousel of carousels.slice(0, 8)) {
@@ -4415,7 +4440,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     ...(boxes.some(box=>box.layoutContracts?.length) ? {layoutBindings:boxes.flatMap(box=>(box.layoutContracts ?? []).map(declaration=>({path:box.path,declaration})))} : {}),
     ...(geometry.some(row => row.bounds) ? { inlineBounds: geometry.filter(row => row.bounds).flatMap(row => row.bounds.map(piece => ({ box: row.box.label, path: row.path, ...ranges(piece.region), ...(block ? { regionConstraints: serialize(piece.region).constraints } : {}),
       ...Object.fromEntries(['outer', 'inner'].map(key => [key, piece[key] ? { inlineStart: affine(piece[key].origin.inline), blockStart: affine(piece[key].origin.block), inlineSize: affine(piece[key].inline), blockSize: affine(piece[key].block) } : null])) }))) } : {}),
-    ...(scrollbars.length ? {scrollbars} : {}), ...(invalidSubstitutions.length ? {invalidSubstitutions} : {}), ...(layoutWarnings.length ? { layoutWarnings } : {}), ...(pageScroll ? { pageScroll } : {}), ...(transitionSizes.length ? { transitionSizes } : {}), ...(options.reportTextFonts ? { textFonts: [...textFonts].map(([path, facts]) => facts === 'varied' ? { path, varied: true } : { path, ...facts }) } : {}), ...((options.selectors || options.scope) && !untransformed && hovered === undefined && !options.$animationFrame && !options.$slideVariant ? { selectors: (() => { const usage = options.selectors ? selectorUsage(rules, boxes) : { rows: [], warnings: [] }; return options.scope ? { ...usage, warnings: [...usage.warnings, ...selectorScope(rules, boxes, options.scope).warnings] } : usage; })() } : {}), ...(generatedTexts.length ? { generatedText: generatedTexts } : {}),
+    ...(scrollbars.length ? {scrollbars} : {}), ...(invalidSubstitutions.length ? {invalidSubstitutions} : {}), ...(layoutWarnings.length ? { layoutWarnings } : {}), ...(pageScroll ? { pageScroll } : {}), ...(transitionSizes.length ? { transitionSizes } : {}), ...(options.reportTextFonts ? { textFonts: [...textFonts].map(([path, facts]) => facts === 'varied' ? { path, varied: true } : { path, ...facts }) } : {}), ...((options.selectors || options.scope) && !untransformed && relayout === undefined && !options.$animationFrame && !options.$slideVariant ? { selectors: (() => { const usage = options.selectors ? selectorUsage(rules, boxes) : { rows: [], warnings: [] }; return options.scope ? { ...usage, warnings: [...usage.warnings, ...selectorScope(rules, boxes, options.scope).warnings] } : usage; })() } : {}), ...(generatedTexts.length ? { generatedText: generatedTexts } : {}),
     ...(options.accessibility ? { accessibility: { rules: accessibilityRules.filter(accessibilityProfiles[options.accessibility.profile ?? 'all']), profile: options.accessibility.profile ?? 'all', contrast: options.accessibility.contrast ?? 'AA', targetLevel: options.accessibility.targetLevel ?? 'AA', targetSize: options.accessibility.targetSize ?? (options.accessibility.targetLevel === 'AAA' ? 44 : 24), warnings: accessibilityWarnings, exempted: accessibilityExempted, notes: accessibilityNotes } } : {}),
     ...(options.integrity ? { integrity: { rules: ['page-overflow-x', 'container-protrusion', 'text-collision', 'target-undersized', 'clipped-content', 'nested-scroll'], targetSize: options.integrity.targetSize ?? 24, protrusion: options.integrity.protrusion ?? 'all', warnings: integrityWarnings, exempted: integrityExempted } } : {}) };
 }

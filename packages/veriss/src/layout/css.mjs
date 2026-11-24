@@ -1056,7 +1056,10 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       // A :hover rule that changes layout: the page is laid out again with each matching box hovered, and any box
       // whose start position moves is a layout shift (Chromium counts it: hover is not an excusing input; measured).
       const hoverLayout = !stateGeometry && !checkedMark && selectors.every(selector => selector.state === 'hover' && !selector.pseudoElement);
-      const stateLayout = !stateGeometry && !checkedMark && (focusLayout || hoverLayout);
+      // A :active rule that changes layout (a pressed button's content dropping by its padding): the page is laid out again
+      // with each matching box pressed, and that layout is checked like the base one.
+      const activeLayout = !stateGeometry && !checkedMark && selectors.every(selector => selector.state === 'active' && !selector.pseudoElement);
+      const stateLayout = !stateGeometry && !checkedMark && (focusLayout || hoverLayout || activeLayout);
       // A state rule that changes layout in a state the analysis does not lay out (:active, :checked, …): Unknown for the
       // boxes it may match in that state (the rule never applies in the states that are laid out, so it is dropped).
       if (!stateGeometry && !checkedMark && !stateLayout && selectors.some(selector => selector.state) && node.nodes.some(d => d.type === 'decl' && !d.prop.startsWith('--') && !statePaint.test(d.prop.toLowerCase()))) {
@@ -1184,7 +1187,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           if (/\d(?:cqw|cqi|cqh|cqb)\b/i.test(declaration.value)) (unmodeled ??= []).push({ property: declaration.prop.toLowerCase(), specified: declaration.value.trim(), file: filename, line: declaration.source.start.line, selector: node.selector });
         }
       }
-      rules.push({ selectors, contexts, declarations, ...(unmodeled ? { unmodeled } : {}), layer, file: filename, line: node.source.start.line, ...(preferences.length ? { preferences } : {}), ...(stateGeometry ? { stateGeometry: true } : {}), ...(stateLayout && node.nodes.some(d => d.type === 'decl' && !d.prop.startsWith('--') && !statePaint.test(d.prop.toLowerCase())) ? { stateLayout: true, ...(hoverLayout ? { hoverLayout: true } : {}) } : {}) });
+      rules.push({ selectors, contexts, declarations, ...(unmodeled ? { unmodeled } : {}), layer, file: filename, line: node.source.start.line, ...(preferences.length ? { preferences } : {}), ...(stateGeometry ? { stateGeometry: true } : {}), ...(stateLayout && node.nodes.some(d => d.type === 'decl' && !d.prop.startsWith('--') && !statePaint.test(d.prop.toLowerCase())) ? { stateLayout: true, ...(hoverLayout ? { hoverLayout: true } : {}), ...(activeLayout ? { activeLayout: true } : {}) } : {}) });
     }
   };
   // F125: em and rem in a media query are the browser's default font size (16px unless the user changed it), not the
