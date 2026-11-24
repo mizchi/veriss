@@ -22,6 +22,21 @@ argument winning (StyleX's rule, independent of definition order), including con
 **Linaria**: `css```, `styled.tag``` become a class per template in definition order; `&` nesting and `@media`
 blocks are flattened.
 
+**styled-components** (imported from `styled-components`): a `styled.tag` / `styled(Styled)` template is evaluated
+for the props each element passes. An element gets a stable class per component (`sc-Name`, what `${Other}` selectors
+refer to) and one class per evaluated CSS. A literal prop is its value; any other prop expression is a condition when the
+template tests it (`$open ? … : …`, `$x && css```), one of its values when the component's props type is a literal
+union, and Unknown when its value is written into a declaration. `theme` comes from `options.theme`. Module constants,
+`css``` fragments and `${Other}` references are inlined; nested rules are lowered with their template lines, so
+`selectors: true` reports `W_CSS_SELECTOR_RELATION` at the line of the nested selector with the edge it assumes
+(`nesting: {path, relation}`). A declaration with an Unknown value is left out and reported (`U_STYLED_THEME`,
+`U_STYLED_VALUE`, `U_STYLED_INTERPOLATION`); `styled(Component)` of a non-styled component, `as`, spreads and `.attrs`
+are Unknown.
+
+```js
+analyzeReact(source, {pageCSS, viewport, theme, file: 'Card.tsx', selectors: true});
+```
+
 Unknown: other components, `dangerouslySetInnerHTML`, dynamic `className`/`style` of other shapes, spreads other
 than `stylex.props`, StyleX values that are not static literals, Linaria interpolations, early returns, more states
 than `maxStates`.

@@ -13,7 +13,8 @@
 // spreads other than stylex.props, and more states than maxStates.
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
-import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree } from '@mizchi/veriss-adapter-core';
+import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree, lowerNested, relocateSelectorWarnings } from '@mizchi/veriss-adapter-core';
+import { styledImports, collectStyled, evaluateStyled, symbolOf, styledClass } from './styled-components.mjs';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = s => escapeText(s).replace(/"/g, '&quot;');
@@ -70,8 +71,10 @@ function linariaRules(className, text) {
  * @param {string} source a module (JSX/TSX) whose default export (or `component`) is a function component
  * @param {{component?: string, maxStates?: number, eachCounts?: number[]}} options
  */
-export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false } = {}) {
+export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component' } = {}) {
   const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+  // styled-components (imported from 'styled-components'): evaluated per element from the props it passes.
+  const scNames = styledImports(ast), sc = collectStyled(ast, source, scNames), scBlocks = new Map();
   const unknowns = [], assumptions = new Set();
   const unknown = (code, message) => { if (!unknowns.some(u => u.message === message)) unknowns.push({ code, message }); };
   const limit = { maxStates, onLimit: max => unknown('U_REACT_STATES', `more than ${max} component states; raise maxStates or split the component`) };
@@ -91,6 +94,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       if (!init || !name) continue;
       // A module-level constant (a string, number or object of them) that Linaria templates may interpolate.
       if (stmt.kind === 'const' || stmt.declaration?.kind === 'const') { const value = literal(init); if (value !== undefined && value !== null) constants.set(name, value); }
+      if (sc.defs.has(name) || sc.fragments.has(name)) continue;
       if (init.type === 'CallExpression' && text(init.callee) === 'stylex.create') {
         const value = literal(init.arguments[0]);
         if (value === undefined) { unknown('U_STYLEX_DYNAMIC', `stylex.create for ${name} is not a static literal`); continue; }
@@ -208,10 +212,46 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     return [{ classes: [], choices: {} }];
   };
 
+  // A styled-components element: its tag (through styled(Base) chains), stable classes, and one class per evaluated
+  // CSS of each component in the chain, base first (its rules come first, so the extension wins at equal specificity).
+  function styledElement(name, node) {
+    const chain = [];
+    for (let d = sc.defs.get(name); d; d = d.base ? sc.defs.get(d.base) : null) {
+      chain.unshift(d);
+      if (d.base && !sc.defs.has(d.base)) { unknown('U_STYLED_BASE', `${d.name} extends ${d.base}, which is not a styled component of this module; its markup is analysed with that component`); return null; }
+    }
+    const props = new Map();
+    for (const a of node.openingElement.attributes) {
+      if (a.type === 'JSXSpreadAttribute') { unknown('U_STYLED_PROPS', `<${name}> spreads ${text(a.argument)}; the props its styles read are not known`); continue; }
+      const key = a.name.name, value = a.value?.type === 'JSXExpressionContainer' ? a.value.expression : a.value;
+      if (key === 'as' || key === 'forwardedAs') { unknown('U_STYLED_AS', `<${name} ${key}> renders another element`); continue; }
+      if (value === null || value === undefined) props.set(key, [{ v: true, choices: {} }]);
+      else if (['StringLiteral', 'NumericLiteral', 'BooleanLiteral'].includes(value.type)) props.set(key, [{ v: value.value, choices: {} }]);
+      else if (value.type === 'ConditionalExpression' && [value.consequent, value.alternate].every(e => ['StringLiteral', 'NumericLiteral', 'BooleanLiteral'].includes(e.type))) props.set(key, [true, false].map(on => ({ v: (on ? value.consequent : value.alternate).value, choices: choice(value.test, on) })));
+      else { const { key: cond, negate } = conditionKey(text(value)); props.set(key, [{ v: symbolOf(cond, key, negate), choices: {} }]); }
+    }
+    let lists = [{ classes: [], choices: {} }];
+    for (const d of chain) {
+      const variants = evaluateStyled(d, props, { defs: sc.defs, fragments: sc.fragments, constants, theme, names: scNames, source, literalProps });
+      for (const v of variants) for (const u of v.unknowns) unknown(u.code, u.message);
+      lists = lists.flatMap(l => variants.map(v => {
+        const choices = merge(l.choices, v.choices); if (!choices) return null;
+        const cls = styledClass(d.name, v.text);
+        if (!scBlocks.has(cls)) scBlocks.set(cls, { selector: `.${cls}`, text: v.text, origin: { file, line: d.line, name: d.name } });
+        return { classes: [...l.classes, cls], choices };
+      }).filter(Boolean));
+    }
+    return { tag: chain[0].tag, baseClasses: chain.map(d => `sc-${d.name}`), scLists: lists };
+  }
+
   function element(node) {
     const name = node.openingElement.name;
-    let tag = name.type === 'JSXIdentifier' ? name.name : text(name), baseClasses = [];
-    if (styled.has(tag)) { baseClasses = [styled.get(tag).className]; tag = styled.get(tag).tag; }
+    let tag = name.type === 'JSXIdentifier' ? name.name : text(name), baseClasses = [], scLists = null;
+    if (sc.defs.has(tag)) {
+      const r = styledElement(tag, node);
+      if (!r) return [{ html: boundary('component', tag), choices: {} }];
+      ({ tag, baseClasses, scLists } = r);
+    } else if (styled.has(tag)) { baseClasses = [styled.get(tag).className]; tag = styled.get(tag).tag; }
     else if (tag === 'Fragment' || tag === 'React.Fragment') return children(node.children);
     else if (/^[A-Z]/.test(tag) || tag.includes('.')) { unknown('U_REACT_COMPONENT', `child component <${tag}>: its markup is analysed with that component, not here`); return [{ html: boundary('component', tag, node.openingElement.attributes.some(a => a.type === 'JSXAttribute' && a.name?.name === 'data-noshift') ? 'data-noshift' : undefined), choices: {} }]; }
     let classLists = [{ classes: [], choices: {} }], refLists = null;
@@ -224,6 +264,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         continue;
       }
       const key = a.name.type === 'JSXNamespacedName' ? `${a.name.namespace.name}:${a.name.name.name}` : a.name.name;
+      // a styled component's transient props ($x) style it and never reach the DOM
+      if (scLists && key.startsWith('$')) continue;
       if (/^on[A-Z]/.test(key) || ['key', 'ref', 'children', 'dangerouslySetInnerHTML'].includes(key)) { if (key === 'dangerouslySetInnerHTML') unknown('U_REACT_HTML', 'dangerouslySetInnerHTML inserts markup that is not known statically'); continue; }
       const value = a.value?.type === 'JSXExpressionContainer' ? a.value.expression : a.value;
       if (key === 'className') { const variants = classVariants(value); classLists = classLists.flatMap(l => variants.map(v => { const choices = merge(l.choices, v.choices); return choices && { classes: [...l.classes, ...v.classes], choices }; })).filter(Boolean); continue; }
@@ -252,9 +294,9 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       statics.push(` ${attrName(key)}="dynamic"`);
     }
     const own = [];
-    for (const c of classLists) for (const r of refLists ?? [null]) for (const at of product(attrLists)) {
-      let choices = merge(c.choices, at.choices); if (r) choices = choices && merge(choices, r.choices); if (!choices) continue;
-      const list = [...baseClasses, ...c.classes, ...(r ? [stylexClass(r.refs)] : [])];
+    for (const c of classLists) for (const r of refLists ?? [null]) for (const at of product(attrLists)) for (const s of scLists ?? [null]) {
+      let choices = merge(c.choices, at.choices); if (r) choices = choices && merge(choices, r.choices); if (s) choices = choices && merge(choices, s.choices); if (!choices) continue;
+      const list = [...baseClasses, ...(s ? s.classes : []), ...c.classes, ...(r ? [stylexClass(r.refs)] : [])];
       own.push({ open: `<${tag}${list.length ? ` class="${escapeAttr(list.join(' '))}"` : ''}${statics.join('')}${at.html}${sourceLines ? ` data-src-line="${node.loc.start.line}"` : ''}>`, choices });
     }
     const inner = voidTags.has(tag) ? empty : children(node.children);
@@ -325,9 +367,10 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // Linaria's css is global: a class is unique to the component, but a nested selector's other compounds are not
   // pinned (E_SCOPE_REACHES); :global(…) reaches past the component (E_SCOPE_ESCAPE) and is unwrapped for the analysis.
   const linariaCSS = cssText.join('\n');
+  const lowered = scBlocks.size ? lowerNested([...scBlocks.values()]) : null;
   const owned = [...linaria.values(), ...[...styled.values()].map(v => v.className)];
   const scope = owned.length ? { mode: 'global', owned, escapes: scopeEscapes(linariaCSS, ['global']) } : undefined;
-  return { states, css: [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values()].join('\n'), unknowns, assumptions: [...assumptions], ...(scope ? { scope } : {}) };
+  return { states, css: [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : [])].join('\n'), unknowns, assumptions: [...assumptions], ...(scope ? { scope } : {}), ...(lowered ? { styleMap: lowered.map, styleCSS: lowered.css } : {}) };
 }
 
 /**
@@ -336,8 +379,18 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
  * @param {object} options veriss options plus pageCSS, page, css (an external stylesheet for plain classNames),
  *   component, maxStates, eachCounts
  */
-export function analyzeReact(source, { component, maxStates, eachCounts, sourceLines, css = '', ...options } = {}) {
-  const expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines });
+export function analyzeReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, css = '', ...options } = {}) {
+  const expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines, theme, file });
   // An external stylesheet is the page's, not the component's: with a component scope it goes before the component CSS.
-  return expanded.scope && css ? analyzeStates(expanded, { ...options, pageCSS: `${options.pageCSS ?? ''}\n${css}` }) : analyzeStates({ ...expanded, css: css + expanded.css }, options);
+  const scoped = Boolean(expanded.scope && css);
+  const pageCSS = scoped ? `${options.pageCSS ?? ''}\n${css}` : options.pageCSS ?? '';
+  const componentCSS = scoped ? expanded.css : css + expanded.css;
+  const report = analyzeStates({ ...expanded, css: componentCSS }, { ...options, pageCSS });
+  // styled-components selectors are reported at their template lines, with the nesting edge they assume
+  if (expanded.styleMap && report.selectors) {
+    const all = expanded.scope ? `${pageCSS}\n${componentCSS}` : pageCSS + componentCSS;
+    const offset = all.slice(0, all.lastIndexOf(expanded.styleCSS)).split('\n').length - 1;
+    report.selectors = { ...report.selectors, warnings: relocateSelectorWarnings(report.selectors.warnings, expanded.styleMap, { offset }) };
+  }
+  return report;
 }
