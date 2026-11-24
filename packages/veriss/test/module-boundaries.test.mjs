@@ -19,7 +19,7 @@ test('pure tools import nothing of veriss', () => {
 
 test('color/ is used by the rules that judge colors and by the syntax stage (to read a color as the browser does)', () => {
   const users = files('.').filter(file => !file.startsWith('color/') && importsOf(file).some(target => target.startsWith('color/')));
-  assert.deepEqual(users.sort(), ['layout/accessibility.mjs', 'layout/css.mjs']);
+  assert.deepEqual(users.sort(), ['layout/accessibility.mjs', 'layout/css.mjs', 'rules/contrast.mjs']);
 });
 
 test('the syntax validators are imported only by the syntax stage (layout/css.mjs)', () => {
@@ -61,4 +61,11 @@ test('the style checks run in one walk (M6): the layout does not call them, and 
   assert.ok(!/\bwalkStyles\b/.test(engine));
   for (const name of ['cssMistakes', 'pseudoWithoutContent', 'inlineStateTransforms', 'inlineTextAlignment', 'inlineAutoMargin', 'inlineOverflow', 'decorationNone'])
     assert.equal(engine.match(new RegExp(`\\b${name}\\(`, 'g'))?.length, 1, name);
+});
+
+test('the contrast checks live in rules/contrast.mjs (M7): they import color/ only, and the accessibility judge no longer computes a text ratio', () => {
+  assert.deepEqual(importsOf('rules/contrast.mjs'), ['color/index.mjs']);
+  const judge = readFileSync(join(src, 'layout/accessibility.mjs'), 'utf8');
+  for (const code of ['E_A11Y_CONTRAST', 'W_A11Y_IMAGE_FALLBACK_CONTRAST', 'E_A11Y_ICON_CONTRAST', 'W_A11Y_CARET_HIDDEN'])
+    assert.ok(!judge.includes(`'${code}'`), code);
 });

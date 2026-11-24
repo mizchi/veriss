@@ -109,6 +109,7 @@ import { scalar, sum, diff, times, sample, clip, serialize, width as domainWidth
 import { languageTag } from './text-font.mjs';
 import { q, add, mul, cmp, div } from './linear.mjs';
 import { intersect } from './integrity.mjs';
+import { createContrast, unplacedContrast, large } from '../rules/contrast.mjs';
 
 export const accessibilityRules = ['accessible-name', 'text-contrast', 'occluded-target', 'target-overlap', 'visual-order', 'hidden-focusable',
   'empty-heading', 'heading-order', 'nested-interactive', 'duplicate-id', 'aria-reference', 'positive-tabindex', 'multiple-main',
@@ -145,8 +146,6 @@ let uaColors = null;
 const backdrop = chain => chain.some(layer => (layer?.filter ?? 'none') !== 'none') ? { unknown: 'a filter on it or an ancestor changes the painted colors, which is not modeled' } : backdropOf(chain, uaColors);
 const px = value => { const m = /^(\d+(?:\.\d+)?)px$/.exec(String(value)); return m ? Number(m[1]) : undefined; };
 const weight = value => value === 'bold' ? 700 : /^\d+$/.test(String(value)) ? Number(value) : 400;
-// Large text: at least 18pt (24px), or 14pt (56/3 px) bold. An unknown size is not large (the stricter ratio).
-const large = facts => { const size = px(facts.fontSize); return size !== undefined && (size >= 24 || (size >= 56 / 3 && weight(facts.fontWeight) >= 700)); };
 
 // Accessible-name text comparison: case and white space folded.
 const normalize = text => String(text).toLowerCase().replace(/\s+/g, ' ').trim();
@@ -310,59 +309,23 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     if (!missing.length && !texts.some(row => row.box.text || (row.box.tag === 'img' && row.box.alt) || row.box.tag === 'svg') && texts.length) report(warnings, 'W_A11Y_GENERATED_NAME', 'warning', `${target.box.label} is named only by CSS generated content (${JSON.stringify(texts.map(row => generatedText(row.box)).join(' '))})`, target, target.region, { rule: 'generated-name' });
   }
 
-  // text-contrast over the DOM ancestors' backgrounds.
-  const [normal, big] = contrast === 'AAA' ? [7, 4.5] : [4.5, 3];
+  // Color contrast (rules/contrast.mjs): the text and icon contrast over the DOM ancestors' backgrounds. The one
+  // geometric question, whether another box may be painted behind the text, is answered here.
   const painted = placed.filter(row => seen(row) && visible(row));
-  // Visually hidden text (sr-only) is not seen: SC 1.4.3 does not apply to it.
-  for (const text of geometry.filter(row => row.box.text && visible(row) && !row.paint?.hiddenVisually)) {
-    const result = backdrop(text.chain);
-    // image-fallback-contrast: text over a url() background image is read against the background colors underneath
-    // while the image is loading, blocked or failed. Without the images (gradients always paint, so a layer with
-    // one stays Unknown), that fallback must meet the ratio too.
-    const images = text.chain.filter(layer => layer.backgroundImage !== 'none');
-    if (result.unknown && images.length && images.every(layer => /^url\(/i.test(String(layer.backgroundImage).trim()) && !/gradient\(/i.test(String(layer.backgroundImage)))) {
-      const fallback = backdrop(text.chain.map(layer => layer.backgroundImage === 'none' ? layer : { ...layer, backgroundImage: 'none' }));
-      const positioned = !fallback.unknown && text.chain.slice(fallback.opaqueAt + 1).some(layer => layer.position !== 'static');
-      if (!fallback.unknown && !positioned) {
-        const ratio = contrastRatio(fallback.fg, fallback.bg), required = large(text.chain.at(-1)) ? big : normal;
-        if (ratio < required && Math.abs(ratio - required) >= 1e-9) report(warnings, 'W_A11Y_IMAGE_FALLBACK_CONTRAST', 'warning', `${text.box.label} is drawn over a background image; while the image is not shown (loading, blocked, failed) it has contrast ${ratio.toFixed(2)}:1 against the background color, below ${required}:1. Give the image's box a background-color that works with the text`, text, text.region, { rule: 'image-fallback-contrast', ratio, required });
-      }
-    }
-    if (result.unknown) { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${text.box.label}: ${result.unknown}`, text, text.region, { rule: 'text-contrast' }); continue; }
-    // A positioned box above the opaque backdrop lets other boxes show through behind the text.
-    const positionedAbove = text.chain.slice(result.opaqueAt + 1).some(layer => layer.position !== 'static');
-    if (positionedAbove) {
-      // Text inside a scroll container has no position (it depends on the scroll offset), but it is clipped to that
-      // container: only boxes over the container can be behind it. A painted box inside the same container has no
-      // position either, so it may be.
-      const bound = text.origin ? null : placed.filter(row => row.overflow === 'scroll' && row.origin && row.block && isAncestor(row.path, text.path)).at(-1);
-      const others = text.origin
-        ? painted.filter(row => !related(row.path, text.path) && text.block && overlap(text, row))
-        : bound ? geometry.filter(row => seen(row) && visible(row) && !related(row.path, text.path) && (row.origin ? overlap(bound, row) : isAncestor(bound.path, row.path))) : [];
-      if ((!text.origin && !bound) || others.length) { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${text.box.label} is positioned without an opaque background of its own; the boxes behind it are not its ancestors`, text, text.region, { rule: 'text-contrast' }); continue; }
-    }
-    const ratio = contrastRatio(result.fg, result.bg), required = large(text.chain.at(-1)) ? big : normal;
-    // Floating-point luminance: a ratio within numeric error of the threshold is not decided (ADR-0007).
-    if (Math.abs(ratio - required) < 1e-9) { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${text.box.label} has contrast ${ratio}:1, at the ${required}:1 threshold within numeric error`, text, text.region, { rule: 'text-contrast', ratio, required }); continue; }
-    if (ratio < required) report(findings, 'E_A11Y_CONTRAST', 'error', `${text.box.label} has contrast ${ratio.toFixed(2)}:1, below ${required}:1`, text, text.region,
-      { rule: 'text-contrast', ratio, required, foreground: result.fg, background: result.bg });
-  }
-
-  // icon-contrast (SC 1.4.11): the svg icon of a control with no visible text is the only thing that says what it is;
-  // its drawn color (fill, else stroke) needs 3:1 against what lies behind it.
-  for (const icon of geometry.filter(row => row.box.tag === 'svg' && visible(row) && row.chain?.at(-1)?.iconPaint !== undefined)) {
-    const owner = geometry.find(row => control(row) && isAncestor(row.path, icon.path));
-    if (!owner || geometry.some(row => row.box.tag !== 'svg' && speaks(row) && (row.path === owner.path || isAncestor(owner.path, row.path)))) continue;
-    const paint = icon.chain.at(-1).iconPaint;
-    if (paint === 'none') continue;
-    if (paint === 'dynamic') { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${icon.box.label}: its shapes are not drawn in one opaque color (several colors, an opacity, or a style attribute on a shape), which is not modeled`, icon, icon.region, { rule: 'icon-contrast' }); continue; }
-    const result = backdrop([...icon.chain.slice(0, -1), { ...icon.chain.at(-1), color: paint }]);
-    if (result.unknown) { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${icon.box.label}: ${result.unknown.replace('the text', 'the icon')}`, icon, icon.region, { rule: 'icon-contrast' }); continue; }
-    const ratio = contrastRatio(result.fg, result.bg);
-    if (Math.abs(ratio - 3) < 1e-9) { report(unknowns, 'U_A11Y_CONTRAST', 'unknown', `${icon.box.label} has contrast ${ratio}:1, at the 3:1 threshold within numeric error`, icon, icon.region, { rule: 'icon-contrast' }); continue; }
-    if (ratio < 3 && !findings.some(f => f.code === 'E_A11Y_ICON_CONTRAST' && f.path === icon.path))
-      report(findings, 'E_A11Y_ICON_CONTRAST', 'error', `${icon.box.label} is the only content of ${owner.box.label} and is drawn in ${paint} at contrast ${ratio.toFixed(2)}:1 against its background, below the 3:1 for graphics (SC 1.4.11)`, icon, icon.region, { rule: 'icon-contrast', ratio, required: 3, foreground: result.fg, background: result.bg, control: owner.box.label });
-  }
+  const behind = text => {
+    // Text inside a scroll container has no position (it depends on the scroll offset), but it is clipped to that
+    // container: only boxes over the container can be behind it. A painted box inside the same container has no
+    // position either, so it may be.
+    const bound = text.origin ? null : placed.filter(row => row.overflow === 'scroll' && row.origin && row.block && isAncestor(row.path, text.path)).at(-1);
+    const others = text.origin
+      ? painted.filter(row => !related(row.path, text.path) && text.block && overlap(text, row))
+      : bound ? geometry.filter(row => seen(row) && visible(row) && !related(row.path, text.path) && (row.origin ? overlap(bound, row) : isAncestor(bound.path, row.path))) : [];
+    return (!text.origin && !bound) || others.length > 0;
+  };
+  const contrastRules = createContrast({ report: { report, findings, warnings, unknowns }, options: { contrast, uaColors },
+    tools: { visible, control, speaks, isAncestor, behind } });
+  contrastRules.textContrast(geometry);
+  contrastRules.iconContrast(geometry);
 
   // label-pointer: a label of a field with pointer-events: none: clicks on it pass through, so it no longer focuses or
   // toggles its field (a custom checkbox whose real input is hidden can then not be used with a pointer at all).
@@ -376,16 +339,8 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
           report(warnings, 'W_A11Y_LABEL_POINTER', 'warning', `${row.box.label} labels a field but has pointer-events: none: clicking it does not reach the field (a hidden custom checkbox cannot then be toggled with a pointer)`, row, row.region, { rule: 'label-pointer' });
   }
 
-  // caret-hidden: a text field whose caret is transparent, or painted in the field's own background color, does not
-  // show where typing goes (the caret is the focus indicator inside a field).
-  const textEntry = box => box.tag === 'textarea' || (box.tag === 'input' && ['text', 'email', 'search', 'password', 'tel', 'url', 'number', undefined].includes(box.inputType));
-  for (const row of geometry.filter(row => textEntry(row.box) && visible(row) && row.chain?.at(-1)?.caretColor && row.chain.at(-1).caretColor !== 'auto')) {
-    const layer = row.chain.at(-1), caret = parseColor(String(layer.caretColor).toLowerCase() === 'currentcolor' ? layer.color : layer.caretColor), bg = parseColor(layer.backgroundColor);
-    if (!caret) continue;
-    const same = bg && bg.a >= 1 && caret.a >= 1 && caret.r === bg.r && caret.g === bg.g && caret.b === bg.b;
-    if ((caret.a === 0 || same) && !warnings.some(w => w.code === 'W_A11Y_CARET_HIDDEN' && w.path === row.path))
-      report(warnings, 'W_A11Y_CARET_HIDDEN', 'warning', `${row.box.label} is a text field with caret-color: ${layer.caretColor}${same ? `, its own background color` : ''}: the caret that shows where typing goes is not seen. Leave caret-color auto (or give it a visible color)`, row, row.region, { rule: 'caret-hidden' });
-  }
+  // caret-hidden (rules/contrast.mjs).
+  contrastRules.caretHidden(geometry);
 
   // occluded-target: a hit-testable box from a later paint layer covers a target.
   const layer = row => { for (let p = row.path; p; p = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '') { const r = everything.find(g => g.path === p); if (r && r.position !== 'static') return p; } return null; };
@@ -2183,6 +2138,12 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     }
   }
   return { findings: dedupe(findings), warnings: dedupe(warnings), unknowns: dedupe(unknowns), exempted: dedupe(exempted), notes };
+}
+
+// Color contrast where the layout is Unknown (ADR-0016 M7): rules/contrast.mjs judges the style stage's rows; this adds
+// where each warning holds (the ranges and, with a height, the exact region).
+export function judgeContrastUnplaced({ rows }, { contrast = 'AA', defaultColors = null, ranges, block }) {
+  return { warnings: unplacedContrast(rows, { contrast, uaColors: defaultColors, where: region => ({ ...ranges(region), ...(block ? { regionConstraints: serialize(region).constraints } : {}) }) }) };
 }
 
 function dedupe(rows) {

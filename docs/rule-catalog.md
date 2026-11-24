@@ -205,7 +205,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `E_A11Y_FIXED_HIDES` / `E_A11Y_FIXED_HIDES_PART` / `E_A11Y_PAGE_START_UNREACHABLE` / `E_A11Y_SCROLL_START_UNREACHABLE` / `E_A11Y_SCROLL_END_COVERED` / `W_A11Y_FRAGMENT_UNDER_BAR` / `W_A11Y_BAR_COVERED` / `W_A11Y_BAR_TRANSPARENT` | 固定バーに隠れる本文、スクロールで届かない先頭・末尾、#id の着地点 | 一部(viewport の scroll-padding が外にあると Unknown) |
 | `E_A11Y_FLASH` / `E_A11Y_BLINK` / `W_A11Y_MOTION` / `W_A11Y_TRANSITION_MOTION` / `W_A11Y_SMOOTH_SCROLL` | 1 秒に 3 回を超える点滅、止められない動き、reduced-motion で止まらない動き | 一部(色の読めないアニメーションは `U_A11Y_FLASH`) |
 | `E_A11Y_POINTER_DISABLED` / `E_A11Y_TOUCH_ZOOM` / `E_A11Y_META_VIEWPORT` / `E_A11Y_CHECKED_INDICATOR` / `E_A11Y_CONTROL_HIDDEN` | 押せないボタン、ズームを止める書き方、checked で見た目の変わらない部品、`display: none` の欄 | 検査可 |
-| `W_A11Y_SMALL_TEXT` / `W_A11Y_LINE_LENGTH` / `W_A11Y_LINE_SPACING` / `W_A11Y_JUSTIFIED` / `W_A11Y_COLOR_ONLY_STATE` / `W_A11Y_FORCED_COLORS` / `W_A11Y_CARET_HIDDEN` / `W_A11Y_IMAGE_FALLBACK_CONTRAST` / `W_A11Y_PLACEHOLDER_CLIPPED` / `W_A11Y_ORDER` | 小さい文字、長い行、詰まった行間、両端揃え、色だけの状態、強制色で消える縁、見えないキャレット、見た目と DOM の順の違い | 検査可 |
+| `W_A11Y_SMALL_TEXT` / `W_A11Y_LINE_LENGTH` / `W_A11Y_LINE_SPACING` / `W_A11Y_JUSTIFIED` / `W_A11Y_COLOR_ONLY_STATE` / `W_A11Y_FORCED_COLORS` / `W_A11Y_CARET_HIDDEN` / `W_A11Y_IMAGE_FALLBACK_CONTRAST` / `W_A11Y_CONTRAST_UNPLACED` / `W_A11Y_PLACEHOLDER_CLIPPED` / `W_A11Y_ORDER` | 小さい文字、長い行、詰まった行間、両端揃え、色だけの状態、強制色で消える縁、見えないキャレット、配置が Unknown のときに祖先の背景で見た低いコントラスト、見た目と DOM の順の違い | 検査可 |
 
 ## 10. アクセシビリティ(意味と構造)
 

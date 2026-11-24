@@ -102,7 +102,7 @@ export default {
 | M4 | `dropped[]` を導入する。11 の `$…Inert` を移す | 中 |
 | M5 | `rules/css-mistakes` を作り、`cssMistakes` と `inline*` を engine から出す。依存は `createCssMistakes({ report, facts, tools })` の引数に明示する(済み)。`walkStyles` をなくすのは M6 に回す(style の段が単独で事実を出せるようになってから) | 大 |
 | M6 | `solve` の中の「効かない宣言」の判定(`reasons`)を規則に移す。layout は「親の display」「flow の中か」などを事実として出す。`walkStyles` をなくす(済み: `rules/inert-declarations.mjs` の `createInertDeclarations`。style の検査は 1 本の walk が全 box・全 state で行い、layout は呼ばない。layout が style を書き換えて報告するもの(% の高さを auto に、block flow の auto の上下 margin を 0 に)と、inline の box の効かない寸法は layout に残る) | 大 |
-| M7 | `rules/contrast` を作り、色の規則を移す。`needs: ['style']` にして、レイアウトなしでも判定する | 中 |
+| M7 | `rules/contrast` を作り、色の規則を移す。`needs: ['style']` にして、レイアウトなしでも判定する(済み: 文字・画像の代わりの背景・アイコンのコントラストと見えないキャレット。後ろに別の箱があるかは呼ぶ側が `behind` で答える。レイアウトが Unknown のときは style の段の行で判定し、低いコントラストは `W_A11Y_CONTRAST_UNPLACED` の警告にする(幾何がないので error にはしない)。状態・placeholder・欄の境界・文中リンク・フォーカスの輪郭の色は、フォーカスや状態の幾何を読むので layout に残る) | 中 |
 | M8 | a11y の残りを `a11y-dom` と `a11y-geometry` に分ける。`integrity`、`cls` も規則にする | 中 |
 | M9 | 境界テストの許可リストが空になったら、`packages/` に出す | 小 |
 

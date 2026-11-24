@@ -101,6 +101,12 @@
 - [x] **E4. `transition` が `prefers-reduced-motion: reduce` で止まらない長い動き**: アニメーションと同じく 5 秒を超える場合。
   `W_A11Y_TRANSITION_MOTION`。箱を動かすプロパティ(位置・大きさ・余白・transform、`all`)の transition だけを数え、色と opacity の
   変化は動きではないので除く。reduce の下で `transition: none` か 5 秒以下になれば報告しない。
+- [x] **E5. レイアウトが Unknown でも文字のコントラストを見る**(`W_A11Y_CONTRAST_UNPLACED`、ADR-0016 M7): 今までは配置が Unknown だと
+  a11y の規則が一つも走らなかった。style の段の行(箱と state ごとの、祖先の塗りの鎖)で `rules/contrast.mjs` を走らせ、基準を下回る
+  文字を警告にする(幾何がないので、祖先でない箱が後ろにないことは示せない。error にはしない)。決められないもの(画像やフィルター、
+  不透明な背景の上の positioned)は報告しない。閉じた details の中身と content-visibility: hidden の中は描かれないので除く。
+  3 ブラウザーで、文字の横(padding)の背景の画素と計算値の色から比を出し、警告の箱と一致することを確かめた
+  (`e2e/layout-accessibility.spec.mjs` の M7 の検査)。
 
 
 ## F. ブラウザーが受け入れるのに何もしない CSS

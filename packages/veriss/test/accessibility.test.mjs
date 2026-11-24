@@ -2382,3 +2382,31 @@ test('a scale maps focused positions; a rotation leaves them unknown', () => {
   // Rotated by an arbitrary angle: no focused position to judge, so no verdict from the stale one.
   assert.equal(offscreen('rotate(30deg)'), false);
 });
+
+// ADR-0016 M7: where the layout is Unknown the contrast rule still runs, on the style stage's rows (the ancestors'
+// paint chain). Without geometry no box is shown not to lie behind the text, so a low ratio is a warning that says so.
+test('text-contrast where the layout is Unknown: a warning over the ancestors\' backgrounds, never an error', () => {
+  const unplaced = report => (report.accessibility?.warnings ?? []).filter(w => w.code === 'W_A11Y_CONTRAST_UNPLACED');
+  // No text sizes (boxes): the layout is Unknown.
+  const low = run(card, cardCSS('.card { background: #fff; color: #777; }')); // 4.48:1
+  assert.equal(low.status, 'unknown');
+  assert.equal(find(low, 'E_A11Y_CONTRAST').length, 0);
+  const [warning, ...rest] = unplaced(low);
+  assert.equal(rest.length, 0);
+  assert.equal(warning.box, '.t');
+  assert.equal(warning.rule, 'text-contrast');
+  assert.ok(warning.ratio > 4.47 && warning.ratio < 4.49, String(warning.ratio));
+  assert.equal(warning.required, 4.5);
+  assert.match(warning.message, /layout is Unknown/);
+  // Enough contrast, or large text: nothing.
+  assert.equal(unplaced(run(card, cardCSS('.card { background: #fff; color: #767676; }'))).length, 0);
+  assert.equal(unplaced(run(card, cardCSS('.card { background: #fff; color: #777; }\n.t { font-size: 24px; }'))).length, 0);
+  // A positioned box above the opaque backdrop: other boxes may show through; not decided.
+  assert.equal(unplaced(run(card, cardCSS('.card { background: #fff; color: #777; }\n.t { position: relative; }'))).length, 0);
+  // Not rendered: the content of a closed details.
+  const closed = {tag: 'main', classes: ['card'], children: [{tag: 'details', classes: ['d'], detailsOpen: false, children: [{tag: 'summary', classes: ['s'], text: true}, {tag: 'p', classes: ['t'], text: true}]}]};
+  const hidden = unplaced(run(closed, cardCSS('.card { background: #fff; color: #777; }\n.s { color: #000; }')));
+  assert.deepEqual(hidden.map(w => w.box), []);
+  // A laid-out page keeps the error.
+  assert.equal(find(run(card, cardCSS('.card { background: #fff; color: #777; }'), {boxes: cardBoxes}), 'E_A11Y_CONTRAST').length, 1);
+});

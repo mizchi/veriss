@@ -25,7 +25,7 @@ import {easedFrames} from './animation-extremes.mjs';
 import {textFontMismatch, textBrowserMismatch, textLinesMismatch, textLangMismatch, fittingLength, fittingLines} from './text-font.mjs';
 import {validateFlexContainer, flexItem, crossAlignment, distribution, flexUnknown} from './flex.mjs';
 import {judgeIntegrity, intersect } from './integrity.mjs';
-import {judgeAccessibility, accessibilityRules, accessibilityProfiles, ruleTier, paintFacts} from './accessibility.mjs';
+import {judgeAccessibility, judgeContrastUnplaced, accessibilityRules, accessibilityProfiles, ruleTier, paintFacts} from './accessibility.mjs';
 import {fact, sizeChain, sizeProperties, trackProperties, contractFact, explanation} from './explain.mjs';
 import {phrasingTags} from '../tree.mjs';
 
@@ -3701,6 +3701,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   }
   // The environments of the root: the region and inherited style each state of options.ancestors gives it.
   let environments = [{ region: initial, style: undefined, paint: [] }];
+  const styleRows = [];
   const laidOut = !diagnostics.length;
   if (laidOut) {
     try {
@@ -3721,7 +3722,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // is reported once per box. Re-layouts of the same page (hover, animation frames, slides, untransformed) skip it.
   // It runs where the layout ran or something is Unknown (not on input the layout refused with an error).
   if ((laidOut || diagnostics.some(d => d.severity === 'unknown')) && hovered === undefined && !options.$animationFrame && !options.$slideVariant && !untransformed) {
-    const styleChecks = (box, region, ancestors, inherited) => {
+    // With accessibility on, it also keeps a row per box and state that is shown (not in a closed details): its paint
+    // facts and its ancestors' chain, for the rules that need no geometry (rules/contrast.mjs) where the layout is Unknown.
+    const chainOf = (environment, ancestors, next, style) => [...environment.paint, ...ancestors.map((a, i) => captionBackdrop(a, ancestors[i + 1]?.box ?? next, paintFacts(a.style))), paintFacts(style)];
+    const keepRow = (box, region, environment, ancestors, style, shown) => { if (shown && options.accessibility && box.popover !== true && !ancestors.some(a => a.style['content-visibility'] === 'hidden')) styleRows.push({ box, path: box.path, region, paint: paintFacts(style), chain: chainOf(environment, ancestors, box, style) }); };
+    const styleChecks = (box, region, ancestors, inherited, environment, shown = true) => {
       // An open dialog's style is not computed (the UA places it); its declarations still tell a margin reset (F129).
       let states; try { states = styles(box, region, ancestors, inherited, false); } catch (error) { if (box.tag === 'dialog' && error?.$sources) try { dialogMarginReset(box, { $sources: error.$sources }); } catch { /* best effort */ } return; }
       for (const state of states) {
@@ -3731,12 +3736,15 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           for (const c of styles(pbox, state.region, ancestors, state.style, false, false, new Set([`::${kind}`]))) pseudoWithoutContent(pbox, c.style);
         } catch { /* the rest still runs */ }
         if (state.style.display === 'none') continue;
-        for (const child of box.children ?? []) styleChecks(child, state.region, [...ancestors, { box, style: state.style, names: [] }], state.style);
+        keepRow(box, state.region, environment, ancestors, state.style, shown);
+        // A closed details shows its summary only (open 'dynamic' is not known to show the rest).
+        for (const child of box.children ?? []) styleChecks(child, state.region, [...ancestors, { box, style: state.style, names: [] }], state.style, environment, shown && !(box.tag === 'details' && box.detailsOpen !== true && child.tag !== 'summary'));
         // The inline elements of a text leaf (links, spans): the checks that hold for an inline box (F36).
         const inlineChecks = (child, chain, parentStyle, at) => {
           let inlineStates; try { inlineStates = styles(child, at, chain, parentStyle, false, false); } catch { return; }
           for (const c of inlineStates) {
             if (c.style.display === 'none') continue;
+            keepRow(child, c.region, environment, chain, c.style, shown);
             try { inlineStateTransforms(child, c.style); } catch { /* the rest still runs */ }
             try { inlineTextAlignment(child, c.style); } catch { /* the rest still runs */ }
             try { inlineAutoMargin(child, c.style); } catch { /* the rest still runs */ }
@@ -3753,7 +3761,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // Bounded by this analysis's own work limit; the budget shared with other analyses (the variants of one page) is
     // given back, so these warnings never turn another analysis Unknown.
     const shared = budget?.remaining;
-    for (const environment of environments) try { styleChecks(root, environment.region, [], environment.style); } catch { /* best effort */ }
+    for (const environment of environments) try { styleChecks(root, environment.region, [], environment.style, environment); } catch { /* best effort */ }
     if (budget) budget.remaining = shared;
   }
   // F37: a ::first-letter / ::first-line that may apply (a block container it selects, not shown to have none) restyles
@@ -3777,8 +3785,19 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     diagnostics.push(...judged.findings);
     integrityWarnings = judged.warnings; integrityExempted = judged.exempted;
   }
-  if (options.accessibility && !untransformed && hovered === undefined && !options.$animationFrame && !options.$slideVariant && !diagnostics.some(d => d.severity === 'unknown')) {
-    const judged = judgeAccessibility({ geometry, waived, root, domain: initial }, { scrollZero: preferences.includes('scroll-zero'), defaultColors: options.defaultColors && !preferences.includes('prefers-color-scheme:dark') && !rules.some(rule => rule.declarations.some(d => d.property === 'color-scheme' && /dark/.test(String(d.value)))) ? { canvas: '#ffffff', canvastext: '#000000' } : null, forcedColorsHandled: rules.some(rule => rule.preferences?.some(p => p.feature === 'forced-colors')), smoothReduced: rules.some(rule => rule.declarations.some(d => d.property === 'scroll-behavior') && (rule.preferences?.some(p => p.feature === 'prefers-reduced-motion'))), keyframeFrames, hostInset: options.hostInset ?? 0, hostBlockInset: options.hostBlockInset ?? 0, viewportBlock: block && options.viewport.height ? height : null, scrollPaddingDeclared: rules.some(rule => rule.declarations.some(d => /^scroll-padding-(?:top|bottom)$/.test(d.property))), viewportMin: options.viewport.min, safeArea: cover && options.safeArea ? { top: 0, right: 0, bottom: 0, left: 0, ...options.safeArea } : null, hinge: options.hinge ?? null, contrast: options.accessibility.contrast ?? 'AA', targetLevel: options.accessibility.targetLevel ?? 'AA', targetSize: options.accessibility.targetSize ?? (options.accessibility.targetLevel === 'AAA' ? 44 : 24), ranges, block });
+  // The UA canvas and text colors when the caller states them (defaultColors), unless a dark scheme may apply.
+  const uaDefaultColors = options.defaultColors && !preferences.includes('prefers-color-scheme:dark') && !rules.some(rule => rule.declarations.some(d => d.property === 'color-scheme' && /dark/.test(String(d.value)))) ? { canvas: '#ffffff', canvastext: '#000000' } : null;
+  const accessibilityRuns = options.accessibility && !untransformed && hovered === undefined && !options.$animationFrame && !options.$slideVariant;
+  const placedAccessibility = accessibilityRuns && !diagnostics.some(d => d.severity === 'unknown');
+  // ADR-0016 M7: where the layout is Unknown, the rules that read paint facts only run on the style stage's rows
+  // (judgeContrastUnplaced: a low contrast is a warning there, not an error).
+  if (accessibilityRuns && !placedAccessibility && styleRows.length) {
+    const keep = accessibilityProfiles[options.accessibility.profile ?? 'all'];
+    if (keep?.('text-contrast')) accessibilityWarnings.push(...judgeContrastUnplaced({ rows: styleRows }, { contrast: options.accessibility.contrast ?? 'AA', defaultColors: uaDefaultColors, ranges, block }).warnings
+      .filter(w => !w.rule || keep(w.rule)).map(w => w.rule ? { ...w, tier: ruleTier(w.rule) } : w));
+  }
+  if (placedAccessibility) {
+    const judged = judgeAccessibility({ geometry, waived, root, domain: initial }, { scrollZero: preferences.includes('scroll-zero'), defaultColors: uaDefaultColors, forcedColorsHandled: rules.some(rule => rule.preferences?.some(p => p.feature === 'forced-colors')), smoothReduced: rules.some(rule => rule.declarations.some(d => d.property === 'scroll-behavior') && (rule.preferences?.some(p => p.feature === 'prefers-reduced-motion'))), keyframeFrames, hostInset: options.hostInset ?? 0, hostBlockInset: options.hostBlockInset ?? 0, viewportBlock: block && options.viewport.height ? height : null, scrollPaddingDeclared: rules.some(rule => rule.declarations.some(d => /^scroll-padding-(?:top|bottom)$/.test(d.property))), viewportMin: options.viewport.min, safeArea: cover && options.safeArea ? { top: 0, right: 0, bottom: 0, left: 0, ...options.safeArea } : null, hinge: options.hinge ?? null, contrast: options.accessibility.contrast ?? 'AA', targetLevel: options.accessibility.targetLevel ?? 'AA', targetSize: options.accessibility.targetSize ?? (options.accessibility.targetLevel === 'AAA' ? 44 : 24), ranges, block });
     diagnostics.push(...judged.findings, ...judged.unknowns);
     // Dark color scheme: when the CSS has prefers-color-scheme: dark rules, the contrast rules run
     // again with them (paint only, so the geometry is the same). System colors stay the light ones:
