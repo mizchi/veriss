@@ -120,7 +120,7 @@ export function normalizeTree(tree,name) {
     if(input.layoutContracts!==undefined && !Array.isArray(input.layoutContracts)) throw new TypeError('Invalid layout declarations');
     if(input.boundaries!==undefined && (!Array.isArray(input.boundaries) || input.boundaries.length>256 || input.boundaries.some(b=>!object(b) || !['component','slot','children','html'].includes(b.kind) || (b.name!==undefined && (typeof b.name!=='string' || b.name.length>256))))) throw new TypeError('Invalid box boundaries');
     // the elements inside an inline svg (not laid out; read by selector checks): {tag, classes, id?, attributes?, children}
-    const svgTreeValid=(nodes,depth=0,count={n:0})=>Array.isArray(nodes) && depth<=32 && nodes.every(n=>object(n) && ++count.n<=2048 && typeof n.tag==='string' && Array.isArray(n.classes) && n.classes.every(c=>typeof c==='string') && (n.id===undefined || typeof n.id==='string') && (n.attributes===undefined || object(n.attributes)) && svgTreeValid(n.children ?? [],depth+1,count));
+    const svgTreeValid=(nodes,depth=0,count={n:0})=>Array.isArray(nodes) && depth<=64 && nodes.every(n=>object(n) && ++count.n<=2048 && typeof n.tag==='string' && Array.isArray(n.classes) && n.classes.every(c=>typeof c==='string') && (n.id===undefined || typeof n.id==='string') && (n.attributes===undefined || object(n.attributes)) && svgTreeValid(n.children ?? [],depth+1,count));
     if(input.svgTree!==undefined && !svgTreeValid(input.svgTree)) throw new TypeError('Invalid svg tree');
     validateTargetMetadata(input);
     const path=input.path ?? (parent ? `${parent}/${index}` : name);
