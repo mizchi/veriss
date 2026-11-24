@@ -118,8 +118,11 @@ export function flexItem(style, { empty = false, axis = 'inline', contentSizes }
   // A percentage width (percentSize) with min-width auto: the automatic minimum is min(the content's min-content width,
   // the specified width) (§4.5), at most the base: safe while it never shrinks (automaticBelowBase). A flex-basis
   // percentage with an auto width has no specified size to cap it, so it needs the measured content (contentSizes).
-  else if (shareLike(basis) && axis === 'inline' && (cmp(shrink, q(0)) === 0 || style[n.min] !== 'auto' || contentSizes || (percentSize && automatic)) && style[n.size] === 'auto' && style['max-inline-size'] === 'none') {
+  // Without an automatic minimum (a scroll container, an empty box, size containment) the minimum is its edges.
+  else if (shareLike(basis) && axis === 'inline' && (cmp(shrink, q(0)) === 0 || style[n.min] !== 'auto' || contentSizes || !automatic || (percentSize && automatic)) && style[n.size] === 'auto' && (style['max-inline-size'] === 'none' || /^\d+(?:\.\d+)?px$/.test(String(style['max-inline-size'])))) {
     const item = { grow, shrink, edges: own, autoStart, autoEnd, automaticBelowBase: false, base: q(0), percentBasis: linear(basis) ? q(0) : div(q(String(basis).slice(0, -1)), q(100)), ...(linear(basis) ? { linearBasis: String(basis) } : {}), contentBox };
+    // A px max-width clamps the share (§9.7): the engine splits the line where the share crosses it.
+    if (style['max-inline-size'] !== 'none') item.maximum = outer(px(style['max-inline-size']), own, contentBox);
     if (style[n.min] !== 'auto') item.minimum = outer(px(style[n.min]), own, contentBox);
     else if (!automatic) item.minimum = own;
     else if (contentSizes) item.minimum = cmp(contentSizes.min, own) < 0 ? own : contentSizes.min;

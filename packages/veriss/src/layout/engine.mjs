@@ -1108,9 +1108,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // items+1 rounds. Returns outer sizes and the remaining free space.
   function resolveFlexLine(region, available, items, gap) {
     // The hypothetical main size: the base clamped by the maximum, then the minimum (min wins over max).
-    const capped = item => item.maximum && constantLess(item.maximum, item.base) ? item.maximum : item.base;
+    // (baseAboveMaximum: an affine percentage base already checked to exceed its constant maximum.)
+    const capped = item => item.maximum && (item.baseAboveMaximum || constantLess(item.maximum, item.base)) ? item.maximum : item.base;
     // (baseAtLeastMinimum: an affine base already checked to be at least the minimum, a percentage flex-basis.)
-    const hypothetical = items.map(item => item.baseBelowMinimum ? item.minimum : (item.minimum === item.base || item.baseAtLeastMinimum) && !item.maximum ? item.base : maximumConstant(capped(item), item.minimum));
+    const hypothetical = items.map(item => item.baseBelowMinimum ? item.minimum : (item.minimum === item.base || item.baseAtLeastMinimum) && (!item.maximum || (item.percentItem && !item.baseAboveMaximum)) ? item.base : maximumConstant(capped(item), item.minimum));
     const sumHypothetical = sum(total(hypothetical), scalar(gap));
     const modes = partition(region, diff(available, sumHypothetical), '>');
     const results = [];
@@ -1121,7 +1122,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const factor = mode === 'grow' ? item.grow : item.shrink;
         // Content-sized items cannot shrink below their base (= their minimum). With
         // only minimum violations the result does not depend on the freezing order.
-        if (cmp(factor, zero) === 0 || (mode === 'shrink' && (item.content || item.baseBelowMinimum || (item.minimum !== item.base && !item.baseAtLeastMinimum && !item.baseBelowMinimum && constantLess(item.base, item.minimum)))) || (mode === 'grow' && item.maximum && constantLess(item.maximum, item.base))) frozen.set(index, hypothetical[index]);
+        if (cmp(factor, zero) === 0 || (mode === 'shrink' && (item.content || item.baseBelowMinimum || (item.minimum !== item.base && !item.baseAtLeastMinimum && !item.baseBelowMinimum && constantLess(item.base, item.minimum)))) || (mode === 'grow' && item.maximum && (item.baseAboveMaximum || constantLess(item.maximum, item.base)))) frozen.set(index, hypothetical[index]);
       });
       let states = [{ region: start, frozen }];
       for (let round = 0; states.length && round <= items.length; round++) {
@@ -1413,6 +1414,13 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const minimum = scalar(constantItem(entry.item).minimum.b ?? entry.item.minimum);
           parts = bounded(parts.flatMap(part => { const split = partition(part.region, diff(percentBase(entry, part), minimum), '>='); return [...split.yes.map(r => ({ region: r, below: part.below, picks: part.picks })), ...split.no.map(r => ({ region: r, picks: part.picks, below: new Set([...part.below, index]) }))]; }));
         });
+        // A px max-width on a percentage item (§9.7): where its share exceeds the maximum, its hypothetical size is the
+        // maximum (it then shrinks from the share, or is frozen there when the line grows); the region is split there.
+        model.forEach((entry, index) => {
+          if (entry.item.percentBasis === undefined || entry.item.maximum === undefined) return;
+          const maximum = scalar(entry.item.maximum);
+          parts = bounded(parts.flatMap(part => { const split = partition(part.region, diff(maximum, percentBase(entry, part)), '>='); return [...split.yes.map(r => ({ ...part, region: r })), ...split.no.map(r => ({ ...part, region: r, above: new Set([...(part.above ?? []), index]) }))]; }));
+        });
         for (const part of parts) {
         const items = model.map((entry, index) => {
           const item = constantItem(entry.item);
@@ -1425,12 +1433,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           // content-box padding): shrinking is then weighted by the constant shrink × P (innerShare).
           const constantPart = add(entry.item.contentBox ? zero : mul(entry.item.edges, q(-1)), zero);
           const innerShare = !entry.item.linearBasis && cmp(constantPart, zero) === 0 && cmp(entry.item.marginMain ?? zero, zero) === 0 && (!entry.item.contentBox || cmp(entry.item.edges, zero) === 0) ? entry.item.percentBasis : null;
-          const below = part.below.has(index);
-          return { ...item, base, minimum: cmp(entry.item.shrink, zero) === 0 ? base : item.minimum, maximum: null, baseAtLeastMinimum: !below, baseBelowMinimum: below, innerShare, percentItem: true };
+          const below = part.below.has(index), above = part.above?.has(index) ?? false;
+          // The maximum matters above it, or when the item grows (it never exceeds its share by shrinking).
+          const maximum = entry.item.maximum !== undefined && (above || cmp(entry.item.grow, zero) > 0) ? item.maximum : null;
+          return { ...item, base, minimum: cmp(entry.item.shrink, zero) === 0 && !above ? base : item.minimum, maximum, baseAboveMaximum: above, baseAtLeastMinimum: !below, baseBelowMinimum: below, innerShare, percentItem: true };
         });
         // Lines break by the hypothetical main sizes: the base clamped by the maximum, then the minimum (§9.3, §9.7;
         // measured: a 180px item with max-width: 20px takes 20px of its line).
-        const hypothetical = wrap ? items.map((item, i) => item.baseBelowMinimum ? item.minimum : model[i].item.percentBasis !== undefined ? item.base : maximumConstant(item.maximum && constantLess(item.maximum, item.base) ? item.maximum : item.base, item.minimum).b) : items.map(item => item.base);
+        const hypothetical = wrap ? items.map((item, i) => item.baseBelowMinimum ? item.minimum : model[i].item.percentBasis !== undefined ? (item.baseAboveMaximum ? maximumConstant(item.maximum, item.minimum) : item.base) : maximumConstant(item.maximum && constantLess(item.maximum, item.base) ? item.maximum : item.base, item.minimum).b) : items.map(item => item.base);
         const sets = wrap ? breakLines(part.region, contentInline, hypothetical, mainGap) : [{ region: part.region, lines: model.length ? [model.map((_, i) => i)] : [] }];
         for (const set of sets) {
           let combos = [{ region: set.region, lines: [] }];
