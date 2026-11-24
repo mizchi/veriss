@@ -14,7 +14,10 @@
 import postcss from 'postcss';
 
 const conditional = new Set(['media', 'supports', 'container']);
-const decl = d => `${d.prop}:${d.value}${d.important ? ' !important' : ''}`;
+// A value written over several lines is printed on one, so every emitted rule stays one line: a line break outside a
+// quoted string is a space, an escaped one inside a string is nothing (CSS drops it there).
+const oneLine = v => v.replace(/("(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*')|\s*\n\s*/g, (m, str) => str?.replace(/\\\r?\n/g, '') ?? ' ');
+const decl = d => `${d.prop}:${oneLine(d.value)}${d.important ? ' !important' : ''}`;
 
 // & is a parent reference only outside quoted strings and escapes (`[data-label="A&B"]`, `.a\&b` are not one)
 const PARENT = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.)|&/g;

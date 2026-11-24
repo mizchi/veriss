@@ -145,3 +145,20 @@ test('lowerNested: a declaration on the text\'s first line in a nested rule has 
   const {map} = lowerNested([{selector: '.sc-A', text: '& > .x { color:red; }', origin: {file: 'f.ts', line: 1, name: 'A'}}]);
   assert.equal(map[0].declarations[0].templateColumn, 10);
 });
+
+test('lowerNested: a value written over several lines is one emitted line', async () => {
+  const {relocateFindings} = await import('../src/nested.mjs');
+  const text = 'background:linear-gradient(red,\nblue); & > .x { border:0; border-top:1px solid; }';
+  const {css, map} = lowerNested([{selector: '.sc-A', text, origin: {file: 'f.ts', line: 10, name: 'A'}}]);
+  const lines = css.split('\n');
+  assert.equal(lines.length, map.length);
+  assert.equal(map[1].cssLine, 2);
+  const finding = {code: 'X', css: {file: '<css>', line: 2, column: lines[1].indexOf('border-top') + 1}};
+  const [moved] = relocateFindings([finding], map);
+  assert.deepEqual(moved.css, {file: 'f.ts', line: 11, column: text.split('\n')[1].indexOf('border-top') + 1});
+});
+
+test('lowerNested: an escaped line break inside a quoted value is dropped, the rest of the string kept', () => {
+  const {css} = lowerNested([{selector: '.sc-A', text: 'content: "a\\\n b";\n  font-family:\n    "X Y",\n    serif;', origin: {file: 'f.ts', line: 1, name: 'A'}}]);
+  assert.equal(css, '.sc-A{content:"a b";font-family:"X Y", serif}');
+});
