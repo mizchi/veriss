@@ -541,7 +541,11 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   決まった後に containing block に対して配置する(grid と同じ `solveOutOfFlow`)。inset が両方 auto の軸は、始点に揃える container なら内容の
   始点に置く(Flexbox §4.1、stretch は flex-start 扱い)。3 ブラウザーで、in-flow の item と absolute / fixed の子の位置が解析と一致した
   (`e2e/layout-flex.spec.mjs`)。
-- 残り(Unknown のまま): 中身で大きさの決まる flex の item(`flex-basis: auto` で幅も auto)。そのほかは、
+- [x] **I11. % の幅の flex item(既定の shrink と min-width)**: 中身で決まる自動の最小幅を理由に Unknown にしていた。最小幅は
+  min(min-content, 指定の幅) で基準の大きさ以下なので、縮まない行では判定する(縮む行は Unknown)。縮む側でも空きがちょうど 0 の行は何も
+  縮まない。3 ブラウザーで 400px と 700px の位置と幅が解析と一致した(`e2e/layout-flex.spec.mjs`)。
+- 残り(Unknown のまま): % の幅に max-width を組み合わせた flex の item(中央寄せの最大幅の容器)、中身で大きさの決まる flex の item
+  (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
 
 ## 済み(このチェックリストを作る前に済んだもの)
