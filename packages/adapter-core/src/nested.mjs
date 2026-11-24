@@ -110,12 +110,12 @@ export function relocateFindings(findings, map, { offset = 0 } = {}) {
 
 /**
  * Selector-usage warnings on lowered CSS, moved to the template: file, line, component name and the nesting edge.
- * A warning is matched by its flat selector; when several rules share it, by line (offset: lines before the lowered CSS).
+ * A warning is matched by its flat selector and its line (offset: lines before the lowered CSS): a page rule with the
+ * same selector is not the template's.
  */
 export function relocateSelectorWarnings(warnings, map, { offset = 0 } = {}) {
   const moved = warnings.map(w => {
-    const same = map.filter(m => m.selector === w.selector);
-    const m = same.length === 1 ? same[0] : same.find(x => x.cssLine + offset === w.line);
+    const m = map.find(x => x.selector === w.selector && x.cssLine + offset === w.line);
     if (!m) return w;
     return { ...w, cssLine: w.line, file: m.origin.file, line: m.origin.line, component: m.origin.name, nesting: { path: m.path, relation: m.relation } };
   });

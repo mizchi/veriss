@@ -132,3 +132,11 @@ test('lowerNested: @supports and @container wrap the rule like @media', () => {
   const {css} = lowerNested([{selector: '.sc-A', text: '@media (min-width: 1px) { @supports (gap: 0) { @media print { gap: 0; } } }', origin: {file: 'f.ts', line: 1, name: 'A'}}]);
   assert.equal(css, '@media (min-width: 1px){@supports (gap: 0){@media print{.sc-A{gap:0}}}}');
 });
+
+test('relocateSelectorWarnings: a warning on a page rule with the same selector as one lowered rule is left as it is', () => {
+  const {map} = lowerNested([{selector: '.sc-A', text: '& > .x { color: red; }', origin: {file: 'a.ts', line: 3, name: 'A'}}]);
+  // the lowered rule is at line 6 (5 page lines before it); the warning is on the page's own `.sc-A > .x` at line 1
+  const w = {code: 'W_CSS_SELECTOR_RELATION', selector: '.sc-A > .x', line: 1, message: 'm'};
+  assert.deepEqual(relocateSelectorWarnings([w], map, {offset: 5}), [w]);
+  assert.equal(relocateSelectorWarnings([{...w, line: 6}], map, {offset: 5})[0].line, 3);
+});
