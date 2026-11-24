@@ -564,8 +564,11 @@ mediaで font-size を変えると、その領域だけunknownになる。`font`
 | `column-gap: normal` | autoになる |
 | `var()` | shorthand内のfallbackを失う。祖先の`--h: var(--g)`を子で再解決する |
 | flex(0.8.1、0.8.2で修正) | `flex: 30px 2 0`等の順序・単位なし0、`flex-basis: content`、`flex-flow`の省略側 |
+| border(0.8.2、mizchi/css#15 で修正) | style が none のときの幅を、style の宣言を当てたときだけ 0 にしていた(`border: 2px`、style のない `border-width`、順序の逆が幅を残す)。一括指定で省いた幅を 1.5px、省いた style を solid にしていた |
 
-veriss側の`!important`無視、詳細度無視、順序反転、media無視、padding左右の入替、gapの消失を加えた変異は全て差分として検出する。`@layer`、container query、幾何、Z3は対象外。`gap: var(--missing)`等のguaranteed-invalid参照は両者とも`unset`として計算し、30,000ケースで比較対象外は0件。実行は`just css-oracle-check`、結果は[report.json](../evals/results/css-cascade-oracle/report.json)。未リリースのmizchi/cssを試す場合は、それへ接続したbuildを`CSS_ORACLE_JS`で指定する。
+veriss側の`!important`無視、詳細度無視、順序反転、media無視、padding左右の入替、gapの消失を加えた変異は全て差分として検出する。`@layer`、container query、幾何、Z3は対象外。`gap: var(--missing)`等のguaranteed-invalid参照は両者とも`unset`として計算し、30,000ケースで比較対象外は0件。実行は`just css-oracle-check`、結果は[report.json](../evals/results/css-cascade-oracle/report.json)。未リリースのmizchi/cssを試す場合は、それへ接続したbuildを`CSS_ORACLE_JS`で指定する。接続は `moon.work` で行う(`moon.mod` はローカルのパスの依存を受け付けない): oracle の `moon.mod` と `computed_oracle` を別のディレクトリに写し、`moon work init` と `moon work use <写した oracle> <mizchi/css の checkout>` のあと、その oracle で `moon build --target js --release` する。初めての環境では、`pnpm build:oracle` の前に `moon update`(レジストリの索引を取る)が要る。
+
+比べないもの: veriss が配置のために捨てた宣言(`$dropped`。inline の箱の overflow。overflow は両軸をまとめて)と、モデルにない宣言が当たる箱(`$unmodeled`。その箱の配置は Unknown)。
 
 ## 検査結果と前提
 
