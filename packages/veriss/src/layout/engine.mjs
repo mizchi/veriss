@@ -1800,7 +1800,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // nothing by itself (clipping and page overflow are checked on their own), so there is no block-size obligation
         // against a positioned ancestor or the initial containing block. A fixed box taller than the viewport keeps it.
         const hangs = available.containingBlock && available.containingBlock.path !== 'viewport';
-        if (available.block && !hangs) obligation(available.marginEnd ? sum(available.block, scalar(available.marginEnd.block)) : available.block, blockSize, box, region, 'E_LAYOUT_ITEM_SIZE', 'block', available.fitBlock !== false && !viewportScrolls, item('block'));
+        if (available.block && !hangs) {
+          obligation(available.marginEnd ? sum(available.block, scalar(available.marginEnd.block)) : available.block, blockSize, box, region, 'E_LAYOUT_ITEM_SIZE', 'block', available.fitBlock !== false && !viewportScrolls, item('block'));
+          // Waived only because the viewport scrolls: the page scroll, which moves no box at scroll position 0.
+          if (viewportScrolls && available.fitBlock !== false) checks.at(-1).pageScroll = true;
+        }
         if (contract.minBlockSize !== undefined && !visuallyHiddenStyle(style)) (box.tableCell && (contract.overflowBlock ?? 'fit') === 'fit' ? cellGrows : obligation)(contentBlock, scalar(contract.minBlockSize), box, region, 'E_LAYOUT_CONTENT', 'block', (contract.overflowBlock ?? 'fit') === 'fit', content('block', 'minBlockSize'));
       }
       let positioned;
