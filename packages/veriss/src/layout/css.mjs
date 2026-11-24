@@ -1115,7 +1115,9 @@ export function parseLayoutCSS(sheets, diagnostic) {
             declarations.push({ property:name, value, ...(flip ? {flip} : {}), ...(custom ? {expression} : {}), ...(pending ? {pending,specified:declaration.value} : {}), ...(declaration.prop.toLowerCase() === 'text-wrap' ? { wrapShorthand: declaration.value.trim() } : {}), important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename });
           }
         } catch (error) {
-          problem(error.code ?? 'U_LAYOUT_CSS', error.message, declaration.source.start.line);
+          // Not modeled: Unknown where the rule applies (computeStyle), not for the whole page — a site-wide stylesheet
+          // has rules for elements this page does not have, and they style nothing here.
+          declarations.push({ property: '$unmodeled', unmodeled: error.message, code: error.code ?? 'U_LAYOUT_CSS', file: filename, line: declaration.source.start.line });
           // Kept for the checks that read the written value (F133: a container query unit the layout does not model).
           if (/\d(?:cqw|cqi|cqh|cqb)\b/i.test(declaration.value)) (unmodeled ??= []).push({ property: declaration.prop.toLowerCase(), specified: declaration.value.trim(), file: filename, line: declaration.source.start.line, selector: node.selector });
         }
@@ -1336,6 +1338,8 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0' };
   const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
   const priorities = new Map(), sources = {},custom=new Map(),dormant={},overridden={}, candidates = {};
+  // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions).
+  const unmodeled = [];
   const conditions = rule => rule.contexts.length ? {conditions: rule.contexts.map(c => ({kind: c.kind, ...(c.name ? {name: c.name} : {}), params: c.params, css: c.css}))} : {};
   // A preference rule holds when the state names its value, or the value is the default.
   const preferred = rule => (rule.preferences ?? []).every(({ feature, value }) => ([...(state ?? [])].find(s => s.startsWith(`${feature}:`))?.slice(feature.length + 1) ?? preferenceValues[feature][0]) === value);
@@ -1349,6 +1353,9 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     for (const selector of rule.selectors) {
       if (!matches(selector, box, state)) continue;
       for (const declaration of rule.declarations) {
+        // Not modeled: the declaration is dropped from the style, and the layout of this box is Unknown (the style checks
+        // still read the rest).
+        if (declaration.unmodeled) { if (!unmodeled.some(u => u.line === declaration.line && u.message === declaration.unmodeled)) unmodeled.push({ message: declaration.unmodeled, code: declaration.code, file: declaration.file, line: declaration.line }); continue; }
         const layer = rule.layer === null ? (declaration.important ? -Infinity : Infinity) : declaration.important ? -rule.layer : rule.layer;
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
         // Scope proximity (Cascade 6 §6.6): after specificity, the nearer scope root wins; unscoped is farthest.
@@ -1667,5 +1674,6 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     for (const key of ['overflow-x', 'overflow-y']) { if (sources[key] || sources.overflow) (values.$tableOverflow ??= {})[key] = values[key]; values[key] = 'visible'; }
   // A logical side was taken as ltr; in an rtl box cascade again with the sides flipped.
   if (!rtl && flipped && values.direction === 'rtl') return computeStyle(rules, box, active, inherited, {spend, state, rtl: true});
+  if (unmodeled.length) values.$unmodeled = unmodeled;
   return values;
 }
