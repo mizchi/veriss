@@ -271,14 +271,15 @@ export function evaluateStyled(def, props, ctx) {
       case 'ArrowFunctionExpression': case 'FunctionExpression': return one({ [FN]: node, mod: cur(), env: scopes.slice() });
       case 'CallExpression': return callExpression(node);
       case 'ObjectExpression': case 'ArrayExpression': {
-        // a literal object or array of single values (a token table); anything else is Unknown
-        const out = node.type === 'ArrayExpression' ? [] : {};
-        for (const p of node.type === 'ArrayExpression' ? node.elements.map((value, i) => ({ key: i, value })) : node.properties.map(p => p.type === 'ObjectProperty' && !p.computed ? { key: p.key.name ?? p.key.value, value: p.value } : null)) {
-          const r = p && ev(p.value);
-          if (!r || r.length !== 1 || isUnknown(r[0].v) || isSym(r[0].v) || Object.keys(r[0].choices).length) return one(unknownValue('U_STYLED_VALUE', `${src(node)} is not a literal table`));
-          out[p.key] = unwrap(r[0].v);
-        }
-        return one(out);
+        // An object or array literal: its fields hold any value (a prop, a theme value, a function, an Unknown read
+        // only if the field is read); a field that varies makes a variant of the whole object.
+        const fields = node.type === 'ArrayExpression' ? node.elements.map((value, i) => value && value.type !== 'SpreadElement' ? { key: i, value } : null) : node.properties.map(p => p.type === 'ObjectProperty' && !p.computed ? { key: p.key.name ?? p.key.value, value: p.value } : null);
+        if (fields.some(f => !f)) return one(unknownValue('U_STYLED_VALUE', `${src(node)}: spread, holes and computed keys are not modeled`));
+        return combine(fields.map(f => ev(f.value)), vs => {
+          const out = node.type === 'ArrayExpression' ? [] : {};
+          fields.forEach((f, i) => { out[f.key] = vs[i]; });
+          return one(out);
+        });
       }
       default: break;
     }
@@ -325,8 +326,28 @@ export function evaluateStyled(def, props, ctx) {
     });
   };
   // a call of a function value (a module function, an imported one, a local arrow); other calls are Unknown
+  // pure methods of strings and arrays whose receiver and arguments are known
+  const METHODS = {
+    includes: (o, a) => o.includes(a), startsWith: (o, a) => typeof o === 'string' && o.startsWith(a), endsWith: (o, a) => typeof o === 'string' && o.endsWith(a),
+    indexOf: (o, a) => o.indexOf(a), join: (o, a) => Array.isArray(o) ? o.map(unwrap).join(a ?? ',') : undefined,
+    toLowerCase: o => typeof o === 'string' ? o.toLowerCase() : undefined, toUpperCase: o => typeof o === 'string' ? o.toUpperCase() : undefined, trim: o => typeof o === 'string' ? o.trim() : undefined,
+  };
+  const known = v => !isUnknown(v) && !isSym(v);
+  const method = node => {
+    const name = node.callee.property.name;
+    const lists = [node.callee.object, ...node.arguments].map(n => ev(n).flatMap(r => valueOf(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })).filter(x => x.choices)));
+    return combine(lists, ([o, ...args]) => {
+      const bad = [o, ...args].find(v => !known(v)); if (bad) return one(bad);
+      const base = unwrap(o);
+      const elements = Array.isArray(base) ? base.map(unwrap) : base;
+      if (!(typeof base === 'string' || Array.isArray(base))) return one(unknownValue('U_STYLED_VALUE', `${src(node)}: .${name} of a value that is not a string or an array`));
+      const r = name === 'join' ? METHODS.join(base, ...args.map(unwrap)) : METHODS[name](elements, ...args.map(unwrap));
+      return one(r === undefined ? unknownValue('U_STYLED_VALUE', `${src(node)} is not modeled`) : r);
+    });
+  };
   const callExpression = node => {
     if (node.arguments.some(a => a.type === 'SpreadElement')) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`));
+    if (['MemberExpression', 'OptionalMemberExpression'].includes(node.callee.type) && !node.callee.computed && Object.hasOwn(METHODS, node.callee.property.name)) return method(node);
     return ev(node.callee).flatMap(c => {
       if (!(c.v && typeof c.v === 'object' && FN in c.v)) return [{ v: isUnknown(c.v) ? c.v : unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`), choices: c.choices }];
       return thread(c, apply(c.v, node.arguments.map(a => ev(a))));

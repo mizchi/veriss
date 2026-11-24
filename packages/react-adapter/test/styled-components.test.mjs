@@ -482,3 +482,36 @@ export default function C() { return <Box m={2} />; }`;
   const [, cls] = classOf(states[0].html, 'div');
   assert.match(css, new RegExp(`\\.${cls}\\{margin:8px;display:block\\}`));
 });
+
+test('styled-components: objects built in interpolations hold any value; only a field that is read and Unknown is Unknown', () => {
+  const source = `import styled, { css } from 'styled-components';
+const scroll = ({ height = 'auto', maxHeight = 'none' }) => css\`height: \${height}; max-height: \${maxHeight};\`;
+const config = (theme) => ({ light: { fg: theme.colors.text, glow: unknownHelper(1) }, dark: { fg: '#fff' } });
+const Box = styled.div\`
+  \${({ $max }) => scroll({ maxHeight: $max ? '40px' : undefined })}
+  color: \${({ $variant, theme }) => config(theme)[$variant].fg};
+\`;
+type P = { variant: 'light' | 'dark'; max: boolean };
+export default function C({ variant, max }: P) { return <Box $variant={variant} $max={max} />; }`;
+  const {states, css, unknowns} = expandReact(source, {theme});
+  assert.deepEqual(unknowns, []);
+  const rule = (variant, max) => { const [, cls] = classOf(states.find(s => s.choices.variant === variant && s.choices.max === max).html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.equal(rule('light', true), 'height:auto;max-height:40px;color:#222');
+  assert.equal(rule('dark', false), 'height:auto;max-height:none;color:#fff');
+});
+
+test('styled-components: Array / String includes on known values', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  top: \${({ $pos }) => (['top-right', 'top-left'].includes($pos) ? '0' : 'auto')};
+  left: \${({ $pos }) => ($pos.includes('left') ? '0' : 'auto')};
+\`;
+type P = { pos: 'top-right' | 'top-left' | 'bottom-left' };
+export default function C({ pos }: P) { return <Box $pos={pos} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  const rule = pos => { const [, cls] = classOf(states.find(s => s.choices.pos === pos).html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.equal(rule('top-right'), 'top:0;left:auto');
+  assert.equal(rule('top-left'), 'top:0;left:0');
+  assert.equal(rule('bottom-left'), 'top:auto;left:0');
+});
