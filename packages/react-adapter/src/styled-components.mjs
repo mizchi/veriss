@@ -292,7 +292,10 @@ export function evaluateStyled(def, props, ctx) {
         const choices = merge(l.choices, b.choices); if (!choices) return [];
         if (isUnknown(b.v)) return [{ v: b.v, choices }];
         const takeRight = node.operator === '&&' ? b.v : node.operator === '||' ? !b.v : unwrap(l.v) === null || unwrap(l.v) === undefined;
-        if (!takeRight) return [{ v: node.operator === '&&' ? false : l.v, choices }];
+        // the left operand itself (0 is written, false / null / undefined are not); a falsy symbol of && without
+        // literal values (or negated) is taken as false
+        const falsySym = node.operator === '&&' && isSym(l.v) && (l.v[SYM].negate || !ctx.literalProps?.has(l.v[SYM].key));
+        if (!takeRight) return [{ v: falsySym ? false : l.v, choices }];
         return ev(node.right).map(r => { const c = merge(choices, r.choices); return c && { v: r.v, choices: c }; }).filter(Boolean);
       }));
       case 'UnaryExpression':

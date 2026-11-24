@@ -889,3 +889,21 @@ export default function C() { return <Box />; }`;
   assert.match(css, /\{gap:8px\}/);
   assert.ok(unknowns.some(u => u.code === 'U_STYLED_INTERPOLATION' && /tokens\.missing/.test(u.message)), JSON.stringify(unknowns));
 });
+
+test('styled-components: `a && b` with a falsy a is a (0 is written, as styled-components writes it)', async () => {
+  const {renderStyled} = await import('./ssr.mjs');
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  width: \${p => p.$n && '10px'};
+  height: \${p => p.$size && p.$size};
+\`;
+export default function C({ size }: { size: '' | '4px' }) { return <Box $n={0} $size={size} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.equal(states.length, 2);
+  for (const s of states) {
+    const ours = new RegExp(`\\.${classOf(s.html, 'div')[1]}\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+    const real = (await renderStyled(source, s.choices)).css.match(/\{([^}]*)\}/)?.[1].replace(/;$/, '') ?? '';
+    assert.equal(ours, real, JSON.stringify(s.choices));
+  }
+});
