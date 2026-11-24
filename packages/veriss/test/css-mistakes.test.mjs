@@ -91,6 +91,12 @@ test('F9: a ::before or ::after with no content is never generated', () => {
   assert.equal(codes(run('.a::before{content:"";display:block;height:10px}'), 'W_CSS_PSEUDO_NO_CONTENT').length, 0);
   // Content from another rule counts.
   assert.equal(codes(run('.a::after{content:""}.a::after{display:block;height:4px}'), 'W_CSS_PSEUDO_NO_CONTENT').length, 0);
+  // A reset for every element (*, *::before, *::after { box-sizing: border-box }) styles no pseudo-element in
+  // particular: not a missing content, on any box.
+  for (const css of ['*,*::before,*::after{box-sizing:border-box;margin:0}', '::before,::after{box-sizing:inherit}', '*:before,*:after{margin:0}'])
+    assert.deepEqual(codes(run(css, '<div class="a"><div class="b"></div></div>'), 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), [], css);
+  // A rule for that element's pseudo-element still counts beside the reset.
+  assert.deepEqual(codes(run('*,*::before,*::after{box-sizing:border-box}.a::before{width:10px}'), 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), ['.a::before']);
 });
 
 test('F10: content on an element (not a pseudo-element) does nothing, unless it is an image', () => {
