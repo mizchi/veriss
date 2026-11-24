@@ -507,6 +507,33 @@
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
+## I. 実際のページで見つかった誤報と Unknown
+
+CSS-in-JS(styled-components)とコンポーネントライブラリを使う管理画面の 40 ページを、描画した DOM と CSSOM で解析し、
+各警告を Chromium で確かめた(宣言や属性を外して箱と画素を比べる、計算値、描かれた背景の画素)。
+
+- [x] **I1. keyframes の名前の大文字・小文字**: animation と animation-name の名前を小文字にしていたので、生成された名前
+  (cqkDSr)の @keyframes を「ない」と報告していた(`W_CSS_KEYFRAMES_MISSING`)。名前は書いたまま比べる。3 ブラウザーで、
+  大文字を含む名前の animation が動き、Spin は @keyframes spin を動かさないことを測った(e2e F1)。
+- [x] **I2. 辺ごとの border の一括指定**: border-top などを読まず(Unknown)、その辺の style を見落として「border が描かれない」
+  と報告していた。border / border-inline / border-block / border-top 〜 left を、width・style・color の順不同・省略可で読む。
+  style を none か hidden と書いた辺は報告しない(border: none をブラウザーが border-width: medium; border-style: none と書き出す)。
+  3 ブラウザーで測った(e2e F14 の 2 つ目)。
+- [x] **I3. 全称のリセットの擬似要素**: `*, *::before, *::after { box-sizing: border-box }` で、すべての ::before・::after を
+  「content がない」と報告していた(ページの警告のほとんど)。擬似要素だけのセレクター(* の有無は問わない)の宣言は数えない。
+- [x] **I4. 見えない欄の caret**: select の部品が持つ、opacity 0 でキー入力だけを受ける input に `W_A11Y_CARET_HIDDEN` を出していた。
+  opacity 0(祖先を含む)か視覚的に隠した欄は見ない。
+- [x] **I5. HTML の属性でない名前**: モデルにない属性はすべて Unknown にしていたので、DOM に漏れたコンポーネントの props
+  (placement、variant)でページ全体が止まっていた。どこかの要素で描画に効く属性だけを Unknown にし、それ以外は何もしない
+  (属性セレクターからは見える)。size・color・align は、効かない要素では F28 の警告にする。3 ブラウザーで測った(e2e F28)。
+- [x] **I6. どの要素にも当たらないルールの、モデルにない宣言**: 読んだ時点で全体を Unknown にしていた(サイト全体の
+  スタイルシートには、そのページにない要素のルールがある)。宣言をルールに残し、当たった箱の配置だけを Unknown にする。
+  スタイルの検査はその箱でも走る。
+- [x] **I7. 複合セレクターの途中の状態**: `.btn:hover:not([disabled])` を読めなかった。状態は複合の中のどこにあってもよい
+  (一つだけ)。3 ブラウザーで、hover で下の箱が動く・動かないことが解析と一致した(e2e の hover の CLS)。
+- 残り(Unknown のまま): :active でレイアウトが変わるルール、結合子の前の状態(`.x:checked + span::before`)、hr・col・br の大きさ、
+  `::-webkit-scrollbar`、テキストと子要素が混ざる箱(`*` のセレクターがあると span で包めない)。
+
 ## 済み(このチェックリストを作る前に済んだもの)
 
 - [x] easing の行き過ぎ(cubic-bezier、`linear()`)の極値でのシフト検査と CLS の上限、終わりの戻り、relative のオフセット、

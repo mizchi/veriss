@@ -73,6 +73,8 @@ tools/gate.sh                                     # push の前に毎回。20〜
 
 ## 次にやること
 
+- **実ページの Unknown**: [チェックリスト I](static-check-checklist.md) の残り。:active のレイアウト、結合子の前の状態、hr・col・br、::-webkit-scrollbar、テキストと子要素の混ざる箱
+
 - **eval の基準**: `evals/results/component-lint/` は Chromium 156(Playwright 1.64.1)で記録した。結果の `browser` が記録した版。別の版では文字の組み方の差で狭い幅の判定が動くので、gate で eval が変わったら、まず `browser` の行(gate が並べて出す)を見る
 - **M6 の残り**: layout が style を書き換えて報告する inert(% の高さ → auto、block flow の auto の上下 margin → 0、block flow の grid 配置)と inline の box の効かない寸法は engine に残る。`solve` の正規化(`$blockFlow`・`$inertMain`・`$anonymousGridText`)を style の段に出せれば、規則に移せる
 - **M7 の残り**: 状態・placeholder・欄の境界・文中リンク・フォーカスの輪郭の色の規則は、状態の幾何を読むので `accessibility.mjs` に残る。アイコンのコントラストは、制御の名前を幾何の行から読むので、レイアウトが Unknown のときは走らない
@@ -85,6 +87,9 @@ tools/gate.sh                                     # push の前に毎回。20〜
   - isle の `package.json` が veriss の API を `@isle/prototype/layout/*` として公開し直している。残すか、利用者に veriss を直接使ってもらうか
 
 ## 落とし穴(このセッションで踏んだもの)
+
+- 描画したページを CSSOM から取り出すと、ブラウザーは一括指定を書き出し直す(border: none → border-width: medium; border-style: none; border-color: currentcolor; border-image: none)。実ページの照合はソースの CSS と形が違う
+- 動くページ(JS あり)で宣言を外して比べると、遅延して読まれるフォント(unicode-range で分割した web フォント)や再描画で画素が変わる。取り出したスナップショットを静的に開き、document.fonts.ready を待ってから比べる。角の数画素(差 1〜2)は描画のゆらぎ
 
 - worktree に `node_modules` をシンボリックリンクでつながない。worktree で pnpm を動かすと、元の作業ツリーの `node_modules/.pnpm/node_modules`
   のリンクがその worktree 基準に張り替えられ、worktree を消すと壊れる(react-adapter のテストが `@babel/plugin-syntax-jsx` を見失った)。
