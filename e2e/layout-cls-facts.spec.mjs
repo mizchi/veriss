@@ -103,7 +103,9 @@ test('static :hover layout-shift findings agree with Chromium', async ({page}) =
   const html = '<main class="page"><div class="card"><div class="inner"></div></div><div class="below"></div></main>';
   const base = '*{box-sizing:border-box;margin:0}.page{display:grid;grid-template-columns:minmax(0,1fr);padding:8px;row-gap:8px}.card{display:grid;grid-template-columns:minmax(0,1fr);height:100px;padding:10px;background:#ddd}.inner{height:20px;background:#888}.below{height:40px;background:#444}';
   // Hover point: inside .card, or inside .below (at y = 8 + 100 + 8 + 20).
-  for (const [name, rule, y] of [['taller card', '.card:hover{height:120px}', 50], ['card padding', '.card:hover{padding:14px}', 50], ['card lift', '.card:hover{transform:translateY(-4px)}', 50], ['card paint', '.card:hover{background:#eee}', 50], ['last box grows', '.below:hover{height:60px}', 136], ['last box narrows', '.below:hover{width:50%}', 136]]) {
+  for (const [name, rule, y] of [['taller card', '.card:hover{height:120px}', 50], ['card padding', '.card:hover{padding:14px}', 50], ['card lift', '.card:hover{transform:translateY(-4px)}', 50], ['card paint', '.card:hover{background:#eee}', 50], ['last box grows', '.below:hover{height:60px}', 136], ['last box narrows', '.below:hover{width:50%}', 136],
+    // A state before :not(): the rule applies on hover unless :not() excludes the box.
+    ['taller unless excluded', '.card:hover:not([data-static]){height:120px}', 50], ['excluded by :not()', '.card:hover:not(.card){height:120px}', 50]]) {
     const report = analyzeHTML(html, {name: 'Page', viewport, css: base + rule, integrity: true});
     expect(report.status === 'unknown', `${name}: ${JSON.stringify(report.diagnostics)}`).toBe(false);
     const predicted = report.diagnostics.some(d => d.code === 'E_LAYOUT_HOVER_SHIFT');
