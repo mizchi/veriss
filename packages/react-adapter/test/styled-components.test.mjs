@@ -252,3 +252,36 @@ export default function C() { return <A />; }`;
   const {css} = expandReact(source);
   assert.match(css, /width:undefinedpx/);
 });
+
+// in-memory modules: './name' -> name.js
+const memoryResolver = files => specifier => {
+  const name = specifier.replace(/^\.\.?\//, '').replace(/\/index$/, '');
+  return files[name] === undefined ? null : {file: `${name}.js`, source: files[name]};
+};
+
+test('styled-components across modules: default exports, re-exports and export * are followed', () => {
+  const files = {
+    Box: `import styled from 'styled-components';
+const Box = styled.div\`
+  display: flex;
+\`;
+export default Box;`,
+    box: `export { default } from './Box';`,
+    tokens: `export const pad = '4px';`,
+    theme: `export * from './tokens';
+export { pad as padding } from './tokens';`,
+    styled: `import styled from 'styled-components';
+import Box from './box';
+import { padding } from './theme';
+export const Card = styled(Box)\`
+  padding: \${padding};
+\`;`,
+  };
+  const source = `import { Card } from './styled';
+export default function C() { return <Card>x</Card>; }`;
+  const {states, css, unknowns} = expandReact(source, {file: 'C.jsx', resolveModule: memoryResolver(files)});
+  assert.deepEqual(unknowns, []);
+  assert.match(states[0].html, /^<div class="sc-Box sc-Card sc-Box-\w+ sc-Card-\w+">x<\/div>$/);
+  assert.match(css, /\{display:flex\}/);
+  assert.match(css, /\{padding:4px\}/);
+});

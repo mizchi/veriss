@@ -70,15 +70,26 @@ export function loadModule({ file, source, ast }, resolveModule, cache = new Map
   ast ??= parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   const names = styledImports(ast);
   const { defs, fragments } = collectStyled(ast, source, names);
-  const consts = new Map(), imports = new Map();
+  // exports: aliases (export default X, export { a as b }), re-exports (export { a as b } from 'm') and export * from 'm'
+  const consts = new Map(), imports = new Map(), aliases = new Map(), reexports = new Map(), stars = [];
   for (const stmt of ast.program.body) {
+    if (stmt.type === 'ExportDefaultDeclaration' && stmt.declaration.type === 'Identifier') aliases.set('default', stmt.declaration.name);
+    if (stmt.type === 'ExportNamedDeclaration' && !stmt.declaration && stmt.exportKind !== 'type') {
+      for (const sp of stmt.specifiers) {
+        if (sp.type !== 'ExportSpecifier' || sp.exportKind === 'type') continue;
+        const exported = sp.exported.name ?? sp.exported.value, local = sp.local.name ?? sp.local.value;
+        if (stmt.source) reexports.set(exported, { specifier: stmt.source.value, imported: local });
+        else aliases.set(exported, local);
+      }
+    }
+    if (stmt.type === 'ExportAllDeclaration' && !stmt.exported && stmt.exportKind !== 'type') stars.push(stmt.source.value);
     if (stmt.type === 'ImportDeclaration' && stmt.source.value !== 'styled-components') {
       for (const sp of stmt.specifiers) imports.set(sp.local.name, { specifier: stmt.source.value, imported: sp.type === 'ImportNamespaceSpecifier' ? '*' : sp.type === 'ImportDefaultSpecifier' ? 'default' : sp.imported.name ?? sp.imported.value });
     }
     const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
     if (decl?.type === 'VariableDeclaration' && decl.kind === 'const') for (const d of decl.declarations) if (d.id.type === 'Identifier' && d.init && !defs.has(d.id.name) && !fragments.has(d.id.name)) consts.set(d.id.name, d.init);
   }
-  const mod = { file, source, ast, names, defs, fragments, consts, imports };
+  const mod = { file, source, ast, names, defs, fragments, consts, imports, aliases, reexports, stars };
   mod.load = specifier => {
     if (!resolveModule) return null;
     const r = resolveModule(specifier, file);
@@ -98,15 +109,19 @@ export function binding(mod, name, seen = new Set()) {
   if (mod.defs.has(name)) return { kind: 'def', def: mod.defs.get(name) };
   if (mod.fragments.has(name)) return { kind: 'fragment', fragment: mod.fragments.get(name) };
   if (mod.consts.has(name)) return { kind: 'const', node: mod.consts.get(name), mod };
-  const im = mod.imports.get(name);
-  if (!im) return null;
-  const target = mod.load(im.specifier);
-  if (!target) return /^[./]/.test(im.specifier) ? { kind: 'missing', message: `${name} is imported from '${im.specifier}', which was not read (pass options.resolveModule)` } : null;
-  if (im.imported === '*') return { kind: 'ns', mod: target };
-  const key = `${target.file}\u0000${im.imported}`;
+  const key = `${mod.file}\u0000${name}`;
   if (seen.has(key)) return null;
   seen.add(key);
-  return binding(target, im.imported, seen);
+  if (mod.aliases.has(name)) return binding(mod, mod.aliases.get(name), seen);
+  const im = mod.imports.get(name) ?? mod.reexports.get(name);
+  if (im) {
+    const target = mod.load(im.specifier);
+    if (!target) return /^[./]/.test(im.specifier) ? { kind: 'missing', message: `${name} is imported from '${im.specifier}', which was not read (pass options.resolveModule)` } : null;
+    return im.imported === '*' ? { kind: 'ns', mod: target } : binding(target, im.imported, seen);
+  }
+  // export * from 'm': the first module that has the name (never default)
+  if (name !== 'default') for (const specifier of mod.stars) { const target = mod.load(specifier); const b = target && binding(target, name, seen); if (b) return b; }
+  return null;
 }
 
 /** The styled component a JSX tag names (Name or Namespace.Name), an import that was not read, or null. */
