@@ -417,3 +417,30 @@ test('percentage-width items with the default shrink and min-width: decided whil
     }
   }
 });
+
+test('percentage-width items with a px max-width: the share up to the maximum, then the maximum, where the browser puts them', async ({page}) => {
+  const base = '*{margin:0;box-sizing:border-box}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.row{display:flex;height:40px}.m{height:20px}.s{width:60px;height:20px;flex-shrink:0}';
+  for (const [css, html] of [['.m{width:100%;max-width:600px;margin:0 auto;padding:0 24px}', '<div class="row"><div class="m"><div class="x"></div></div></div>'],
+    ['.m{flex-grow:1;width:50%;max-width:300px}', '<div class="row"><div class="s"></div><div class="m"><div class="x"></div></div></div>'],
+    ['.m{width:100%;max-width:300px;min-width:0}', '<div class="row"><div class="s"></div><div class="m"><div class="x"></div></div></div>'],
+    ['.m{flex:1 1 30%;max-width:200px;min-width:0}', '<div class="row"><div class="s"></div><div class="m"><div class="x"></div></div></div>'],
+    ['.m{width:40%;max-width:200px;margin-left:auto}', '<div class="row"><div class="s"></div><div class="m"><div class="x"></div></div><div class="m"><div class="x"></div></div></div>']]) {
+    const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: base + css, viewport: {min: 320, max: 800, height: {min: 400, max: 800}}, block: true});
+    expect(report.status, `${css}: ${JSON.stringify(report.diagnostics)}`).toBe('verified');
+    const num = v => { const [n, d = '1'] = String(v).split('/'); return Number(n) / Number(d); };
+    const at = (a, w) => num(a.constant) + w * num(a.coefficient);
+    for (const width of [340, 450, 700]) {
+      await page.setViewportSize({width, height: 600});
+      await page.setContent(`<!doctype html><html lang="en"><head><style>${base}${css}</style></head><body>${html}</body></html>`);
+      const browser = await page.evaluate(() => [...document.querySelectorAll('.m')].map(n => { const r = n.getBoundingClientRect(); return [r.x, r.width]; }));
+      // The rectangle of the region the width falls in (regions meet at a boundary, where they agree).
+      const inRegion = x => { const ws = x.region.vertices.map(v => num(v.width)); return Math.min(...ws) <= width && width <= Math.max(...ws); };
+      const statics = [];
+      for (const path of [...new Set(report.sizes.filter(x => x.box === '.m' && x.rect).map(x => x.path))]) {
+        const x = report.sizes.find(s => s.path === path && s.rect && inRegion(s));
+        statics.push([at(x.rect.inlineStart, width), at(x.rect.inlineSize, width)]);
+      }
+      expect(statics, `${css} at ${width}`).toEqual(browser);
+    }
+  }
+});

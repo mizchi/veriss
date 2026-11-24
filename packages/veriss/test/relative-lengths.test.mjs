@@ -17,8 +17,10 @@ test('em lengths compute against the element\'s px font-size', () => {
 test('a flex item\'s percentage width with flex-basis auto is a share of the container', () => {
   assert.deepEqual(box('.p{display:flex;width:300px}.a{width:40%;flex:none}.b{width:50px;flex:none}'), {'.a': ['0', '120'], '.b': ['120', '50']});
   assert.deepEqual(box('.p{display:flex;width:300px}.a{width:40%;flex-grow:1;flex-shrink:0}.b{width:50px;flex:none}')['.a'], ['0', '250']);
-  // Shrinking with an automatic minimum: the specified-size suggestion caps the minimum, which is not modeled.
-  assert.match(String(box('.p{display:flex;width:300px}.a{width:40%}.b{width:50px}')), /^unknown/);
+  // An empty item has no content to keep it wide: its automatic minimum is 0, and it fits here.
+  assert.deepEqual(box('.p{display:flex;width:300px}.a{width:40%}.b{width:50px}'), {'.a': ['0', '120'], '.b': ['120', '50']});
+  // Shrinking with an automatic minimum from its content: the specified-size suggestion caps the minimum, which is not modeled.
+  assert.match(String(box('.p{display:flex;width:300px}.a{width:90%}.b{width:50px;flex:none}', '<div class="p"><div class="a"><div class="x"></div></div><div class="b"></div></div>')), /^unknown/);
 });
 
 test('a percentage height in block flow resolves against the parent\'s declared height', () => {

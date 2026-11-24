@@ -544,7 +544,12 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
 - [x] **I11. % の幅の flex item(既定の shrink と min-width)**: 中身で決まる自動の最小幅を理由に Unknown にしていた。最小幅は
   min(min-content, 指定の幅) で基準の大きさ以下なので、縮まない行では判定する(縮む行は Unknown)。縮む側でも空きがちょうど 0 の行は何も
   縮まない。3 ブラウザーで 400px と 700px の位置と幅が解析と一致した(`e2e/layout-flex.spec.mjs`)。
-- 残り(Unknown のまま): % の幅に max-width を組み合わせた flex の item(中央寄せの最大幅の容器)、中身で大きさの決まる flex の item
+- [x] **I12. % の幅と px の max-width の flex item(中央寄せの最大幅の容器)**: % の basis は max-width が none のときだけ受けていた。
+  share は viewport に対して一次なので、share と max-width の大小で行を分け、超える側では仮の大きさを max-width にする(§9.7。縮む行では
+  share から縮み、伸びる行では max-width で止まる)。スクロールコンテナや空の箱のように自動の最小幅を持たない item も、% の basis で受ける。
+  3 ブラウザーで、340px・450px・700px の位置と幅が解析と一致した(中央寄せ、伸びる item、縮む行、`flex: 1 1 30%`、auto の margin。
+  `e2e/layout-flex.spec.mjs`)。
+- 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
 
