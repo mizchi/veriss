@@ -110,7 +110,8 @@ function compileCompound(source, depth = 0) {
       if (ofList) { const top = ofList.map(x => x.specificity).sort((a, b) => b[0] - a[0] || b[1] - a[1] || b[2] - a[2])[0]; specificity = specificity.map((v, i) => v + top[i]); }
       rest = rest.slice(nth[0].length); continue;
     }
-    // :has(relative list): an argument is one compound with an optional leading combinator (descendant by default).
+    // :has(relative list): an argument is a compound with an optional leading combinator (descendant by default), and
+    // may go further down through > and descendant combinators (steps), each step matched below the one before.
     const has = rest.match(/^:has\(/i);
     if (has) {
       let level = 1, end = has[0].length;
@@ -118,12 +119,16 @@ function compileCompound(source, depth = 0) {
       if (level) throw new Error(`Unclosed selector function: ${source}`);
       const relative = postcss.list.comma(rest.slice(has[0].length, end - 1)).map(arg => {
         const m = arg.trim().match(/^([>+~])?\s*(.*)$/s);
-        const compiled = compileSelector(m[2], depth + 1);
-        if (compiled.state || compiled.pseudoElement || compiled.chain?.length || compiled.parts.some(p => p.kind === 'has')) throw new Error(`Unsupported selector (:has() takes one compound without states here): ${source}`);
-        return { combinator: m[1] ?? ' ', selector: compiled };
+        const pieces = splitComplex(m[2]);
+        // Sibling combinators after the leading one are not modeled.
+        if (pieces.slice(1).some(p => !['>', ' '].includes(p.combinator))) throw new Error(`Unsupported selector (:has() goes down with > and descendant combinators only): ${source}`);
+        const compiled = pieces.map(p => compileSelector(p.text, depth + 1));
+        if (compiled.some(c => c.state || c.pseudoElement || c.chain?.length || c.parts.some(p => p.kind === 'has'))) throw new Error(`Unsupported selector (:has() takes compounds without states here): ${source}`);
+        const steps = compiled.slice(1).map((selector, k) => ({ combinator: pieces[k + 1].combinator, selector }));
+        return { combinator: m[1] ?? ' ', selector: compiled[0], ...(steps.length ? { steps } : {}), specificity: compiled.reduce((a, c) => combine(a, c.specificity), [0, 0, 0]) };
       });
-      parts.push({ kind: 'has', relative, choices: relative.map(r => r.selector) });
-      specificity = combine(specificity, relative.reduce((best, r) => greaterRank(r.selector.specificity, best) ? r.selector.specificity : best, [0, 0, 0]));
+      parts.push({ kind: 'has', relative, choices: relative.flatMap(r => [r.selector, ...(r.steps ?? []).map(step => step.selector)]) });
+      specificity = combine(specificity, relative.reduce((best, r) => greaterRank(r.specificity, best) ? r.specificity : best, [0, 0, 0]));
       rest = rest.slice(end); continue;
     }
     // :not(list): matches when no argument does; its specificity is its most specific argument's. States and
@@ -313,13 +318,16 @@ function structuralMatches(part, box) {
 const elementChildren = box => [...(box.children ?? []), ...(box.inline ?? [])].filter(child => !child.anonymous && !child.pseudo);
 const descendants = box => elementChildren(box).flatMap(child => [child, ...descendants(child)]);
 function hasMatches(part, box) {
-  return part.relative.some(({ combinator, selector }) => {
-    if (combinator === ' ') return descendants(box).some(d => matches(selector, d));
-    if (combinator === '>') return elementChildren(box).some(d => matches(selector, d));
+  // The rest of an argument below an element it matched: each step a child (>) or a descendant of the one before.
+  const below = (element, steps) => !steps.length || (steps[0].combinator === '>' ? elementChildren(element) : descendants(element)).some(d => matches(steps[0].selector, d) && below(d, steps.slice(1)));
+  return part.relative.some(({ combinator, selector, steps = [] }) => {
+    const found = d => matches(selector, d) && below(d, steps);
+    if (combinator === ' ') return descendants(box).some(found);
+    if (combinator === '>') return elementChildren(box).some(found);
     const all = siblingsOf(box);
     if (!all) return false; // reported by dynamicAttributeTests
     const later = all.slice(all.findIndex(s => s === box || s.path === box.path) + 1);
-    return (combinator === '+' ? later.slice(0, 1) : later).some(d => matches(selector, d));
+    return (combinator === '+' ? later.slice(0, 1) : later).some(found);
   });
 }
 // An adapter renders a dynamic attribute value as this placeholder: a value test against it is not known.

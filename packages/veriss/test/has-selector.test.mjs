@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {analyzeHTML} from '../src/html.mjs';
 import {compileSelector} from '../src/layout/selectors.mjs';
 
-// :has(relative selectors): descendant (default), > child, + next sibling, ~ later sibling; each argument one
-// compound. States inside, complex arguments, and a component root's siblings are Unknown.
+// :has(relative selectors): descendant (default), > child, + next sibling, ~ later sibling; an argument may go further
+// down with > and descendant combinators. States inside, sibling combinators after the first, and a component root's
+// siblings are Unknown.
 const g = 'display:grid;grid-template-columns:minmax(0,1fr)';
 const analyze = (inner, css) => analyzeHTML(`<html lang="en"><body><main class="page">${inner}</main></body></html>`, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page,.c{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}});
 const heights = (inner, css) => {
@@ -28,10 +29,22 @@ test('descendant, child and sibling arguments', () => {
   assert.deepEqual(heights(html, `${base}.c:has(.w, + .e){height:30px}`), [30, 20, 30, 20]);
 });
 
-test("states, complex arguments and a root's siblings are Unknown", () => {
+test('an argument going down with > and descendant combinators', () => {
+  const base = '.m{display:block}.w{display:grid;grid-template-columns:10px}.c{height:20px}';
+  assert.deepEqual(heights(html, `${base}.c:has(.w img){height:30px}`), [30, 20, 20, 20]);
+  assert.deepEqual(heights(html, `${base}.c:has(> .w > img){height:30px}`), [30, 20, 20, 20]);
+  assert.deepEqual(heights(html, `${base}.c:has(> img.m){height:30px}`), [20, 30, 20, 20]);
+  // Each step is a child of the one before: img is not a child of .c in .a.
+  assert.deepEqual(heights(html, `${base}.c:has(> div > div){height:30px}`), [20, 20, 20, 20]);
+  // The specificity of an argument is that of the whole relative selector.
+  assert.deepEqual(compileSelector('.c:has(> .w > img)').specificity, [0, 2, 1]);
+});
+
+test("states, sibling combinators inside an argument and a root's siblings are Unknown", () => {
   const base = '.m{display:block}.w{display:grid;grid-template-columns:10px}';
   assert.equal(analyze(html, `${base}.c:has(img:hover){padding:1px}`).status, 'unknown');
-  assert.equal(analyze(html, `${base}.c:has(.w img){padding:1px}`).status, 'unknown');
+  assert.equal(analyze(html, `${base}.c:has(.w + img){padding:1px}`).status, 'unknown');
+  assert.equal(analyze(html, `${base}.c:has(> .w img:hover){padding:1px}`).status, 'unknown');
   assert.equal(analyzeHTML('<div class="c"><div class="k"></div></div>', {name: 'C', css: `*{box-sizing:border-box;margin:0}.c{${g}}.k{height:1px}.c:has(+ .x){width:50%}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}}).status, 'unknown');
   assert.equal(analyzeHTML('<div class="c"><div class="k"></div></div>', {name: 'C', css: `*{box-sizing:border-box;margin:0}.c{${g}}.k{height:1px}.c:has(> .k){width:50%}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}}).status, 'verified');
 });
