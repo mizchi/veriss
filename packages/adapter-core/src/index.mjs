@@ -304,7 +304,7 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   const grouped = new Map();
   for (const r of results) for (const d of [...r.report.diagnostics.filter(d => d.severity !== 'unknown'), ...(r.report.layoutWarnings ?? []), ...(r.report.accessibility?.warnings ?? []), ...(r.report.integrity?.warnings ?? [])]) {
     const key = `${d.code}\u0000${d.box ?? ''}`;
-    if (!grouped.has(key)) grouped.set(key, { code: d.code, box: d.box, path: d.path, severity: d.severity, message: d.message, rule: d.rule, css: d.css, ...(d.layout ? { layout: d.layout } : {}), states: [], html: r.html });
+    if (!grouped.has(key)) grouped.set(key, { code: d.code, box: d.box, path: d.path, severity: d.severity, message: d.message, rule: d.rule, css: d.css, ...(d.related ? { related: d.related } : {}), ...(d.layout ? { layout: d.layout } : {}), states: [], html: r.html });
     const entry = grouped.get(key);
     if (!entry.states.includes(r.choices)) entry.states.push(r.choices);
   }
@@ -377,4 +377,4 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   return out;
 }
 export { lint, formatText, recommended } from './lint.mjs';
-export { lowerNested, relocateSelectorWarnings } from './nested.mjs';
+export { lowerNested, relocateSelectorWarnings, relocateFindings } from './nested.mjs';

@@ -13,7 +13,7 @@
 // spreads other than stylex.props, and more states than maxStates.
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
-import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings } from '@mizchi/veriss-adapter-core';
+import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings, relocateFindings } from '@mizchi/veriss-adapter-core';
 import { loadModule, binding, styledTag, evaluateStyled, evaluateExpression, isUnknownValue, symbolOf, symbolInfo, styledClass } from './styled-components.mjs';
 import { typeMembers, literalValues, isTextType } from './types.mjs';
 
@@ -508,6 +508,12 @@ export function analyzeReact(source, { component, maxStates, eachCounts, sourceL
     const all = expanded.scope ? `${pageCSS}\n${componentCSS}` : pageCSS + componentCSS;
     const offset = all.slice(0, all.lastIndexOf(expanded.styleCSS)).split('\n').length - 1;
     report.selectors = { ...report.selectors, warnings: relocateSelectorWarnings(report.selectors.warnings, expanded.styleMap, { offset }) };
+  }
+  // findings located in the styled CSS (CSS mistakes such as a shorthand conflict) are reported at the template lines
+  if (expanded.styleMap) {
+    const all = expanded.scope ? `${pageCSS}\n${componentCSS}` : pageCSS + componentCSS;
+    const offset = all.slice(0, all.lastIndexOf(expanded.styleCSS)).split('\n').length - 1;
+    report.findings = relocateFindings(report.findings, expanded.styleMap, { offset });
   }
   // A dynamic value that wins the cascade: said in terms of the template (where, what its value depends on) and of the
   // option that declares it.

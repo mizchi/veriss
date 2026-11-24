@@ -38,7 +38,16 @@ export function lowerNested(blocks) {
     // origin.lines (optional): the template line of each text line, when the text is not line-for-line the template
     // (an interpolation written over several lines collapsed into its value)
     const { lines: lineMap, ...rest } = origin;
-    map.push({ cssLine: lines.length, selector, origin: { ...rest, line: lineMap?.[nodeLine - 1] ?? origin.line + nodeLine - 1 }, path, relation });
+    const templateLine = l => lineMap?.[l - 1] ?? origin.line + l - 1;
+    // each declaration: its 1-based column in the emitted line, and where it is in the template (the column only when
+    // the text is line-for-line the template)
+    let column = (media ? `@media ${media}{` : '').length + selector.length + 2;
+    const declarations = decls.map(d => {
+      const at = { column, line: templateLine(d.source.start.line), ...(lineMap ? {} : { templateColumn: d.source.start.line === 1 ? d.source.start.column - selector.length - 1 : d.source.start.column }) };
+      column += decl(d).length + 1;
+      return at;
+    });
+    map.push({ cssLine: lines.length, selector, origin: { ...rest, line: templateLine(nodeLine) }, path, relation, declarations });
   };
   for (const block of blocks) {
     const root = postcss.parse(`${block.selector}{${block.text}}`);
@@ -64,6 +73,25 @@ export function lowerNested(blocks) {
     walk(root.nodes[0], block.selector, null, [block.selector], null);
   }
   return { css: lines.join('\n'), map };
+}
+
+/**
+ * Findings located in lowered CSS (css: {line, column}; related[].css too), moved to the template: the line (and, when
+ * the text is the template line for line, the column) of the declaration at that column, else of the rule; the
+ * component name is added. Findings elsewhere are unchanged. offset: lines before the lowered CSS.
+ */
+export function relocateFindings(findings, map, { offset = 0 } = {}) {
+  const move = css => {
+    const m = css && map.find(x => x.cssLine + offset === css.line);
+    if (!m) return null;
+    const d = css.column ? [...m.declarations].reverse().find(x => x.column <= css.column) : null;
+    return { css: { file: m.origin.file, line: d?.line ?? m.origin.line, ...(d?.templateColumn ? { column: d.templateColumn } : {}) }, component: m.origin.name };
+  };
+  return findings.map(f => {
+    const at = move(f.css);
+    if (!at) return f;
+    return { ...f, ...at, cssLine: f.css.line, ...(f.related ? { related: f.related.map(r => { const m = move(r.css); return m ? { ...r, css: m.css } : r; }) } : {}) };
+  });
 }
 
 /**

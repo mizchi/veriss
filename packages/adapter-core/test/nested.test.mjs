@@ -86,3 +86,31 @@ test('relocateSelectorWarnings: warnings of several variants of one template lin
   assert.equal(out[0].variants, 2);
   assert.doesNotMatch(out[0].message, /no element has class/);
 });
+
+test('relocateFindings: a finding at a column of the lowered CSS is moved to the template line of that declaration', async () => {
+  const {relocateFindings} = await import('../src/nested.mjs');
+  const text = `
+  border: 1px solid;
+  border-top: 2px solid;
+  & > .x {
+    color: red;
+    padding: 1px;
+  }
+`;
+  const {css, map} = lowerNested([{selector: '.sc-A', text, origin: {file: 'styled.ts', line: 10, name: 'A'}}]);
+  const lines = css.split('\n');
+  // the lowered line and column of a declaration, as the core reports it (1-based)
+  const at = (line, needle) => ({file: '<css>', line: line + 2, column: lines[line - 1].indexOf(needle) + 1});
+  const findings = [
+    {code: 'E_CSS_SHORTHAND_CONFLICT', css: at(1, 'border-top'), related: [{css: at(1, 'border:'), message: 'Earlier border'}]},
+    {code: 'X', css: at(2, 'padding')},
+    {code: 'Y', box: '.a'},
+  ];
+  const moved = relocateFindings(findings, map, {offset: 2});
+  // template lines: the text's line k is origin.line + k - 1 (line 1 is the empty first line)
+  assert.deepEqual(moved[0].css, {file: 'styled.ts', line: 12, column: 3});
+  assert.equal(moved[0].component, 'A');
+  assert.deepEqual(moved[0].related[0].css, {file: 'styled.ts', line: 11, column: 3});
+  assert.equal(moved[1].css.line, 15);
+  assert.deepEqual(moved[2], findings[2]);
+});

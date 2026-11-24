@@ -789,3 +789,19 @@ test('dynamic values: keys may be patterns (*), and a value of "ignore" leaves t
   const both = expandReact(dynamicSource, {dynamicValues: {'*.width': 'ignore', 'Box.width': ['5px']}});
   assert.match(both.css, /width:5px/);
 });
+
+test('findings in the styled CSS (a shorthand conflict) are reported at the template lines of both declarations', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  border: 1px solid;
+  border-top: 2px solid;
+\`;
+export default function C() { return <Box />; }`;
+  const report = analyzeReact(source, {pageCSS, viewport, file: 'Box.tsx'});
+  const f = report.findings.find(x => x.code === 'E_CSS_SHORTHAND_CONFLICT');
+  assert.ok(f, JSON.stringify(report.findings));
+  assert.equal(f.css.file, 'Box.tsx');
+  assert.equal(f.css.line, 4);
+  assert.equal(f.component, 'Box');
+  assert.equal(f.related?.[0]?.css?.line, 3);
+});
