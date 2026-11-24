@@ -14,7 +14,7 @@
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
 import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree, lowerNested, relocateSelectorWarnings } from '@mizchi/veriss-adapter-core';
-import { loadModule, binding, styledTag, evaluateStyled, symbolOf, styledClass } from './styled-components.mjs';
+import { loadModule, binding, styledTag, evaluateStyled, symbolOf, symbolInfo, styledClass } from './styled-components.mjs';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = s => escapeText(s).replace(/"/g, '&quot;');
@@ -71,11 +71,14 @@ function linariaRules(className, text) {
  * @param {string} source a module (JSX/TSX) whose default export (or `component`) is a function component
  * @param {{component?: string, maxStates?: number, eachCounts?: number[]}} options
  */
-export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component', resolveModule } = {}) {
+// inject (internal, styled(Component)): the component rendered by a styled wrapper, with the wrapper's classes as its
+// className, the wrapper's children, and the props the wrapper was given ({v, choices} variants; v a literal or a symbol).
+export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component', resolveModule, inject } = {}) {
   const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   // styled-components (imported from 'styled-components'): evaluated per element from the props it passes.
   // Imported styled modules are read through options.resolveModule(specifier, importerFile).
-  const sc = loadModule({ file, source, ast }, resolveModule), scBlocks = new Map();
+  const sc = loadModule({ file, source, ast }, resolveModule), scBlocks = inject?.blocks ?? new Map();
+  let restName = null;
   const unknowns = [], assumptions = new Set();
   const unknown = (code, message) => { if (!unknowns.some(u => u.message === message)) unknowns.push({ code, message }); };
   const limit = { maxStates, onLimit: max => unknown('U_REACT_STATES', `more than ${max} component states; raise maxStates or split the component`) };
@@ -209,6 +212,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         return acc.flatMap(l => parts.map(r => { const choices = merge(l.choices, r.choices); return choices && { classes: [...l.classes, ...r.classes], choices }; }).filter(Boolean));
       }, [{ classes: [], choices: {} }]);
     }
+    if (inject && ((node.type === 'Identifier' && node.name === 'className') || (node.type === 'MemberExpression' && !node.computed && propsName && node.object.type === 'Identifier' && node.object.name === propsName && node.property.name === 'className'))) return [{ classes: inject.classes, choices: {} }];
     unknown('U_REACT_DYNAMIC_CLASS', `className={${text(node)}} is not a literal, a Linaria class or a condition of them`);
     return [{ classes: [], choices: {} }];
   };
@@ -221,6 +225,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       chain.unshift(d);
       if (!d.base) break;
       const b = binding(d.mod, d.base);
+      if (b?.kind === 'component') { chain[0].baseComponent = b; break; }
       if (b?.kind !== 'def') { unknown('U_STYLED_BASE', `${d.name} extends ${d.base}, which is not a styled component${b?.kind === 'missing' ? ` (${b.message})` : ''}; its markup is analysed with that component`); return null; }
       d = b.def;
     }
@@ -245,7 +250,19 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         return { classes: [...l.classes, cls], choices };
       }).filter(Boolean));
     }
-    return { tag: chain[0].tag, baseClasses: chain.map(d => `sc-${d.name}`), scLists: lists };
+    const base = chain[0].baseComponent;
+    delete chain[0].baseComponent;
+    if (!base) return { tag: chain[0].tag, baseClasses: chain.map(d => `sc-${d.name}`), scLists: lists };
+    // styled(Component): that component rendered with these classes as its className, these children and props
+    const inner = children(node.children);
+    const html = lists.flatMap(l => {
+      const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, maxStates, eachCounts, sourceLines,
+        inject: { classes: [...chain.map(d => `sc-${d.name}`).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, prefix: `${chain[0].base}` } });
+      for (const u of rendered.unknowns) unknown(u.code, `${chain[0].base}: ${u.message}`);
+      for (const a of rendered.assumptions) assumptions.add(a);
+      return rendered.states.map(st => { const choices = merge(l.choices, st.choices); return choices && { html: st.html, choices }; }).filter(Boolean);
+    });
+    return { html };
   }
 
   function element(node) {
@@ -256,6 +273,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     if (scTag) {
       const r = styledElement(tag, node, scTag.def);
       if (!r) return [{ html: boundary('component', tag), choices: {} }];
+      if (r.html) return r.html;
       ({ tag, baseClasses, scLists } = r);
     } else if (styled.has(tag)) { baseClasses = [styled.get(tag).className]; tag = styled.get(tag).tag; }
     else if (tag === 'Fragment' || tag === 'React.Fragment') return children(node.children);
@@ -266,6 +284,10 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       if (a.type === 'JSXSpreadAttribute') {
         if (a.argument.type === 'CallExpression' && text(a.argument.callee) === 'stylex.props') {
           refLists = a.argument.arguments.reduce((acc, arg) => acc.flatMap(l => refVariants(arg).map(r => { const choices = merge(l.choices, r.choices); return choices && { refs: [...l.refs, ...r.refs], choices }; }).filter(Boolean)), refLists ?? [{ refs: [], choices: {} }]);
+        } else if (inject && a.argument.type === 'Identifier' && (a.argument.name === restName || a.argument.name === propsName)) {
+          // the wrapper's props passed on: its className joins this element's classes
+          classLists = classLists.map(l => ({ ...l, classes: [...l.classes, ...inject.classes] }));
+          assumptions.add(`props spread onto <${tag}> carry the styled wrapper's className; other props are not rendered as attributes`);
         } else unknown('U_REACT_SPREAD', `<${tag}> spreads ${text(a.argument)}; its attributes are not known`);
         continue;
       }
@@ -330,6 +352,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     // {children} / {props.children}: what the caller passes, assumed to be text but marked as the caller's content.
     const literalName = node.type === 'Identifier' ? node.name : node.type === 'MemberExpression' && !node.computed && propsName && node.object.type === 'Identifier' && node.object.name === propsName ? node.property.name : null;
     if (node.type === 'Identifier' && defaultProps.has(node.name)) return [{ html: escapeText(String(defaultProps.get(node.name))), choices: choose(`${node.name} given`, false) }, { html: '…', choices: choose(`${node.name} given`, true) }];
+    if (inject && literalName === 'children') return inject.children;
     if (literalName && literalProps.has(literalName)) return literalProps.get(literalName).map(value => ({ html: escapeText(String(value)), choices: choose(literalName, value) }));
     if (['Identifier', 'MemberExpression', 'TemplateLiteral', 'CallExpression', 'OptionalMemberExpression'].includes(node.type)) { assumptions.add('{expression} text is placeholder text; its size comes from the box contracts'); return [{ html: /^(?:props\.)?children$/.test(text(node)) ? `…${boundary('children')}` : '…', choices: {} }]; }
     unknown('U_REACT_EXPRESSION', `the JSX child {${text(node)}} is not modeled`);
@@ -367,6 +390,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // Destructured without renaming ({ status }) or read as props.status.
   const local = param?.type === 'ObjectPattern' ? new Set(param.properties.filter(p => p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'Identifier' && p.key.name === p.value.name).map(p => p.key.name)) : null;
   if (param?.type === 'Identifier') propsName = param.name;
+  if (param?.type === 'ObjectPattern') restName = param.properties.find(p => p.type === 'RestElement')?.argument.name ?? null;
   literalProps = literalUnionProps(propsMembers(param?.typeAnnotation?.typeAnnotation, ast.program.body), name => Boolean(propsName) || Boolean(local?.has(name)));
   // A prop with a literal default ({ label = 'Save changes' }): its default is a state of its own (the prop left out).
   for (const p of param?.type === 'ObjectPattern' ? param.properties : []) if (p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier' && p.value.left.name === p.key.name && ['StringLiteral', 'NumericLiteral'].includes(p.value.right.type) && !literalProps.has(p.key.name)) defaultProps.set(p.key.name, p.value.right.value);
@@ -376,11 +400,25 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   if (target.fn.body.type === 'BlockStatement' && target.fn.body.body.filter(s => s.type === 'ReturnStatement').length > 1) unknown('U_REACT_EARLY_RETURN', 'the component returns early; only its last return is modeled');
   // A comparison of a literal prop (status === 'Active', status !== 'Active') agrees with the prop's chosen value.
   const consistent = choices => literalChoicesAgree(choices, literalProps);
-  const states = body ? expression(body.type === 'ParenthesizedExpression' ? body.expression : body).filter(v => consistent(v.choices)).map(v => ({ html: v.html.trim(), choices: v.choices })) : [];
+  let states = body ? expression(body.type === 'ParenthesizedExpression' ? body.expression : body).filter(v => consistent(v.choices)).map(v => ({ html: v.html.trim(), choices: v.choices })) : [];
+  // Rendered by a styled wrapper: a condition on a prop the wrapper passed agrees with what it passed (a literal decides
+  // it; an expression is the wrapper's own condition); other conditions are this component's, named apart.
+  if (inject) states = states.flatMap(st => Object.entries(st.choices).reduce((acc, [key, held]) => acc.flatMap(a => {
+    const given = inject.props.get(key);
+    if (!given) { const choices = merge(a.choices, choose(`${inject.prefix}:${key}`, held)); return choices ? [{ ...a, choices }] : []; }
+    return given.flatMap(g => {
+      const sym = symbolInfo(g.v);
+      const own = sym ? choose(sym.key, typeof held === 'boolean' ? held !== sym.negate : held) : null;
+      if (!sym && (typeof held === 'boolean' ? Boolean(g.v) !== held : g.v !== held)) return [];
+      const choices = merge(merge(a.choices, g.choices) ?? {}, own ?? {});
+      return choices && merge(a.choices, g.choices) ? [{ ...a, choices }] : [];
+    });
+  }), [{ html: st.html, choices: {} }]));
   // Linaria's css is global: a class is unique to the component, but a nested selector's other compounds are not
   // pinned (E_SCOPE_REACHES); :global(…) reaches past the component (E_SCOPE_ESCAPE) and is unwrapped for the analysis.
   const linariaCSS = cssText.join('\n');
-  const lowered = scBlocks.size ? lowerNested([...scBlocks.values()]) : null;
+  // a component rendered by a styled wrapper leaves its blocks to the wrapper's expansion, which lowers them all once
+  const lowered = scBlocks.size && !inject ? lowerNested([...scBlocks.values()]) : null;
   const owned = [...linaria.values(), ...[...styled.values()].map(v => v.className)];
   const scope = owned.length ? { mode: 'global', owned, escapes: scopeEscapes(linariaCSS, ['global']) } : undefined;
   return { states, css: [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : [])].join('\n'), unknowns, assumptions: [...assumptions], ...(scope ? { scope } : {}), ...(lowered ? { styleMap: lowered.map, styleCSS: lowered.css } : {}) };

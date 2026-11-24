@@ -71,9 +71,15 @@ export function loadModule({ file, source, ast }, resolveModule, cache = new Map
   const names = styledImports(ast);
   const { defs, fragments } = collectStyled(ast, source, names);
   // exports: aliases (export default X, export { a as b }), re-exports (export { a as b } from 'm') and export * from 'm'
-  const consts = new Map(), imports = new Map(), aliases = new Map(), reexports = new Map(), stars = [];
+  const consts = new Map(), imports = new Map(), aliases = new Map(), reexports = new Map(), stars = [], comps = new Map();
   for (const stmt of ast.program.body) {
     if (stmt.type === 'ExportDefaultDeclaration' && stmt.declaration.type === 'Identifier') aliases.set('default', stmt.declaration.name);
+    // function components: function X / export default function X (found by expandReact under that name or 'default')
+    const fnDecl = stmt.type === 'ExportDefaultDeclaration' || stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
+    if (fnDecl?.type === 'FunctionDeclaration') {
+      if (fnDecl.id) comps.set(fnDecl.id.name, fnDecl.id.name);
+      if (stmt.type === 'ExportDefaultDeclaration') comps.set('default', 'default');
+    }
     if (stmt.type === 'ExportNamedDeclaration' && !stmt.declaration && stmt.exportKind !== 'type') {
       for (const sp of stmt.specifiers) {
         if (sp.type !== 'ExportSpecifier' || sp.exportKind === 'type') continue;
@@ -89,7 +95,7 @@ export function loadModule({ file, source, ast }, resolveModule, cache = new Map
     const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
     if (decl?.type === 'VariableDeclaration' && decl.kind === 'const') for (const d of decl.declarations) if (d.id.type === 'Identifier' && d.init && !defs.has(d.id.name) && !fragments.has(d.id.name)) consts.set(d.id.name, d.init);
   }
-  const mod = { file, source, ast, names, defs, fragments, consts, imports, aliases, reexports, stars };
+  const mod = { file, source, ast, names, defs, fragments, consts, imports, aliases, reexports, stars, comps };
   mod.load = specifier => {
     if (!resolveModule) return null;
     const r = resolveModule(specifier, file);
@@ -108,7 +114,15 @@ export function loadModule({ file, source, ast }, resolveModule, cache = new Map
 export function binding(mod, name, seen = new Set()) {
   if (mod.defs.has(name)) return { kind: 'def', def: mod.defs.get(name) };
   if (mod.fragments.has(name)) return { kind: 'fragment', fragment: mod.fragments.get(name) };
-  if (mod.consts.has(name)) return { kind: 'const', node: mod.consts.get(name), mod };
+  if (mod.comps.has(name)) return { kind: 'component', name: mod.comps.get(name), mod };
+  if (mod.consts.has(name)) {
+    // a const that is a function component (possibly in forwardRef / memo)
+    let n = mod.consts.get(name);
+    while (n && ['TSAsExpression', 'TSSatisfiesExpression', 'ParenthesizedExpression'].includes(n.type)) n = n.expression;
+    while (n?.type === 'CallExpression' && /^(?:React\.)?(?:forwardRef|memo)$/.test(mod.source.slice(n.callee.start, n.callee.end))) n = n.arguments[0];
+    if (n && ['ArrowFunctionExpression', 'FunctionExpression'].includes(n.type)) return { kind: 'component', name, mod };
+    return { kind: 'const', node: mod.consts.get(name), mod };
+  }
   const key = `${mod.file}\u0000${name}`;
   if (seen.has(key)) return null;
   seen.add(key);
@@ -359,4 +373,6 @@ function templateLines(quasi) {
 }
 
 export const symbolOf = (key, prop, negate = false) => ({ [SYM]: { key, prop, negate } });
+/** {key, negate} of a prop symbol, or null for a literal value. */
+export const symbolInfo = v => (isSym(v) ? { key: v[SYM].key, negate: v[SYM].negate } : null);
 export const styledClass = (name, text) => `sc-${name}-${hash(text)}`;

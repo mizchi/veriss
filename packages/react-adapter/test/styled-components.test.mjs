@@ -285,3 +285,32 @@ export default function C() { return <Card>x</Card>; }`;
   assert.match(css, /\{display:flex\}/);
   assert.match(css, /\{padding:4px\}/);
 });
+
+const baseDir = new URL('../fixtures/styled-base/', import.meta.url);
+const baseResolver = specifier => {
+  if (!specifier.startsWith('./')) return null;
+  for (const ext of ['.js', '.jsx']) { try { const file = `${specifier.slice(2)}${ext}`; return {file, source: readFileSync(new URL(file, baseDir), 'utf8')}; } catch {} }
+  return null;
+};
+
+test('styled(Component): the component is expanded with the generated classes and the props passed to it', () => {
+  const {states, css, unknowns} = expandReact(readFileSync(new URL('Panel.jsx', baseDir), 'utf8'), {file: 'Panel.jsx', resolveModule: baseResolver});
+  assert.deepEqual(unknowns, []);
+  assert.equal(states.length, 2); // off: the outer condition decides the inner branch
+  const off = states.find(s => s.choices.off === true), on = states.find(s => s.choices.off === false);
+  assert.match(off.html, /^<section><p class="sc-Wrap sc-Wrap-\w+ sc-Danger sc-Danger-\w+" aria-disabled="true">!<\/p><button class="sc-Primary sc-Primary-\w+" type="button">Go<\/button><\/section>$/);
+  assert.match(on.html, /<p class="sc-Wrap sc-Wrap-\w+ sc-Danger sc-Danger-\w+">!<\/p>/);
+  assert.match(css, /\{color:red\}/);
+  assert.match(css, /\{margin:0;height:20px\}/);
+  assert.match(css, /\{display:block;height:32px\}/);
+});
+
+test('styled(Component): every state has the structure styled-components renders', async () => {
+  const {renderStyledFile} = await import('./ssr.mjs');
+  const shape = html => html.replace(/ class="[^"]*"/g, '').replace(/>\s+</g, '><').trim();
+  const {states} = expandReact(readFileSync(new URL('Panel.jsx', baseDir), 'utf8'), {file: 'Panel.jsx', resolveModule: baseResolver});
+  for (const s of states) {
+    const {html} = await renderStyledFile(new URL('Panel.jsx', baseDir).pathname, s.choices);
+    assert.equal(shape(html), shape(s.html), JSON.stringify(s.choices));
+  }
+});

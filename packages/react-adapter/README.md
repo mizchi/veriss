@@ -30,8 +30,12 @@ union, and Unknown when its value is written into a declaration. `theme` comes f
 `css``` fragments and `${Other}` references are inlined; nested rules are lowered with their template lines, so
 `selectors: true` reports `W_CSS_SELECTOR_RELATION` at the line of the nested selector with the edge it assumes
 (`nesting: {path, relation}`). A declaration with an Unknown value is left out and reported (`U_STYLED_THEME`,
-`U_STYLED_VALUE`, `U_STYLED_INTERPOLATION`); `styled(Component)` of a non-styled component, `as`, spreads and `.attrs`
-are Unknown.
+`U_STYLED_VALUE`, `U_STYLED_INTERPOLATION`). `styled(Component)` of a function component (in this module or a resolved
+one, forwardRef/memo included) renders that component with the generated classes as its `className` (taken through
+`className`, `props.className` or a rest spread), the wrapper's children, and the props it was given: a condition on a
+prop given as a literal is decided by it, one given as an expression is the wrapper's condition, and the component's
+other conditions are named `Component:key`. `styled(Component)` of a package component, `as`, spreads on a styled
+element and `.attrs` are Unknown.
 
 Styled components, `css``` fragments and constants imported from other modules (`import * as Styled from './styled'`,
 `<Styled.Container>`, `${trimVertical}` from a typography module) are read through `resolveModule(specifier,
