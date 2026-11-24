@@ -36,6 +36,9 @@ export function resolveTypeName(mod, name, seen = new Set()) {
   return null;
 }
 
+// the union of member types from several declarations (each read in its own module)
+const MERGED = 'VerissMergedTypes';
+
 // a type reference to a plain name (Foo, not ns.Foo) resolved in `mod`
 const reference = (type, mod) => type?.type === 'TSTypeReference' && type.typeName.type === 'Identifier' ? resolveTypeName(mod, type.typeName.name) : null;
 
@@ -45,6 +48,19 @@ export function typeMembers(type, mod, depth = 0) {
   if (type.type === 'TSParenthesizedType') return typeMembers(type.typeAnnotation, mod, depth + 1);
   if (type.type === 'TSTypeLiteral') return type.members.map(member => ({ member, mod }));
   if (type.type === 'TSIntersectionType') return type.types.flatMap(t => typeMembers(t, mod, depth + 1));
+  // A union of object types (props as a discriminated union): one member per name, whose type is the union of the
+  // branches' types and which is optional when a branch lacks it or has it optional. The branches are merged
+  // independently (which values go together is not kept), so this may admit combinations no branch allows.
+  if (type.type === 'TSUnionType') {
+    const branches = type.types.map(t => typeMembers(t, mod, depth + 1).filter(({ member: m }) => m.type === 'TSPropertySignature' && m.key?.type === 'Identifier'));
+    const names = [...new Set(branches.flat().map(({ member }) => member.key.name))];
+    return names.map(name => {
+      const parts = branches.flat().filter(({ member }) => member.key.name === name);
+      const optional = parts.some(({ member }) => member.optional) || branches.some(b => !b.some(({ member }) => member.key.name === name));
+      const merged = { type: MERGED, parts: parts.map(({ member, mod }) => ({ type: member.typeAnnotation?.typeAnnotation, mod })) };
+      return { member: { type: 'TSPropertySignature', key: parts[0].member.key, optional, typeAnnotation: { typeAnnotation: merged } }, mod };
+    });
+  }
   if (type.type === 'TSExpressionWithTypeArguments' || type.type === 'TSInterfaceHeritage') {
     const name = type.expression?.type === 'Identifier' ? type.expression.name : null;
     return name ? declarationMembers(resolveTypeName(mod, name), depth) : [];
@@ -64,6 +80,11 @@ export function literalValues(type, mod, depth = 0) {
   if (!type || depth > 16) return null;
   if (type.type === 'TSParenthesizedType') return literalValues(type.typeAnnotation, mod, depth + 1);
   if (literal(type)) return literal(type);
+  if (type.type === 'TSNeverKeyword') return [];
+  if (type.type === MERGED) {
+    const parts = type.parts.map(p => p.type ? literalValues(p.type, p.mod, depth + 1) : null);
+    return parts.every(Boolean) ? [...new Set(parts.flat())] : null;
+  }
   if (type.type === 'TSUnionType') {
     const parts = type.types.map(t => literalValues(t, mod, depth + 1));
     return parts.every(Boolean) ? [...new Set(parts.flat())] : null;
@@ -75,7 +96,8 @@ export function literalValues(type, mod, depth = 0) {
 /** Whether values of the type are text (strings, numbers, literals, unions of them with undefined / null). */
 export function isTextType(type, mod, depth = 0) {
   if (!type || depth > 16) return false;
-  if (['TSStringKeyword', 'TSNumberKeyword', 'TSLiteralType'].includes(type.type)) return true;
+  if (['TSStringKeyword', 'TSNumberKeyword', 'TSLiteralType', 'TSNeverKeyword'].includes(type.type)) return true;
+  if (type.type === MERGED) return type.parts.every(p => isTextType(p.type, p.mod, depth + 1));
   if (type.type === 'TSParenthesizedType') return isTextType(type.typeAnnotation, mod, depth + 1);
   if (type.type === 'TSUnionType') return type.types.every(t => ['TSUndefinedKeyword', 'TSNullKeyword'].includes(t.type) || isTextType(t, mod, depth + 1));
   const found = reference(type, mod);

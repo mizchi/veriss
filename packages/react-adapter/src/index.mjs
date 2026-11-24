@@ -414,7 +414,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     if (!(propsName || local?.has(name) || defaults.has(name))) continue;
     if (m.optional && !defaults.has(name)) continue;
     const values = literalValues(m.typeAnnotation?.typeAnnotation, mod);
-    if (values && (!m.optional || values.includes(defaults.get(name)))) literalProps.set(name, values);
+    if (values?.length && (!m.optional || values.includes(defaults.get(name)))) literalProps.set(name, values);
   }
   // props typed as strings or numbers (literals, unions of them, optional or not) are text, never the caller's elements
   textProps = new Set(members.filter(({ member: m, mod }) => isTextType(m.typeAnnotation?.typeAnnotation, mod)).map(({ member: m }) => m.key.name));

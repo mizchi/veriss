@@ -515,3 +515,18 @@ export default function C({ pos }: P) { return <Box $pos={pos} />; }`;
   assert.equal(rule('top-left'), 'top:0;left:0');
   assert.equal(rule('bottom-left'), 'top:auto;left:0');
 });
+
+test('props types: a union of object types merges its members (never adds no value; a member some branch lacks is optional)', () => {
+  const source = `import styled from 'styled-components';
+type Base = { label: string };
+type Overlay = Base & { layout?: 'overlay'; position?: 'top' | 'bottom' };
+type Inline = Base & { layout: 'inline'; position?: never };
+type Props = Overlay | Inline;
+const Box = styled.div\`
+  top: \${({ $position }) => ($position === 'top' ? '0' : 'auto')};
+\`;
+export default function C({ position = 'top', layout = 'overlay', label }: Props) { return <Box $position={position}>{label}</Box>; }`;
+  const {states, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.deepEqual([...new Set(states.map(s => s.choices.position))].sort(), ['bottom', 'top']);
+});
