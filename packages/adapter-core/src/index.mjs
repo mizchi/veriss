@@ -377,3 +377,4 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   return out;
 }
 export { lint, formatText, recommended } from './lint.mjs';
+export { lowerNested, relocateSelectorWarnings } from './nested.mjs';

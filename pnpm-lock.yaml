@@ -184,6 +184,9 @@ importers:
       parse5:
         specifier: 8.0.1
         version: 8.0.1
+      postcss:
+        specifier: 8.5.32
+        version: 8.5.32
     devDependencies:
       '@mizchi/veriss':
         specifier: workspace:*

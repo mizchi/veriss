@@ -10,7 +10,8 @@
     }
   },
   "dependencies": {
-    "parse5": "8.0.1"
+    "parse5": "8.0.1",
+    "postcss": "8.5.32"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
