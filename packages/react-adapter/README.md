@@ -42,7 +42,9 @@ a dynamic value. Declared in `options.dynamicValues` by `'Component.property'` (
 'auto']}`), each value is a state (choice `dynamic:Container.width`). Undeclared, it is kept as the placeholder
 `-veriss-dynamic(id)`, which the core ranks in the cascade like any declaration: where a higher-ranked declaration
 (importance, layer, specificity, order) beats it, it does not matter; where it wins, `E_LAYOUT_DYNAMIC_VALUE` names
-the template line and the key to declare. Other Unknown values (a missing theme key, a call or statement the
+the template line and the key to declare. A key may be a pattern (`*` matches any characters: `'*.width'`); an
+exact key wins over patterns, and patterns are tried in order. The value `'ignore'` leaves that declaration out
+unchecked, by choice: it is listed in the assumptions, not reported. Other Unknown values (a missing theme key, a call or statement the
 evaluator does not follow) leave the declaration out and are reported (`U_STYLED_THEME`, `U_STYLED_VALUE`,
 `U_STYLED_INTERPOLATION`).
 

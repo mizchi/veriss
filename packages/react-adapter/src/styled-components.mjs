@@ -118,6 +118,19 @@ export function loadModule({ file, source, ast }, resolveModule, cache = new Map
  * What a name means in a module: a styled component, a css fragment, a const, an imported module namespace, an import
  * that could not be read ({missing}), or null (not something styled evaluation knows).
  */
+// The declaration of a dynamic value in options.dynamicValues: the exact key ('Component.property'), else the first
+// pattern (* matches any characters) that matches it; an array of values, 'ignore', or undefined.
+export function declaredValues(dynamicValues, key) {
+  if (!dynamicValues) return undefined;
+  if (Object.hasOwn(dynamicValues, key)) return dynamicValues[key];
+  for (const [pattern, value] of Object.entries(dynamicValues)) {
+    if (!pattern.includes('*')) continue;
+    const re = new RegExp(`^${pattern.split('*').map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
+    if (re.test(key)) return value;
+  }
+  return undefined;
+}
+
 // the names a binding pattern declares
 function patternNames(p) {
   if (!p) return [];
@@ -504,10 +517,12 @@ export function evaluateStyled(def, props, ctx) {
       if (!mark && !(n.type === 'decl' && n.value.trim() === '')) return;
       const [a, b] = [n.source.start.offset - 2, n.source.end.offset - 2 + 1];
       if (mark && marks.get(mark)?.dynamic && n.type === 'decl' && !/\u0001/.test(n.prop) && !n.prop.startsWith('--')) {
-        const property = n.prop.toLowerCase(), key = `${def.name}.${property}`, declared = ctx.dynamicValues?.[key];
+        const property = n.prop.toLowerCase(), key = `${def.name}.${property}`, declared = declaredValues(ctx.dynamicValues, key);
         // only the value is replaced (the declaration's ;, !important and line breaks stay where they are)
         const va = a + n.prop.length + (n.raws.between ?? ':').length, vb = va + (n.raws.value?.raw ?? n.value).length;
         const newlines = '\n'.repeat((text.slice(va, vb).match(/\n/g) ?? []).length);
+        // 'ignore': not checked, by the author's choice (an assumption, not an Unknown): the declaration is left out
+        if (declared === 'ignore') { ctx.ignoredDynamics?.add(key); edits.push([a, b, blank(a, b)]); return; }
         if (declared?.length) { edits.push([va, vb, declared.map(value => ({ text: `${value}${newlines}`, choices: choose(`dynamic:${key}`, value) }))]); return; }
         if (ctx.dynamics) {
           const u = marks.get(mark), id = ctx.dynamics.length;

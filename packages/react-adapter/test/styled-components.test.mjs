@@ -778,3 +778,14 @@ export default function C({ label, ...rest }) { return <Box {...rest}>{label}</B
   assert.equal(dynamics.length, (css.match(/-veriss-dynamic\(/g) ?? []).length);
   for (const d of dynamics) assert.ok(css.includes(`-veriss-dynamic(${d.id})`));
 });
+
+test('dynamic values: keys may be patterns (*), and a value of "ignore" leaves the declaration out as an assumption', () => {
+  const pattern = expandReact(dynamicSource, {dynamicValues: {'B*.width': ['10px']}});
+  assert.deepEqual(pattern.states.map(s => s.choices['dynamic:Box.width']), ['10px']);
+  const ignored = analyzeReact(dynamicSource, {pageCSS, viewport, dynamicValues: {'*.width': 'ignore'}});
+  assert.ok(!ignored.findings.some(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE'));
+  assert.ok(ignored.coverage.assumptions.some(a => /ignored.*Box\.width/.test(a)), JSON.stringify(ignored.coverage.assumptions));
+  // an exact key wins over a pattern
+  const both = expandReact(dynamicSource, {dynamicValues: {'*.width': 'ignore', 'Box.width': ['5px']}});
+  assert.match(both.css, /width:5px/);
+});
