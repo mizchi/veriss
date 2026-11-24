@@ -714,6 +714,9 @@ function expand(property, value) {
   // F104: list-style-image is paint, kept only so the engine can tell one on a box with no marker.
   if (property === 'list-style-image') return [[property, String(value).trim()]];
   if (decoration.test(property)) return [];
+  // border-image: none (or its source none, or a CSS-wide keyword) is the initial value: no image, nothing changes (a
+  // reset on hr). Dropped as a no-op, it overrides nothing: an earlier image stays the cascaded, Unknown declaration.
+  if (/^border-image(?:-source)?$/.test(property) && (wide.has(value) || String(value).trim().toLowerCase() === 'none')) return [];
   throw new Error(`Unsupported layout property: ${property}`);
 }
 

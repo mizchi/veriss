@@ -571,6 +571,8 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   `.btn:has(> span:only-child > svg)` で止まる)。`>` と子孫の結合子で下へたどる引数を受け、1 段ずつ前の段の子か子孫で照合する。
   詳細度は引数全体のもの。引数の中の状態と、2 つ目以降の `+` / `~` は Unknown のまま。3 ブラウザーで、どのルールが当たるかが一致した
   (`e2e/layout-flex.spec.mjs`)。
+- [x] **I17. `border-image: none`**: 初期値のリセット(hr に当てるもの)も Unknown にしていた。`none` と CSS 全体のキーワードは何も変えない
+  宣言として捨てる。捨てるので前の宣言を上書きせず、前に画像があればそれが cascade の結果のまま Unknown になる(安全側)。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

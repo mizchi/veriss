@@ -61,7 +61,7 @@ veriss が判定できる形で書くための規約である。エンジンが�
 
 - `border` / `border-top` などの一括指定は、width・style・color をどの順でも書いてよい(省略も可)。
 - 角丸は `border-radius` の一括指定で書く。角ごとの longhand(`border-top-left-radius` など)は、当たる箱が Unknown になる。
-- `border-image` は使わない。
+- `border-image` は使わない(`border-image: none` のリセットはよい)。
 - 枠のない箱には `border: none` か `border: 0` と書く。style を書かずに幅だけ書くと、border は描かれず、`W_CSS_BORDER_NO_STYLE` になる。
 
 ## 5. 状態(`:hover` / `:focus` / `:active` / `:checked` …)
