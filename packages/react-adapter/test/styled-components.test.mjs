@@ -75,7 +75,8 @@ export default function R() { return <Row><div><Label>x</Label></div></Row>; }`;
 test('styled-components: every state has the structure styled-components itself renders (transient props not forwarded)', async () => {
   const {renderStyled} = await import('./ssr.mjs');
   const source = fixture('StyledCard.jsx');
-  const shape = html => html.replace(/ class="[^"]*"/g, '').replace(/>\s+</g, '><').trim();
+  // structure without class values and without the adapter's boundary annotations (comments, not DOM)
+  const shape = html => html.replace(/ class="[^"]*"/g, '').replace(/<!--isle-boundary:[^>]*-->/g, '').replace(/>\s+</g, '><').trim();
   const {states} = expandReact(source, {theme});
   for (const s of states) {
     const {html} = await renderStyled(source, {...s.choices, title: '…'}, theme);
@@ -326,4 +327,15 @@ export default function C({ on }) { return on ? <A $on={on} /> : <i />; }`;
   const used = new Set(states.flatMap(s => [...s.html.matchAll(/class="([^"]+)"/g)].flatMap(m => m[1].split(' '))));
   for (const [, cls] of css.matchAll(/\.(sc-[\w-]+)\{/g)) assert.ok(used.has(cls), `${cls} is in the CSS but in no state`);
   assert.doesNotMatch(css, /color:blue/);
+});
+
+test('styled-components: `as` is not written to the DOM', () => {
+  const source = `import styled from 'styled-components';
+const A = styled.button\`
+  color: red;
+\`;
+export default function C({ tag }) { return <A as={tag}>x</A>; }`;
+  const {states, unknowns} = expandReact(source);
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_AS'));
+  assert.doesNotMatch(states[0].html, / as=/);
 });

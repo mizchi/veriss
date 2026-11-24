@@ -156,3 +156,9 @@ test('components wrapped in forwardRef / memo, and a default export written with
     assert.equal(states[0].html, '<div class="a">x</div>', source);
   }
 });
+
+test('a JSX child expression other than literal text is the caller\'s content: marked as a children boundary', () => {
+  const source = `export default function B({ icon, items }) { return <button className="b">{icon}{items.map(i => i)}<span>x</span></button>; }`;
+  const {states} = expandReact(source);
+  assert.match(states[0].html, /^<button class="b">…<!--isle-boundary:children-->/);
+});

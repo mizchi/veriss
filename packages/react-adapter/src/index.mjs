@@ -85,7 +85,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const empty = [{ html: '', choices: {} }];
   // Props typed as a union of string or number literals (status: 'Active' | 'Pending review'): their text is one of
   // those values, a state each (the choice is the prop's value).
-  let literalProps = new Map(), propsName = null; const defaultProps = new Map();
+  let literalProps = new Map(), propsName = null, textProps = new Set(); const defaultProps = new Map();
   const text = node => source.slice(node.start, node.end);
   const choice = (node, value) => { const { key, negate } = conditionKey(text(node)); return choose(key, value !== negate); };
 
@@ -293,7 +293,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       }
       const key = a.name.type === 'JSXNamespacedName' ? `${a.name.namespace.name}:${a.name.name.name}` : a.name.name;
       // a styled component's transient props ($x) style it and never reach the DOM
-      if (scLists && key.startsWith('$')) continue;
+      if (scLists && (key.startsWith('$') || key === 'as' || key === 'forwardedAs')) continue;
       if (/^on[A-Z]/.test(key) || ['key', 'ref', 'children', 'dangerouslySetInnerHTML'].includes(key)) { if (key === 'dangerouslySetInnerHTML') unknown('U_REACT_HTML', 'dangerouslySetInnerHTML inserts markup that is not known statically'); continue; }
       const value = a.value?.type === 'JSXExpressionContainer' ? a.value.expression : a.value;
       if (key === 'className') { const variants = classVariants(value); classLists = classLists.flatMap(l => variants.map(v => { const choices = merge(l.choices, v.choices); return choices && { classes: [...l.classes, ...v.classes], choices }; })).filter(Boolean); continue; }
@@ -354,7 +354,11 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     if (node.type === 'Identifier' && defaultProps.has(node.name)) return [{ html: escapeText(String(defaultProps.get(node.name))), choices: choose(`${node.name} given`, false) }, { html: '…', choices: choose(`${node.name} given`, true) }];
     if (inject && literalName === 'children') return inject.children;
     if (literalName && literalProps.has(literalName)) return literalProps.get(literalName).map(value => ({ html: escapeText(String(value)), choices: choose(literalName, value) }));
-    if (['Identifier', 'MemberExpression', 'TemplateLiteral', 'CallExpression', 'OptionalMemberExpression'].includes(node.type)) { assumptions.add('{expression} text is placeholder text; its size comes from the box contracts'); return [{ html: /^(?:props\.)?children$/.test(text(node)) ? `…${boundary('children')}` : '…', choices: {} }]; }
+    // A value from outside (a prop, a call) may be elements the caller passes (an icon, a list): placeholder text for the
+    // layout, marked as the caller's content so selectors that may style it are not judged on what is not seen.
+    if (literalName && textProps.has(literalName)) { assumptions.add('{expression} text is placeholder text; its size comes from the box contracts'); return [{ html: '…', choices: {} }]; }
+    if (['Identifier', 'MemberExpression', 'CallExpression', 'OptionalMemberExpression', 'OptionalCallExpression'].includes(node.type)) { assumptions.add('{expression} text is placeholder text; its size comes from the box contracts'); return [{ html: `…${boundary('children')}`, choices: {} }]; }
+    if (node.type === 'TemplateLiteral') { assumptions.add('{expression} text is placeholder text; its size comes from the box contracts'); return [{ html: '…', choices: {} }]; }
     unknown('U_REACT_EXPRESSION', `the JSX child {${text(node)}} is not modeled`);
     return empty;
   }
@@ -391,7 +395,11 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const local = param?.type === 'ObjectPattern' ? new Set(param.properties.filter(p => p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'Identifier' && p.key.name === p.value.name).map(p => p.key.name)) : null;
   if (param?.type === 'Identifier') propsName = param.name;
   if (param?.type === 'ObjectPattern') restName = param.properties.find(p => p.type === 'RestElement')?.argument.name ?? null;
-  literalProps = literalUnionProps(propsMembers(param?.typeAnnotation?.typeAnnotation, ast.program.body), name => Boolean(propsName) || Boolean(local?.has(name)));
+  const members = propsMembers(param?.typeAnnotation?.typeAnnotation, ast.program.body);
+  literalProps = literalUnionProps(members, name => Boolean(propsName) || Boolean(local?.has(name)));
+  // props typed as strings or numbers (literals, unions of them, optional or not) are text, never the caller's elements
+  const textType = t => ['TSStringKeyword', 'TSNumberKeyword', 'TSLiteralType'].includes(t?.type) || (t?.type === 'TSUnionType' && t.types.every(x => textType(x) || x.type === 'TSUndefinedKeyword' || x.type === 'TSNullKeyword'));
+  textProps = new Set((members ?? []).filter(m => m.type === 'TSPropertySignature' && m.key?.type === 'Identifier' && textType(m.typeAnnotation?.typeAnnotation)).map(m => m.key.name));
   // A prop with a literal default ({ label = 'Save changes' }): its default is a state of its own (the prop left out).
   for (const p of param?.type === 'ObjectPattern' ? param.properties : []) if (p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier' && p.value.left.name === p.key.name && ['StringLiteral', 'NumericLiteral'].includes(p.value.right.type) && !literalProps.has(p.key.name)) defaultProps.set(p.key.name, p.value.right.value);
   if (defaultProps.size) assumptions.add(`props with a literal default (${[...defaultProps.keys()].join(', ')}) are checked with that default and with placeholder text for any other value`);
