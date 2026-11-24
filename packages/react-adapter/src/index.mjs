@@ -79,7 +79,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // styled-components (imported from 'styled-components'): evaluated per element from the props it passes.
   // Imported styled modules are read through options.resolveModule(specifier, importerFile).
   const sc = loadModule({ file, source, ast }, resolveModule), scBlocks = inject?.blocks ?? new Map();
-  let restName = null;
+  let restName = null, destructuredNames = new Set();
   const unknowns = [], assumptions = new Set();
   const unknown = (code, message) => { if (!unknowns.some(u => u.message === message)) unknowns.push({ code, message }); };
   const limit = { maxStates, onLimit: max => unknown('U_REACT_STATES', `more than ${max} component states; raise maxStates or split the component`) };
@@ -230,9 +230,16 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       if (b?.kind !== 'def') { unknown('U_STYLED_BASE', `${d.name} extends ${d.base}, which is not a styled component${b?.kind === 'missing' ? ` (${b.message})` : ''}; its markup is analysed with that component`); return null; }
       d = b.def;
     }
-    const props = new Map();
+    let props = new Map(), forwarded = null;
     for (const a of node.openingElement.attributes) {
-      if (a.type === 'JSXSpreadAttribute') { unknown('U_STYLED_PROPS', `<${name}> spreads ${text(a.argument)}; the props its styles read are not known`); continue; }
+      if (a.type === 'JSXSpreadAttribute') {
+        // the component's own props spread on: {...rest} carries what was not destructured by name, {...props} all
+        const arg = a.argument.type === 'Identifier' ? a.argument.name : null;
+        if (arg && arg === restName) forwarded = destructuredNames;
+        else if (arg && arg === propsName) forwarded = new Set();
+        else unknown('U_STYLED_PROPS', `<${name}> spreads ${text(a.argument)}; the props its styles read are not known`);
+        continue;
+      }
       const key = a.name.name, value = a.value?.type === 'JSXExpressionContainer' ? a.value.expression : a.value;
       if (key === 'as' || key === 'forwardedAs') { unknown('U_STYLED_AS', `<${name} ${key}> renders another element`); continue; }
       if (value === null || value === undefined) props.set(key, [{ v: true, choices: {} }]);
@@ -246,9 +253,21 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         else { const { key: cond, negate } = conditionKey(text(value)); props.set(key, [{ v: symbolOf(cond, key, negate), choices: {} }]); }
       }
     }
+    // a key read but not given as an attribute comes through the spread: the component's prop of that name
+    const evaluated = props => chain.map(d => evaluateStyled(d, props, { theme, literalProps }));
+    let perDef = null;
+    if (forwarded) {
+      const given = props, excluded = forwarded, through = new Map(given);
+      through.get = key => given.has(key) ? given.get(key) : excluded.has(key) || key === 'children' ? undefined : [{ v: symbolOf(key, key), choices: {} }];
+      const spread = evaluated(through);
+      // too many variants (many props read only for their values): the spread's props are read as absent
+      if (spread.reduce((n, vs) => n * vs.length, 1) > maxStates) unknown('U_STYLED_PROPS', `<${name}>: the props its spread carries make more than ${maxStates} variants of its styles; they are read as absent`);
+      else { perDef = spread; props = through; }
+    }
+    perDef ??= evaluated(props);
     let lists = [{ classes: [], choices: {} }];
-    for (const d of chain) {
-      const variants = evaluateStyled(d, props, { theme, literalProps });
+    for (const [i, d] of chain.entries()) {
+      const variants = perDef[i];
       for (const v of variants) for (const u of v.unknowns) unknown(u.code, u.message);
       lists = lists.flatMap(l => variants.map(v => {
         const choices = merge(l.choices, v.choices); if (!choices) return null;
@@ -409,6 +428,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const defaults = new Map((param?.type === 'ObjectPattern' ? param.properties : []).filter(p => p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier' && p.value.left.name === p.key.name && ['StringLiteral', 'NumericLiteral'].includes(p.value.right.type)).map(p => [p.key.name, p.value.right.value]));
   if (param?.type === 'Identifier') propsName = param.name;
   if (param?.type === 'ObjectPattern') restName = param.properties.find(p => p.type === 'RestElement')?.argument.name ?? null;
+  destructuredNames = new Set(param?.type === 'ObjectPattern' ? param.properties.filter(p => p.type === 'ObjectProperty').map(p => p.key.name ?? p.key.value) : []);
   // Its members: from the annotation on the parameter or the wrapper, through aliases, interfaces (with extends) and
   // intersections, in this module or the modules it imports types from.
   const members = typeMembers(param?.typeAnnotation?.typeAnnotation ?? target.propsType, sc).filter(({ member: m }) => m.type === 'TSPropertySignature' && m.key?.type === 'Identifier');
@@ -417,7 +437,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   literalProps = new Map();
   for (const { member: m, mod } of members) {
     const name = m.key.name;
-    if (!(propsName || local?.has(name) || defaults.has(name))) continue;
+    if (!(propsName || local?.has(name) || defaults.has(name) || (restName && !destructuredNames.has(name)))) continue;
     if (m.optional && !defaults.has(name)) continue;
     const values = literalValues(m.typeAnnotation?.typeAnnotation, mod);
     if (values?.length && (!m.optional || values.includes(defaults.get(name)))) literalProps.set(name, values);

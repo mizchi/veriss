@@ -663,3 +663,51 @@ export default function C({ on }) { return <Box $on={on} />; }`;
   const {unknowns} = expandReact(source);
   assert.ok(unknowns.some(u => /the statement c = 'red'/.test(u.message)), JSON.stringify(unknowns));
 });
+
+test('styled props: the component\'s rest spread carries every prop not destructured by name; {...props} carries all', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  padding: \${({ size }) => (size === 'small' ? '4px' : '8px')};
+  color: \${({ tone }) => tone ?? 'black'};
+  border: \${({ $outlined }) => ($outlined ? '1px solid' : 'none')};
+\`;
+type P = { size: 'small' | 'large'; tone: string; outlined?: boolean };
+export default function C({ tone, outlined, ...rest }: P) { return <Box {...rest} $outlined={outlined} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  // tone was destructured, so it is not in rest: undefined, the 'black' fallback. The DOM attributes rest carries
+  // are still unknown (U_REACT_SPREAD); what the styles read is not.
+  assert.deepEqual(unknowns.map(u => u.code), ['U_REACT_SPREAD']);
+  const rule = (size, outlined) => { const [, cls] = classOf(states.find(s => s.choices.size === size && s.choices.outlined === outlined).html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.equal(rule('small', true), 'padding:4px;color:black;border:1px solid');
+  assert.equal(rule('large', false), 'padding:8px;color:black;border:none');
+
+  const all = `import styled from 'styled-components';
+const Box = styled.div\`
+  padding: \${({ size }) => (size === 'small' ? '4px' : '8px')};
+\`;
+type P = { size: 'small' | 'large' };
+export default function C(props: P) { return <Box {...props} />; }`;
+  const r = expandReact(all);
+  assert.deepEqual(r.unknowns.map(u => u.code), ['U_REACT_SPREAD']);
+  assert.equal(r.states.length, 2);
+});
+
+test('styled props: a spread of anything else is still Unknown', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`padding: \${({ size }) => (size === 'small' ? '4px' : '8px')};\`;
+export default function C({ extra }) { return <Box {...extra} />; }`;
+  assert.ok(expandReact(source).unknowns.some(u => u.code === 'U_STYLED_PROPS'));
+});
+
+test('styled props: when the props a spread carries make more variants than maxStates, they are read as absent and reported', () => {
+  const keys = Array.from({length: 8}, (_, i) => `k${i}`);
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  ${keys.map(k => `\${({ ${k} }) => (${k} ? 'outline: 1px solid;' : '')}`).join('\n  ')}
+  display: block;
+\`;
+export default function C({ label, ...rest }) { return <Box {...rest}>{label}</Box>; }`;
+  const {states, unknowns} = expandReact(source, {maxStates: 16});
+  assert.equal(states.length, 1);
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_PROPS' && /more than 16/.test(u.message)), JSON.stringify(unknowns));
+});
