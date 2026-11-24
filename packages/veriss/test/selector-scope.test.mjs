@@ -29,3 +29,22 @@ test('scope: unscoped CSS-in-JS may not style what a child component, slot or ch
   // Scoped styles (Svelte, Vue) hash the styled element: no reach.
   assert.deepEqual(run(html, css, {mode: 'scoped'}), []);
 });
+
+test('scope: in CSS that applies to the whole page, a selector with no class the component owns matches elements anywhere (E_SCOPE_GLOBAL)', () => {
+  const html = `<ul class="list"><li class="i">a</li></ul>`;
+  // A type, a class the page may use too, the universal selector, and a relation with no owned class.
+  for (const sel of ['li', '.list', '*', '.list > li', 'ul li'])
+    assert.deepEqual(run(html, `.list{${g};padding:0}${sel}{margin:0}`, {mode: 'global', owned: ['x']}).filter(([, s]) => s === sel), [['E_SCOPE_GLOBAL', sel]], sel);
+  // Any compound with an owned class keeps the selector inside the component: a subject or an ancestor.
+  assert.deepEqual(run(html, `.list{${g};padding:0}.i{margin:0}.list > .i{margin:0}`, {mode: 'global', owned: ['list', 'i']}), []);
+  assert.deepEqual(run(html, `.list{${g};padding:0}.list li{margin:0}`, {mode: 'global', owned: ['list']}), []);
+  // Scoped styles (Svelte, Vue scoped) hash the styled element: never global.
+  assert.deepEqual(run(html, `.list{${g};padding:0}li{margin:0}`, {mode: 'scoped'}), []);
+});
+
+test('scope: sheets of different modes in one component are judged each by its own (a scoped and a plain <style>)', () => {
+  const html = `<ul class="list"><li class="i">a</li></ul>`;
+  // Component CSS line 1 is the scoped sheet, line 2 the plain one.
+  const css = `.list{${g};padding:0} li{margin:0}\nli{padding:0}`;
+  assert.deepEqual(run(html, css, {mode: 'global', owned: [], sheets: [{mode: 'scoped', from: 2, to: 2}, {mode: 'global', from: 3, to: 3}]}), [['E_SCOPE_GLOBAL', 'li']]);
+});

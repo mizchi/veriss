@@ -240,7 +240,7 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   // Component scope: the component's own CSS starts on its own line after the page CSS, so the scope check can tell
   // the component's selectors from the page's.
   const allCSS = scope ? `${pageCSS}\n${css}` : pageCSS + css;
-  const scopeOption = scope ? { mode: scope.mode, ...(scope.ancestors ? { ancestors: scope.ancestors } : {}), ...(scope.owned ? { owned: scope.owned } : {}), firstLine: pageCSS.split('\n').length + 1 } : null;
+  const scopeOption = scope ? { mode: scope.mode, ...(scope.ancestors ? { ancestors: scope.ancestors } : {}), ...(scope.owned ? { owned: scope.owned } : {}), firstLine: pageCSS.split('\n').length + 1, ...(scope.sheets ? { sheets: scope.sheets.map(s => ({ mode: s.mode, from: s.from + pageCSS.split('\n').length, to: s.to + pageCSS.split('\n').length })) } : {}) } : null;
   const results = states.map(state => {
     let html = state.html, boxes = options.boxes;
     if (wrapsSafely(css)) html = wrapTextRuns(html).html;
@@ -325,7 +325,7 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
       grouped.set(`${w.code}\u0000${w.selector}`, { code: w.code, box: w.selector, severity: 'error', message: w.message, rule: 'component-scope', states: held, html, selector: w.selector });
     }
     for (const e of scope.escapes ?? []) grouped.set(`E_SCOPE_ESCAPE\u0000${e.selector}`, { code: 'E_SCOPE_ESCAPE', box: e.selector, severity: 'error', rule: 'component-scope', selector: e.selector, states: results.map(r => r.choices),
-      message: `${e.selector} uses ${e.kind}, which reaches outside the component's own elements (the page, a parent or a child component): style those elements in the component that renders them, and pass context in as a custom property or a prop` });
+      message: e.message ?? `${e.selector} uses ${e.kind}, which reaches outside the component's own elements (the page, a parent or a child component): style those elements in the component that renders them, and pass context in as a custom property or a prop` });
   }
   // Checklist F8: a size transitioned between a keyword (auto, none, …) in one state and a length in another (a class
   // toggle) does not interpolate: the box jumps between the states.

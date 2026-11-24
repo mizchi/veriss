@@ -26,7 +26,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | 9 | [a11y: 見え方と幾何](#9-アクセシビリティ見え方と幾何) | コントラスト、覆い、フォーカス、ターゲットの大きさ | CSS + box tree | `E_A11Y_*` 約 40 | 色と背景の鎖、描画順と当たり判定、フォーカスの見え方 | 回転した箱、スクロール容器の中の覆い、モデル化しない色 |
 | 10 | [a11y: 意味と構造](#10-アクセシビリティ意味と構造) | 名前、label、alt、見出し、landmark、ARIA | HTML(+ 描画される/されない) | `E_A11Y_*`・`W_A11Y_*` 約 70 | 静的な属性と、幅ごとに描かれる要素 | 動的な aria-label・role・alt など(`U_A11Y_*`) |
 | 11 | [ブラウザー差](#11-ブラウザーで結果が違うもの) | 一部のブラウザーだけが効かせる書き方 | CSS | `*_BROWSER_DEPENDENT` ほか 6 | 差があること自体(`browsers` 付き) | 配置そのもの(Unknown のまま) |
-| 12 | [コンポーネントの境界](#12-コンポーネントの境界) | セレクタがコンポーネントの外に届くか | adapter の結果 | `E_SCOPE_*` 5 | React・Vue・Svelte の状態と子コンポーネント | 動的な class・style・spread(`U_REACT_*` など) |
+| 12 | [コンポーネントの境界](#12-コンポーネントの境界) | セレクタがコンポーネントの外に届くか | adapter の結果 | `E_SCOPE_*` 6 | React・Vue・Svelte の状態と子コンポーネント | 動的な class・style・spread(`U_REACT_*` など) |
 | 13 | [検査しないもの](#13-検査しないものunknown) | 解析が扱わない入力 | — | `U_LAYOUT_*` 約 45 | — | 理由のコードを出し、成功にしない |
 
 ---
@@ -248,7 +248,7 @@ React・Vue・Svelte の adapter がコンポーネントを状態ごとの箱�
 
 | コード | 検出すること | 判定 |
 |---|---|---|
-| `E_SCOPE_OUTSIDE` / `E_SCOPE_REACHES` / `E_SCOPE_ESCAPE` / `E_SCOPE_CONTRACT` | 外の文脈に頼るセレクタ、子コンポーネントの中を塗るセレクタ、`:global`・`:deep`、子の中の noshift | 検査可 |
+| `E_SCOPE_OUTSIDE` / `E_SCOPE_REACHES` / `E_SCOPE_GLOBAL` / `E_SCOPE_ESCAPE` / `E_SCOPE_CONTRACT` | 外の文脈に頼るセレクタ、子コンポーネントの中を塗るセレクタ、ページ全体に当たるセレクタ、`:global`・`:deep`・`createGlobalStyle`、子の中の noshift | 検査可 |
 | `U_REACT_*` / `U_VUE_*` / `U_SVELTE_*` / `U_STYLEX_*` / `U_LINARIA_*` | 動的な class・style、spread、map の中身、読めないテンプレート | Unknown(その部分は検査しない) |
 
 ## 13. 検査しないもの(Unknown)

@@ -6,12 +6,15 @@ const compoundMatches = (selector, box) => { try { return exactMatches(selector,
 // closed in the component's own template. Checked on one tree (one state); an adapter intersects the states.
 //   E_SCOPE_OUTSIDE   a compound left of a combinator matches no element of the component: the rule depends on an
 //                     ancestor or sibling the page or a parent component provides (where the component is placed)
+//   E_SCOPE_GLOBAL    (CSS that applies to the whole page: scope.mode 'global') no compound of the selector has a class
+//                     the component owns: it matches elements anywhere on the page (li, .list, *, .list > li)
 //   E_SCOPE_REACHES   (unscoped CSS-in-JS: scope.mode 'global') the styled element is not pinned by a class the
 //                     component owns, and the element the combinator starts from renders a child component, a slot or
 //                     children: the rule can style elements another component renders
 // scope = { mode: 'scoped' | 'global', ancestors?: 'scoped' (every compound is scoped, as in Svelte: an ancestor no
 // element matches is an unused selector, not a dependency on the page), owned?: string[] (classes the component's stylesheet generates), firstLine?: the
-// first line of the component's CSS (the page CSS before it is not the component's) }. The page around the component
+// first line of the component's CSS (the page CSS before it is not the component's), sheets?: [{ mode, from, to }] (lines of
+// the CSS, inclusive, whose mode differs from scope.mode: a scoped and a plain <style> in one component) }. The page around the component
 // (its html and body wrapper) is not the component's.
 const boundaryText = b => b.kind === 'component' ? `<${b.name ?? 'component'}>` : b.kind === 'slot' ? '<slot> content' : b.kind === 'children' ? '{children}' : 'raw HTML';
 const subtreeBoundaries = box => [...(box.boundaries ?? []), ...(box.children ?? []).filter(c => !c.anonymous && !c.pseudo).flatMap(subtreeBoundaries)];
@@ -23,17 +26,26 @@ export function selectorScope(rules, boxes, scope) {
   const warnings = [], seen = new Set();
   for (const rule of rules.filter(rule => !rule.attached && !(scope.firstLine && rule.line < scope.firstLine))) for (const selector of rule.selectors) {
     const key = `${selector.source}\u0000${rule.file}\u0000${rule.line}`;
-    if (seen.has(key) || !selector.chain?.length) continue; seen.add(key);
+    if (seen.has(key)) continue; seen.add(key);
     const at = { selector: selector.source, file: rule.file, line: rule.line };
+    const mode = (scope.sheets ?? []).find(sheet => sheet.from <= rule.line && rule.line <= sheet.to)?.mode ?? scope.mode;
+    const ownedIn = compound => compound.parts.some(part => part.kind === 'class' && owned.has(part.value));
+    // CSS that applies to the whole page: a selector none of whose compounds the component owns can match any element.
+    if (mode === 'global' && !ownedIn(selector) && !(selector.chain ?? []).some(({ compound }) => ownedIn(compound))) {
+      warnings.push({ code: 'E_SCOPE_GLOBAL', severity: 'error', ...at,
+        message: `${selector.source} applies to the whole page and has no class this component owns, so it matches elements anywhere on the page, not only this component's: scope the stylesheet (<style scoped>, a CSS module, a CSS-in-JS class) or select through a class the component owns` });
+      continue;
+    }
+    if (!selector.chain?.length) continue;
     const outside = scope.ancestors !== 'scoped' && selector.chain.find(({ compound }) => !elements.some(box => compoundMatches(compound, box)));
     if (outside) {
       warnings.push({ code: 'E_SCOPE_OUTSIDE', severity: 'error', ...at, compound: outside.compound.source,
         message: `${selector.source} relies on ${outside.compound.source}, which no element of this component matches: the rule depends on where the component is placed (an ancestor or sibling outside it). Keep the relation inside the component (a class or prop on its own root), or pass the context in as a custom property` });
       continue;
     }
-    if (scope.mode !== 'global') continue;
+    if (mode !== 'global') continue;
     // Pinned: the styled element carries a class only this component's stylesheet generates.
-    if (selector.parts.some(part => part.kind === 'class' && owned.has(part.value))) continue;
+    if (ownedIn(selector)) continue;
     const { compound, combinator } = selector.chain[0];
     const starts = elements.filter(box => compoundMatches(compound, box));
     const reached = starts.flatMap(box => combinator === '>' ? box.boundaries ?? [] : combinator === ' ' ? subtreeBoundaries(box) : []);
