@@ -976,3 +976,29 @@ test('typed-props fixtures: every name imported from a sibling module is exporte
     }
   }
 });
+
+test('styled(Component): the CSS of the base component (StyleX, Linaria) is kept, once per module', () => {
+  const files = {
+    Base: `import * as stylex from '@stylexjs/stylex';
+import { css } from '@linaria/core';
+const s = stylex.create({ base: { width: 100 } });
+const label = css\`
+  height: 20px;
+\`;
+export default function Base({ className, children }) {
+  return <div className={className}><span {...stylex.props(s.base)}>{children}</span><b className={label}>x</b></div>;
+}`,
+  };
+  const source = `import styled from 'styled-components';
+import Base from './Base';
+const W = styled(Base)\`
+  color: red;
+\`;
+export default function C() { return <section><W>a</W><W>b</W></section>; }`;
+  const {states, css, unknowns} = expandReact(source, {file: 'C.jsx', resolveModule: memoryResolver(files)});
+  assert.deepEqual(unknowns, []);
+  const [sx] = classOf(states[0].html, 'span');
+  assert.match(css, new RegExp(`\\.${sx}\\{width:100px\\}`));
+  assert.equal(css.split(`.${sx}{width:100px}`).length - 1, 1, css);
+  assert.equal(css.split('{height:20px}').length - 1, 1, css);
+});

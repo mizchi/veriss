@@ -79,6 +79,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // styled-components (imported from 'styled-components'): evaluated per element from the props it passes.
   // Imported styled modules are read through options.resolveModule(specifier, importerFile).
   const sc = loadModule({ file, source, ast }, resolveModule), scBlocks = inject?.blocks ?? new Map();
+  // the StyleX and Linaria CSS of components rendered by styled wrappers (styled(Base)), one entry per module / class
+  const baseCSS = inject?.baseCSS ?? new Map();
   let restName = null, destructuredNames = new Set();
   const unknowns = [], assumptions = new Set();
   const unknown = (code, message) => { if (!unknowns.some(u => u.message === message)) unknowns.push({ code, message }); };
@@ -283,7 +285,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     const inner = children(node.children);
     const html = lists.flatMap(l => {
       const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, dynamicValues, dynamics, ignoredDynamics, keyframes, maxStates, eachCounts, sourceLines,
-        inject: { classes: [...chain.map(stableClass).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, prefix: `${chain[0].base}` } });
+        inject: { classes: [...chain.map(stableClass).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, baseCSS, prefix: `${chain[0].base}` } });
       for (const u of rendered.unknowns) unknown(u.code, `${chain[0].base}: ${u.message}`);
       for (const a of rendered.assumptions) assumptions.add(a);
       return rendered.states.map(st => { const choices = merge(l.choices, st.choices); return choices && { html: st.html, choices }; }).filter(Boolean);
@@ -509,7 +511,12 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const scope = owned.length ? { mode: 'global', owned, escapes: scopeEscapes(linariaCSS, ['global']) } : undefined;
   // styled-components keyframes`` rules (after the lowered rules, so their line map is unchanged)
   const keyframeRules = inject ? [] : [...keyframes].map(([name, text]) => `@keyframes ${name}{${text.replace(/\s*\n\s*/g, ' ').trim()}}`);
-  const css = [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : []), ...keyframeRules].join('\n');
+  const ownLinaria = linariaCSS.replace(/:global\(([^()]*)\)/g, '$1');
+  // a component rendered by a styled wrapper hands its StyleX / Linaria CSS to the wrapper's expansion, which writes
+  // each module's Linaria CSS and each StyleX class once (not again when they are its own)
+  if (inject) { if (ownLinaria) baseCSS.set(`linaria ${file}`, ownLinaria); for (const [id, rule] of stylexRules) baseCSS.set(`stylex ${id}`, rule); }
+  const fromBases = inject ? [] : [...baseCSS].filter(([key]) => key !== `linaria ${file}` && !stylexRules.has(key.replace(/^stylex /, ''))).map(([, rule]) => rule);
+  const css = [ownLinaria, ...stylexRules.values(), ...fromBases, ...(lowered ? [lowered.css] : []), ...keyframeRules].join('\n');
   // the dynamic values the rendered CSS has (an evaluation dropped for too many variants registered its own too)
   if (ignoredDynamics.size && !inject) assumptions.add(`dynamic values ignored by options.dynamicValues (${[...ignoredDynamics].sort().join(', ')}): their declarations are left out and not checked`);
   const used = new Set([...css.matchAll(/-veriss-dynamic\((\d+)\)/g)].map(m => Number(m[1])));
