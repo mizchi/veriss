@@ -19,9 +19,15 @@ veriss が判定できる形で書くための規約である。エンジンが�
 - grid の列は、px か `minmax(0, Nfr)` にする。
   - 素の `1fr` は、中身による最小幅を持つ。veriss がそれを判定できるのは、中身の最小幅が定数で分かる場合だけで、それ以外は Unknown になる。確実に判定させるには `minmax(0, 1fr)` と書く。
 - `float` と段組(`columns`)は使わない(`Unsupported layout property: clear` / `columns`)。
-- `position: absolute` / `fixed` の箱には、両方の軸に inset を書く(`top` か `bottom`、`left` か `right`)。
+- `position: absolute` / `fixed` の箱には、両方の軸に inset を書く(`top` か `bottom`、`left` か `right`)のが確実。
   - 書かない軸は静的位置(流れの中にあったときの位置)に置かれる。
-  - grid の container や block の中なら veriss は静的位置を求められるが、flex の container の中では求められない(`Absolute children of a flex container use flex static positions`)。
+  - veriss が静的位置を求められるのは次の場合。
+    - grid の container の中。
+    - block の container の中。
+    - flex の container の中で、container が始点に揃えるとき。ltr で、`justify-content`・`align-content`・item の `align-self`(stretch は flex-start 扱い)が始点のもので、始点の margin がないとき。
+  - flex で中央揃えなどにしていると、その軸は Unknown になる。
+- flex の item には、主軸の大きさを書く(px か % の `width` / `flex-basis`、または `flex: 1` のように basis 0 で伸ばす)。
+  - `flex-basis: auto` で幅も auto の item は、中身の大きさで決まる。veriss がそれを求められるのは、テキストの寸法が分かる葉の箱など一部だけで、それ以外は Unknown になる(`flex-basis: auto with an auto width uses the content size`)。
 - 意図して重ねる箱は、`position: absolute` か、grid の同じ領域に置いたうえで、重なりを宣言する
   (宣言のない重なりは `E_LAYOUT_OVERLAP`)。
 
