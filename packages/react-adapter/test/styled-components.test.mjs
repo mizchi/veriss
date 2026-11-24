@@ -818,3 +818,21 @@ export default function C() { return <Box />; }`;
   assert.equal(f.related?.[0]?.css?.line, 3);
   assert.equal(strict.status, 'violated');
 });
+
+test('selectors: a template rule is unmatched only when no variant of it matches (a variant rendered only when enabled does not make &:disabled dead)', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.button\`
+  color: \${({ $c }) => $c};
+  &:disabled {
+    cursor: not-allowed;
+  }
+\`;
+export default function C({ disabled }) { return <Box $c={disabled ? 'gray' : 'black'} disabled={disabled} />; }`;
+  const report = analyzeReact(source, {pageCSS, viewport, selectors: true, file: 'C.tsx'});
+  assert.ok(!report.selectors.warnings.some(w => w.code === 'W_CSS_SELECTOR_UNMATCHED'), JSON.stringify(report.selectors.warnings.map(w => w.message)));
+  // when no variant matches it, the line is reported once
+  const never = source.replace('disabled={disabled} />', '/>');
+  const w = analyzeReact(never, {pageCSS, viewport, selectors: true, file: 'C.tsx'}).selectors.warnings.filter(x => x.code === 'W_CSS_SELECTOR_UNMATCHED');
+  assert.equal(w.length, 1);
+  assert.equal(w[0].line, 4);
+});

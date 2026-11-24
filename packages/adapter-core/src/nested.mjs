@@ -122,5 +122,9 @@ export function relocateSelectorWarnings(warnings, map, { offset = 0 } = {}) {
     seen.variants++;
     if (/no element has class/.test(seen.message) && !/no element has class/.test(w.message)) Object.assign(seen, { ...w, variants: seen.variants });
   }
-  return out;
+  // A template rule is unmatched only when every variant of it is: one variant that matches (a variant rendered only in
+  // the states where the rule applies) means the line is used.
+  const emitted = new Map();
+  for (const m of map) { const key = `${m.origin.file}\u0000${m.origin.line}\u0000${m.path.slice(1).join('\u0000')}`; emitted.set(key, (emitted.get(key) ?? 0) + 1); }
+  return out.filter(w => w.code !== 'W_CSS_SELECTOR_UNMATCHED' || !w.nesting || w.variants >= (emitted.get(`${w.file}\u0000${w.line}\u0000${w.nesting.path.slice(1).join('\u0000')}`) ?? 0));
 }
