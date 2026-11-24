@@ -929,3 +929,20 @@ export default function C({ size }: A & { size: 'medium' | 'large' }) { return <
   const text = `export default function C({ size }: { size: string } & { size: 'a' | 'b' }) { return <p>{size}</p>; }`;
   assert.deepEqual(expandReact(text).states.map(s => s.html).sort(), ['<p>a</p>', '<p>b</p>']);
 });
+
+test('styled-components: a closure assigning to a captured binding does not change it on other paths', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  color: \${({ $on }) => {
+    let c = 'blue';
+    const change = () => { c = 'red'; return c; };
+    if ($on) return change();
+    return c;
+  }};
+\`;
+export default function C({ on }) { return <Box $on={on} />; }`;
+  const {states, css} = expandReact(source);
+  const off = states.find(s => s.choices.on === false);
+  const rule = new RegExp(`\\.${classOf(off.html, 'div')[1]}\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+  assert.ok(rule === 'color:blue' || rule === '', rule);
+});

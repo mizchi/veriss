@@ -364,12 +364,14 @@ export function evaluateStyled(def, props, ctx) {
     return plain && (v === null || typeof v !== 'object' || !Object.hasOwn(v, key)) ? one(undefined) : getKey(v, key, node);
   };
   const call = f => apply(f, [one(PROPS)]);
+  // the scopes of the active invocation start at scopes[ownFrom] (those before it were captured by a closure)
+  let ownFrom = 0;
   const apply = (f, args) => {
     const fn = f[FN];
     if (depth > 32) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: calls nested too deep`));
     return inModule(f.mod, () => {
-      const saved = scopes, scope = new Map();
-      scopes = [...(f.env ?? []), scope]; depth++;
+      const saved = scopes, savedOwn = ownFrom, scope = new Map();
+      scopes = [...(f.env ?? []), scope]; ownFrom = scopes.length - 1; depth++;
       try {
         for (const [i, param] of fn.params.entries()) {
           if (!bind(scope, param, args[i] ?? one(undefined))) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: the parameter ${src(param)} is not modeled`));
@@ -377,7 +379,7 @@ export function evaluateStyled(def, props, ctx) {
         if (fn.body.type !== 'BlockStatement') return ev(fn.body);
         // falling off the end returns undefined
         return run(fn.body.body).map(p => ({ v: p.done ? p.v : undefined, choices: p.choices }));
-      } finally { scopes = saved; depth--; }
+      } finally { scopes = saved; ownFrom = savedOwn; depth--; }
     });
   };
   // a call of a function value (a module function, an imported one, a local arrow); other calls are Unknown
@@ -437,11 +439,12 @@ export function evaluateStyled(def, props, ctx) {
       case 'ReturnStatement': return (st.argument ? ev(st.argument) : one(undefined)).map(r => ({ done: true, v: r.v, choices: r.choices }));
       case 'BlockStatement': return inBlock(() => run(st.body, outer));
       case 'ExpressionStatement': {
-        // x = value, for a binding of this function, on a path no condition split (paths share one scope)
+        // x = value, for a binding of this function (not one a closure captured: other paths read that scope too), on
+        // a path no condition split (paths share one scope)
         const e = st.expression;
         if (e.type !== 'AssignmentExpression' || e.operator !== '=' || e.left.type !== 'Identifier' || Object.keys(outer).length) return notModeled(st);
-        const holder = [...scopes].reverse().find(sc => sc.has(e.left.name));
-        if (!holder) return notModeled(st);
+        const at = scopes.findLastIndex(sc => sc.has(e.left.name)), holder = scopes[at];
+        if (!holder || at < ownFrom) return notModeled(st);
         holder.set(e.left.name, ev(e.right));
         return [{ done: false, choices: {} }];
       }
