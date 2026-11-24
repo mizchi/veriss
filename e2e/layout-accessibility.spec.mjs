@@ -2350,3 +2350,26 @@ test('page-start-unreachable: Chromium lays centered tall content above the page
   expect(positives).toBeGreaterThan(0);
   expect(negatives).toBeGreaterThan(0);
 });
+
+test('text-contrast where the layout is Unknown (ADR-0016 M7): a warning exactly where the painted colors fall below the ratio', async ({page}) => {
+  const {contrastRatio, parseColor} = await import('../packages/veriss/src/color/index.mjs');
+  // No text sizes: the layout is Unknown, and the contrast is judged on the style stage's rows.
+  const html = '<html lang="en"><body><main class="m"><section class="s"><p class="a">Dark</p><p class="b">Grey</p></section><p class="c">Light</p></main></body></html>';
+  const css = '*{margin:0}html,body,.m,.s{display:grid;grid-template-columns:minmax(0,1fr)}.m{background:#fff;color:#000}.s{background:#246}p{font-size:16px;line-height:24px;padding-left:20px}.a{color:#fff}.b{color:#456}.c{color:#999}';
+  const report = analyzeHTML(html, {name: 'P', css, viewport: {min: 320, max: 800}, accessibility: true});
+  expect(report.status).toBe('unknown');
+  expect(report.diagnostics.some(d => d.code === 'E_A11Y_CONTRAST')).toBe(false);
+  const warned = (report.accessibility?.warnings ?? []).filter(w => w.code === 'W_A11Y_CONTRAST_UNPLACED').map(w => w.box).sort();
+  await page.setViewportSize({width: 500, height: 400});
+  await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html.replace(/^<html lang="en"><body>|<\/body><\/html>$/g, '')}</body></html>`);
+  const low = [];
+  for (const sel of ['.a', '.b', '.c']) {
+    const {color, x, y} = await page.evaluate(s => { const n = document.querySelector(s), r = n.getBoundingClientRect(); return {color: getComputedStyle(n).color, x: Math.round(r.left + 5), y: Math.round(r.top + r.height / 2)}; }, sel);
+    // The background the browser paints beside the glyphs (the padding), read from a screenshot pixel.
+    const shot = await page.screenshot({clip: {x, y, width: 1, height: 1}});
+    const pixel = await page.evaluate(async b64 => { const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode(); const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const [r, gr, b] = g.getImageData(0, 0, 1, 1).data; return `rgb(${r}, ${gr}, ${b})`; }, shot.toString('base64'));
+    if (contrastRatio(parseColor(color), parseColor(pixel)) < 4.5) low.push(sel);
+  }
+  expect(warned).toEqual(low.sort());
+  expect(low).toEqual(['.b', '.c']);
+});

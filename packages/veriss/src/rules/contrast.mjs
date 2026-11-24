@@ -78,3 +78,27 @@ export function createContrast({ report: { report, findings, warnings, unknowns 
   }
   return { textContrast, iconContrast, caretHidden };
 }
+
+// Where the layout is Unknown (ADR-0016 M7). The rows come from the style stage: each box in each state of its style,
+// with its ancestors' paint chain and no geometry. Nothing then shows that no other box lies behind the text (a
+// negative margin, a grid area shared with it, a transform), so a ratio below the requirement is a warning that says
+// so, never an error, and what cannot be decided is not reported (the analysis is Unknown already). A positioned box
+// above the opaque backdrop is not decided either. The icon contrast needs the control's name from the geometric rows,
+// so it waits for the layout; the hidden caret reads the field's own colors and runs as it is.
+// where(region): the fields that say where a warning holds (its viewport ranges).
+const unplacedCodes = { E_A11Y_CONTRAST: 'W_A11Y_CONTRAST_UNPLACED', W_A11Y_IMAGE_FALLBACK_CONTRAST: 'W_A11Y_IMAGE_FALLBACK_CONTRAST' };
+export function unplacedContrast(rows, { contrast = 'AA', uaColors = null, where }) {
+  const findings = [], warnings = [], unknowns = [];
+  const report = (list, code, severity, message, row, region, extra) => {
+    if (list === unknowns) return;
+    const caveat = code in unplacedCodes;
+    warnings.push({ code: unplacedCodes[code] ?? code, severity: 'warning', box: row.box.label, path: row.path, source: row.box.source, ...where(region), ...extra,
+      message: caveat ? `${message}, against its ancestors' backgrounds: the layout is Unknown, so a box that is not an ancestor may lie behind it` : message });
+  };
+  const isAncestor = (a, b) => b.startsWith(a + '/');
+  const rules = createContrast({ report: { report, findings, warnings, unknowns }, options: { contrast, uaColors },
+    tools: { visible: row => row.paint.visibility === 'visible', control: () => false, speaks: () => false, isAncestor, behind: () => true } });
+  rules.textContrast(rows);
+  rules.caretHidden(rows);
+  return warnings;
+}

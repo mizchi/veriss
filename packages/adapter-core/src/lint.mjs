@@ -40,6 +40,7 @@ export const recommended = {
   E_LAYOUT_IMAGE_RATIO: ['error', 'make the reserved ratio match the file'],
   W_A11Y_PLACEHOLDER_CLIPPED: ['warning', 'shorten the placeholder (or put the hint in a label) or widen the field'],
   W_A11Y_IMAGE_FALLBACK_CONTRAST: ['warning', 'give the image\'s box a background-color that keeps the text readable without the image'],
+  W_A11Y_CONTRAST_UNPLACED: ['warning', 'raise the contrast of the text against its background (judged over its ancestors\' backgrounds: the layout was not analysed)'],
   W_LAYOUT_DECLARATION_INERT: ['warning', 'remove it, or change the parent display it needs'],
   W_LAYOUT_FOCUS_SHIFT: ['warning', 'draw focus with outline or box-shadow, or keep the size (change border-color, not border-width)'],
   W_LAYOUT_CONTAINER_COLLAPSE: ['warning', 'give the query container a width, flex: 1 or a flex-basis'],

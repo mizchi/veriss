@@ -109,7 +109,7 @@ import { scalar, sum, diff, times, sample, clip, serialize, width as domainWidth
 import { languageTag } from './text-font.mjs';
 import { q, add, mul, cmp, div } from './linear.mjs';
 import { intersect } from './integrity.mjs';
-import { createContrast, large } from '../rules/contrast.mjs';
+import { createContrast, unplacedContrast, large } from '../rules/contrast.mjs';
 
 export const accessibilityRules = ['accessible-name', 'text-contrast', 'occluded-target', 'target-overlap', 'visual-order', 'hidden-focusable',
   'empty-heading', 'heading-order', 'nested-interactive', 'duplicate-id', 'aria-reference', 'positive-tabindex', 'multiple-main',
@@ -2138,6 +2138,12 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     }
   }
   return { findings: dedupe(findings), warnings: dedupe(warnings), unknowns: dedupe(unknowns), exempted: dedupe(exempted), notes };
+}
+
+// Color contrast where the layout is Unknown (ADR-0016 M7): rules/contrast.mjs judges the style stage's rows; this adds
+// where each warning holds (the ranges and, with a height, the exact region).
+export function judgeContrastUnplaced({ rows }, { contrast = 'AA', defaultColors = null, ranges, block }) {
+  return { warnings: unplacedContrast(rows, { contrast, uaColors: defaultColors, where: region => ({ ...ranges(region), ...(block ? { regionConstraints: serialize(region).constraints } : {}) }) }) };
 }
 
 function dedupe(rows) {
