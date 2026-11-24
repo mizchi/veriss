@@ -195,7 +195,7 @@ export function styledTag(mod, tag) {
  * @returns {Array<{text: string, choices: object, unknowns: Array<{code, message}>}>}
  */
 /** One expression of a component in module `mod` (see expression mode in evaluateStyled): [{v, choices}]. */
-export const evaluateExpression = (expression, mod, ctx) => evaluateStyled({ mod, name: '' }, new Map(), { ...ctx, expression });
+export const evaluateExpression = (expression, mod, ctx) => evaluateStyled({ mod, name: '' }, ctx.props ?? new Map(), { ...ctx, expression });
 export const isUnknownValue = v => isUnknown(v);
 
 // Thrown when an evaluation would hold more than ctx.maxVariants variants (the product is never built past it).
@@ -514,6 +514,8 @@ export function evaluateStyled(def, props, ctx) {
   if (ctx.expression) {
     const scope = new Map(ctx.scope ?? []);
     scopes = [scope];
+    // the props object itself (ctx.propsName, a parameter not destructured): its members are ctx.props
+    if (ctx.propsName && !scope.has(ctx.propsName)) scope.set(ctx.propsName, one(PROPS));
     for (const [pattern, init] of ctx.bindings ?? []) if (!bind(scope, pattern, ev(init))) for (const name of patternNames(pattern)) scope.set(name, one(unknownValue('U_STYLED_VALUE', `${src(init)} is not modeled`)));
     return ev(ctx.expression);
   }

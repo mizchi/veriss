@@ -1079,3 +1079,38 @@ export default function C(props) { return <Box {...props}>x</Box>; }`;
   assert.match(css, /\{display:block\}/);
   assert.ok(unknowns.some(u => u.code === 'U_STYLED_PROPS' && /more than 16/.test(u.message)), JSON.stringify(unknowns));
 });
+
+test('styled(Component): a prop the wrapper passes is that value in Base\'s expressions; props.x reads the prop x', async () => {
+  const {renderStyled} = await import('./ssr.mjs');
+  const widthOf = ({states, css}) => states.map(s => { const cls = classOf(s.html, 'div').find(c => new RegExp(`\\.${c}\\{width:`).test(css)); return new RegExp(`\\.${cls}\\{width:(\\w+)\\}`).exec(css)?.[1]; }).sort();
+  const source = `import styled from 'styled-components';
+const Inner = styled.div\`
+  width: \${({ $w }) => ($w === 'small' ? '10px' : '20px')};
+\`;
+function Base({ className, size }) { return <Inner className={className} $w={size} />; }
+const W = styled(Base)\`
+  color: red;
+\`;
+export default function C() { return <W size="small" />; }`;
+  assert.match((await renderStyled(source, {})).css, /width:10px/);
+  assert.deepEqual(widthOf(expandReact(source)), ['10px']);
+
+  const member = `import styled from 'styled-components';
+const Inner = styled.div\`
+  width: \${({ $w }) => ($w === 'small' ? '10px' : '20px')};
+\`;
+export default function C(props: { size: 'small' | 'large' }) { return <Inner $w={props.size} />; }`;
+  assert.deepEqual(widthOf(expandReact(member)), ['10px', '20px']);
+  assert.match((await renderStyled(member, {size: 'large'})).css, /width:20px/);
+
+  // props.open passed to a styled element and tested in the JSX is one condition, on the prop open
+  const same = `import styled from 'styled-components';
+const Box = styled.div\`
+  width: \${({ $on }) => ($on ? '10px' : '20px')};
+\`;
+export default function C(props) { return <section><Box $on={props.open} />{props.open && <i />}</section>; }`;
+  const {states} = expandReact(same);
+  assert.deepEqual(states.map(s => s.choices), [{open: true}, {open: false}]);
+  const shape = html => html.replace(/ class="[^"]*"/g, '');
+  for (const s of states) assert.equal(shape(s.html), shape((await renderStyled(same, s.choices)).html), JSON.stringify(s.choices));
+});

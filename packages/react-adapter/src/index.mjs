@@ -93,7 +93,9 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // those values, a state each (the choice is the prop's value).
   let literalProps = new Map(), propsName = null, textProps = new Set(), componentEnv = null, staticVariants = () => null; const defaultProps = new Map();
   const text = node => source.slice(node.start, node.end);
-  const choice = (node, value) => { const { key, negate } = conditionKey(text(node)); return choose(key, value !== negate); };
+  // a condition's key; props.x (the parameter not destructured) is the prop x, as a destructured x would be
+  const keyOf = node => { const { key, negate } = conditionKey(text(node)); const name = propsName && key.startsWith(`${propsName}.`) ? key.slice(propsName.length + 1) : null; return { key: name && /^[\w$]+$/.test(name) ? name : key, negate }; };
+  const choice = (node, value) => { const { key, negate } = keyOf(node); return choose(key, value !== negate); };
 
   // Module-level styles: stylex.create objects, Linaria css`` classes and styled components.
   const stylex = new Map(), linaria = new Map(), styled = new Map(), constants = new Map(), cssText = [];
@@ -256,7 +258,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         // symbol under this attribute's name; when any variant is Unknown, the expression is one symbol of its text
         const evaluated = componentEnv && evaluateExpression(value, sc, { ...componentEnv, theme, literalProps });
         if (evaluated?.length && !evaluated.some(r => isUnknownValue(r.v))) props.set(key, evaluated.map(r => { const sym = symbolInfo(r.v); return sym ? { v: symbolOf(sym.key, key, sym.negate), choices: r.choices } : r; }));
-        else { const { key: cond, negate } = conditionKey(text(value)); props.set(key, [{ v: symbolOf(cond, key, negate), choices: {} }]); }
+        else { const { key: cond, negate } = keyOf(value); props.set(key, [{ v: symbolOf(cond, key, negate), choices: {} }]); }
       }
     }
     // a key read but not given as an attribute comes through the spread: the component's prop of that name
@@ -486,7 +488,15 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   {
     const names = new Set([...(local ?? []), ...defaults.keys()]);
     const bindings = target.fn.body.type === 'BlockStatement' ? target.fn.body.body.filter(st => st.type === 'VariableDeclaration' && st.kind !== 'var').flatMap(st => st.declarations.filter(d => d.init).map(d => [d.id, d.init])) : [];
-    componentEnv = { scope: [...names].map(n => [n, [{ v: symbolOf(n, n), choices: {} }]]), bindings };
+    // rendered by a styled wrapper: a prop it passed as literals is those values (under the wrapper's conditions, kept
+    // apart as the caller's); a prop it passed as an expression stays this component's symbol, which the wrapper's
+    // condition replaces once the states are known
+    const propValue = n => {
+      const given = inject?.props.get(n);
+      if (!given || given.some(g => symbolInfo(g.v))) return [{ v: symbolOf(n, n), choices: {} }];
+      return given.map(g => ({ v: g.v, choices: Object.fromEntries(Object.entries(g.choices).map(([k, v]) => [`${CALLER}${k}`, v])) }));
+    };
+    componentEnv = { scope: [...names].map(n => [n, propValue(n)]), bindings, ...(propsName ? { propsName, props: { get: propValue } } : {}) };
   }
   if (literalProps.size) assumptions.add(`text of props typed as literal unions (${[...literalProps.keys()].join(', ')}) is each of their values`);
   const body = target.fn.body.type === 'BlockStatement' ? target.fn.body.body.filter(s => s.type === 'ReturnStatement').at(-1)?.argument : target.fn.body;
@@ -496,11 +506,9 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   let states = body ? expression(body.type === 'ParenthesizedExpression' ? body.expression : body).filter(v => consistent(v.choices)).map(v => ({ html: v.html.trim(), choices: v.choices })) : [];
   // Rendered by a styled wrapper: a condition on a prop the wrapper passed agrees with what it passed (a literal decides
   // it; an expression is the wrapper's own condition); other conditions are this component's, named apart.
-  // A condition read as props.x (the parameter not destructured) is on the prop x.
-  const propOf = key => propsName && key.startsWith(`${propsName}.`) && /^[\w$]+$/.test(key.slice(propsName.length + 1)) ? key.slice(propsName.length + 1) : key;
   if (inject) states = states.flatMap(st => Object.entries(st.choices).reduce((acc, [key, held]) => acc.flatMap(a => {
     if (key.startsWith(CALLER)) { const choices = merge(a.choices, choose(key.slice(CALLER.length), held)); return choices ? [{ ...a, choices }] : []; }
-    const given = inject.props.get(propOf(key));
+    const given = inject.props.get(key);
     if (!given) { const choices = merge(a.choices, choose(`${inject.prefix}:${key}`, held)); return choices ? [{ ...a, choices }] : []; }
     return given.flatMap(g => {
       const sym = symbolInfo(g.v);
