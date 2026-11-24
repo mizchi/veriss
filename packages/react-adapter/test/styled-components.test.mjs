@@ -797,11 +797,19 @@ const Box = styled.div\`
   border-top: 2px solid;
 \`;
 export default function C() { return <Box />; }`;
+  // through an adapter it is a warning (CSS not written to that rule) at both declarations, and the layout is analysed
   const report = analyzeReact(source, {pageCSS, viewport, file: 'Box.tsx'});
-  const f = report.findings.find(x => x.code === 'E_CSS_SHORTHAND_CONFLICT');
-  assert.ok(f, JSON.stringify(report.findings));
-  assert.equal(f.css.file, 'Box.tsx');
+  const w = report.findings.find(x => x.code === 'W_CSS_SHORTHAND_CONFLICT');
+  assert.ok(w, JSON.stringify(report.findings));
+  assert.equal(w.severity, 'warning');
+  assert.deepEqual(w.css.map(c => [c.property, c.file, c.line]), [['border-top', 'Box.tsx', 4], ['border', 'Box.tsx', 3]]);
+  assert.equal(w.component, 'Box');
+  assert.notEqual(report.status, 'violated');
+  // shorthandConflicts: 'error' keeps the rule's own policy
+  const strict = analyzeReact(source, {pageCSS, viewport, file: 'Box.tsx', shorthandConflicts: 'error'});
+  const f = strict.findings.find(x => x.code === 'E_CSS_SHORTHAND_CONFLICT');
+  assert.ok(f, JSON.stringify(strict.findings));
   assert.equal(f.css.line, 4);
-  assert.equal(f.component, 'Box');
   assert.equal(f.related?.[0]?.css?.line, 3);
+  assert.equal(strict.status, 'violated');
 });
