@@ -39,14 +39,16 @@ export function lowerNested(blocks) {
   };
   for (const block of blocks) {
     const root = postcss.parse(`${block.selector}{${block.text}}`);
-    const walk = (node, selector, media, path, relation) => {
+    // A nested style rule's first declarations are reported at its selector line (where a relation is written);
+    // later runs, and runs inside @media, at their first declaration.
+    const walk = (node, selector, media, path, relation, head = null) => {
       let run = [];
-      const flush = () => { if (run.length) emit(selector, run, media, block.origin, path, relation, run[0].source.start.line); run = []; };
+      const flush = () => { if (run.length) { emit(selector, run, media, block.origin, path, relation, head ?? run[0].source.start.line); head = null; } run = []; };
       for (const n of node.nodes ?? []) {
         if (n.type === 'decl') { run.push(n); continue; }
         flush();
         if (n.type === 'rule') {
-          for (const part of postcss.list.comma(n.selector)) walk(n, resolve(selector, part), media, [...path, part.trim()], edge(selector, part));
+          for (const part of postcss.list.comma(n.selector)) walk(n, resolve(selector, part), media, [...path, part.trim()], edge(selector, part), n.source.start.line);
         } else if (n.type === 'atrule' && conditional.has(n.name)) {
           const params = n.name === 'media' ? n.params : null;
           if (params === null) continue;
