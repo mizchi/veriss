@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyzeHTML} from '../src/html.mjs';
+import {analyzeLayout} from '../src/index.mjs';
 
 const run = (css, html = '<div class="a"></div>') => analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: `*{margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.a{height:20px}${css}`, viewport: {min: 320, max: 1200, height: {min: 300, max: 900}}});
 const codes = (r, code) => (r.layoutWarnings ?? []).filter(w => w.code === code);
@@ -1473,4 +1474,16 @@ test('F133: a container query unit with no query container for its axis is a sma
   // Not a unit: a name or a string with the letters in it.
   assert.equal(hit('.a{animation-name:cqw}@keyframes cqw{to{opacity:.5}}').length, 0);
   assert.equal(hit('.a{width:50svw}').length, 0);
+});
+
+test('F9: a pseudo-element without content on a container is reported whether the layout is verified or Unknown (one style walk, ADR-0016 M6)', () => {
+  const tree = {tag: 'main', classes: ['row'], children: [{tag: 'div', classes: ['cell']}]};
+  const css = '* { box-sizing: border-box; }\n.row { display: grid; grid-template-columns: minmax(0, 1fr); }\n.row::before { width: 10px; }\n';
+  const verified = analyzeLayout(tree, {name: 'Row', css, viewport: {min: 160, max: 640}, ancestors: [{tag: 'html'}]});
+  assert.equal(verified.status, 'verified', JSON.stringify(verified.diagnostics));
+  assert.deepEqual(codes(verified, 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), ['.row::before']);
+  // Unknown (no ancestors: nothing closes the environment): the same warning.
+  const unknown = analyzeLayout(tree, {name: 'Row', css: css + '.cell { min-width: var(--x); }\n', viewport: {min: 160, max: 640}});
+  assert.equal(unknown.status, 'unknown');
+  assert.deepEqual(codes(unknown, 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), ['.row::before']);
 });

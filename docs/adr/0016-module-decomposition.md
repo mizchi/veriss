@@ -101,12 +101,12 @@ export default {
 | M3 | `notes[]` を導入する。28 の配列を 1 つずつ移し、engine の分割代入をなくす | 中 |
 | M4 | `dropped[]` を導入する。11 の `$…Inert` を移す | 中 |
 | M5 | `rules/css-mistakes` を作り、`cssMistakes` と `inline*` を engine から出す。依存は `createCssMistakes({ report, facts, tools })` の引数に明示する(済み)。`walkStyles` をなくすのは M6 に回す(style の段が単独で事実を出せるようになってから) | 大 |
-| M6 | `solve` の中の「効かない宣言」の判定(`reasons`)を規則に移す。layout は「親の display」「flow の中か」などを事実として出す。`walkStyles` をなくす | 大 |
+| M6 | `solve` の中の「効かない宣言」の判定(`reasons`)を規則に移す。layout は「親の display」「flow の中か」などを事実として出す。`walkStyles` をなくす(済み: `rules/inert-declarations.mjs` の `createInertDeclarations`。style の検査は 1 本の walk が全 box・全 state で行い、layout は呼ばない。layout が style を書き換えて報告するもの(% の高さを auto に、block flow の auto の上下 margin を 0 に)と、inline の box の効かない寸法は layout に残る) | 大 |
 | M7 | `rules/contrast` を作り、色の規則を移す。`needs: ['style']` にして、レイアウトなしでも判定する | 中 |
 | M8 | a11y の残りを `a11y-dom` と `a11y-geometry` に分ける。`integrity`、`cls` も規則にする | 中 |
 | M9 | 境界テストの許可リストが空になったら、`packages/` に出す | 小 |
 
-各段階の完了条件は、全パッケージの単体テスト、component-lint の eval が変わらないこと、css-mistakes の 3 ブラウザ e2e。所見の集合(code・box・path)は、段階の前後で同じでなければならない(差分を取るテストを M3 の前に置く)。
+各段階の完了条件は、全パッケージの単体テスト、component-lint の eval が変わらないこと、css-mistakes の 3 ブラウザ e2e。所見の集合(code・box・path)は、段階の前後で同じでなければならない(差分を取るテストを M3 の前に置く)。差分は `tools/finding-set/record.sh` で全単体テストの解析ごとに記録し、`tools/finding-set/compare.mjs` で比べる(M6 から)。
 
 ## 考えた別の案
 

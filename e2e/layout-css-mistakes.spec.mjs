@@ -88,6 +88,16 @@ test('F8: a transition between auto (or none) and a length jumps', async ({page}
   }
 });
 
+test('F9: a pseudo-element without content on a grid container (body) is not generated either', async ({page}) => {
+  for (const [css, generated] of [['body::before{display:block;height:10px}', false], ['body::before{content:"";display:block;height:10px}', true]]) {
+    await load(page, css);
+    expect(await page.evaluate(() => getComputedStyle(document.body, '::before').content !== 'none'), css).toBe(generated);
+    // A generated ::before is the first grid item: it pushes .a down by its height.
+    expect(await page.evaluate(() => document.querySelector('.a').getBoundingClientRect().top), css).toBe(generated ? 10 : 0);
+    expect(warns(css, 'W_CSS_PSEUDO_NO_CONTENT'), css).toBe(!generated);
+  }
+});
+
 test('F9, F10: a pseudo-element without content, and content on an element', async ({page}) => {
   for (const [css, generated] of [['.a::before{display:block;width:10px;height:10px}', false], ['.a::before{content:"";display:block;height:10px}', true]]) {
     await load(page, css);

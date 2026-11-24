@@ -18,12 +18,13 @@ isle から切り出した CSS 検証器(veriss)を、別のマシンで続け�
   - 保留: F91(段組の外の `break-*`。印刷を対象にするか未決)、F95(`li{display:flex}` でマーカーが消える。警告の条件が未決)
   - 見送り(実測したら効いていた): flex の `text-indent`、`perspective`、表のセルの `max-width`
   - 健全性の修正: F89(`calc(100%-10px)` を 100%−10px として計算していた)、F99(引用符のない不正な `font-family` を適用していた)
-- **モジュール分割**: [ADR-0016](adr/0016-module-decomposition.md)。M1〜M5 が済み、M6 から
+- **モジュール分割**: [ADR-0016](adr/0016-module-decomposition.md)。M1〜M6 が済み、M7 から
   - M1 `src/color/`(色の数学。依存なし)
   - M2 `test/module-boundaries.test.mjs`(import の向きの検査)
   - M3 構文の段の結果を `notes[]` に(`src/rules/syntax-notes.mjs` が文言)
   - M4 捨てた宣言を `style.$dropped[]` に(`src/layout/dropped.mjs`)
   - M5 CSS の誤りの検査を `src/rules/css-mistakes.mjs` の `createCssMistakes({ report, facts, tools })` に
+  - M6 効かない宣言の判定を `src/rules/inert-declarations.mjs` に(layout は親の display・flow の中かを渡すだけ)。style の検査は 1 本の walk(全 box・全 state)。所見の集合の差分は `tools/finding-set/`
 - **座標計算サブセット L1**: [ADR-0018](adr/0018-coordinate-subset.md)。Grid と Flex(row・nowrap)の座標を、engine から独立した
   Z3 の仕様(`models/layout/spec.mjs`)として定義し直した。engine の領域ごとの式と幅の範囲全体で一致(`tests/layout-spec.test.mjs`)、
   3 ブラウザーとランダムな設定で一致(`e2e/layout-spec.spec.mjs`)。次の段は TODO.md の「座標計算サブセット L1」
@@ -72,7 +73,7 @@ tools/gate.sh                                     # push の前に毎回。20〜
 ## 次にやること
 
 - **eval の基準**: `evals/results/component-lint/` は Chromium 156(Playwright 1.64.1)で記録した。結果の `browser` が記録した版。別の版では文字の組み方の差で狭い幅の判定が動くので、gate で eval が変わったら、まず `browser` の行(gate が並べて出す)を見る
-- **M6**: `solve` の中に残る「効かない宣言」の判定(`reasons` の一覧)を `rules/css-mistakes.mjs` に移す。layout の段は「親の display」「flow の中か」を事実として出す。レイアウトが Unknown のときに検査をやり直す `walkStyles` をなくす
+- **M6 の残り**: layout が style を書き換えて報告する inert(% の高さ → auto、block flow の auto の上下 margin → 0、block flow の grid 配置)と inline の box の効かない寸法は engine に残る。`solve` の正規化(`$blockFlow`・`$inertMain`・`$anonymousGridText`)を style の段に出せれば、規則に移せる
 - **M7**: `rules/contrast`(色の規則を `src/color/` の上に。祖先の塗りの鎖だけで判定し、後ろに重なる箱の判定だけ layout があるときに足す)
 - **M8**: a11y を DOM の規則と幾何の規則に分ける。integrity と CLS も規則にする
 - **M9**: 境界テストの許可が空になったら `packages/` に分ける

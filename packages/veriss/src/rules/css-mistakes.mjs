@@ -4,7 +4,7 @@
 //   report: where findings go (warnings, Unknown diagnostics, the viewport ranges of a region)
 //   facts:  what the syntax and style stages found (rules, the indexes parseLayoutCSS keeps, styles() of a box)
 //   tools:  selector matching and the dropped-declaration readers
-// The checks are unchanged; M6 moves the ones still inside the layout (solve) here.
+// The checks are unchanged. They run in the style stage's one walk (engine.mjs, M6), never from the layout.
 export function createCssMistakes({ report, facts, tools }) {
   const { warnings: layoutWarnings, unknown, diagnostics, ranges } = report;
   const { rules, firstPseudo, contentRules, radiusRules, keyframeNames, dependentDeclarations, userSelectNone, transitionSizes, styles, unreadContainers = [] } = facts;
