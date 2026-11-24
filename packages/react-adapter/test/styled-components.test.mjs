@@ -863,3 +863,15 @@ export default function C() { return <Row><A /><B /></Row>; }`;
   assert.match(css, new RegExp(`> \\.${stableB}\\{display:none\\}`));
   assert.ok(!css.includes(`.${stableA}{display:none}`), css);
 });
+
+test('styled-components: a literal-union prop tested for truthiness keeps its values (no size=true / size=false states)', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  width: \${p => (p.$size ? p.$size : 'auto')};
+\`;
+export default function C({ size }: { size: 'sm' | 'lg' }) { return <Box $size={size} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.deepEqual(states.map(s => s.choices.size).sort(), ['lg', 'sm']);
+  for (const s of states) assert.match(css, new RegExp(`\\.${classOf(s.html, 'div')[1]}\\{width:${s.choices.size}\\}`));
+});

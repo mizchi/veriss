@@ -225,9 +225,12 @@ export function evaluateStyled(def, props, ctx) {
   const combine = (lists, f) => lists.reduce((acc, list) => acc.flatMap(a => list.map(b => { const choices = merge(a.choices, b.choices); return choices && { vs: [...a.vs, b.v], choices }; }).filter(Boolean)), [{ vs: [], choices: {} }])
     .flatMap(({ vs, choices }) => f(vs).map(r => { const c = merge(choices, r.choices); return c && { v: r.v, choices: c }; }).filter(Boolean));
 
-  // truthiness of a value: a symbol splits on its key
+  // truthiness of a value: a symbol splits on its key (per value when the key has literal values, so the branches
+  // record the same choices as the value itself)
   const truth = v => {
     if (isUnknown(v)) return [{ v, choices: {} }];
+    const values = isSym(v) && ctx.literalProps?.get(v[SYM].key);
+    if (values) return values.map(x => ({ v: Boolean(x) !== v[SYM].negate, choices: choose(v[SYM].key, x) }));
     if (isSym(v)) return [true, false].map(on => ({ v: on, choices: choose(v[SYM].key, on !== v[SYM].negate) }));
     return one(Boolean(unwrap(v)));
   };
