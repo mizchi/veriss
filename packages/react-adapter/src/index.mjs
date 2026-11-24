@@ -14,7 +14,7 @@
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
 import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings, relocateFindings } from '@mizchi/veriss-adapter-core';
-import { loadModule, binding, styledTag, evaluateStyled, evaluateExpression, isUnknownValue, symbolOf, symbolInfo, styledClass } from './styled-components.mjs';
+import { loadModule, binding, styledTag, evaluateStyled, evaluateExpression, isUnknownValue, symbolOf, symbolInfo, styledClass, stableClass } from './styled-components.mjs';
 import { typeMembers, literalValues, isTextType } from './types.mjs';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -278,12 +278,12 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     }
     const base = chain[0].baseComponent;
     delete chain[0].baseComponent;
-    if (!base) return { tag: chain[0].tag, baseClasses: chain.map(d => `sc-${d.name}`), scLists: lists };
+    if (!base) return { tag: chain[0].tag, baseClasses: chain.map(stableClass), scLists: lists };
     // styled(Component): that component rendered with these classes as its className, these children and props
     const inner = children(node.children);
     const html = lists.flatMap(l => {
       const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, dynamicValues, dynamics, ignoredDynamics, keyframes, maxStates, eachCounts, sourceLines,
-        inject: { classes: [...chain.map(d => `sc-${d.name}`).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, prefix: `${chain[0].base}` } });
+        inject: { classes: [...chain.map(stableClass).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, prefix: `${chain[0].base}` } });
       for (const u of rendered.unknowns) unknown(u.code, `${chain[0].base}: ${u.message}`);
       for (const a of rendered.assumptions) assumptions.add(a);
       return rendered.states.map(st => { const choices = merge(l.choices, st.choices); return choices && { html: st.html, choices }; }).filter(Boolean);

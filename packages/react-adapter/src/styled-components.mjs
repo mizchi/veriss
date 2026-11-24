@@ -1,5 +1,6 @@
 // styled-components, statically: a styled.tag`` / styled(Base)`` template evaluated for the props an element passes,
-// one class per evaluated CSS text, plus a stable class per component (sc-Name) that `${Other}` selectors refer to.
+// one class per evaluated CSS text, plus a stable class per component (sc-Name-<module hash>) that `${Other}` selectors
+// refer to (qualified by its module, so two modules that each declare Icon do not share it).
 // Nested rules are lowered with provenance (adapter-core lowerNested), so selector checks report template lines.
 //
 // Props are values or symbols. A JSX attribute that is a literal is its value; any other expression is a symbol named
@@ -205,7 +206,7 @@ export function evaluateStyled(def, props, ctx) {
   const src = node => cur().source.slice(node.start, node.end);
   const fromBinding = (b, name) => {
     if (!b) return one(unknownValue('U_STYLED_INTERPOLATION', `${name} is not a module constant, a styled component or a css fragment`));
-    if (b.kind === 'def') return one(`.sc-${b.def.name}`);
+    if (b.kind === 'def') return one(`.${stableClass(b.def)}`);
     if (b.kind === 'fragment') return inModule(b.fragment.mod, () => template(b.fragment.quasi));
     if (b.kind === 'const') return inModule(b.mod, () => ev(b.node));
     if (b.kind === 'ns') return one({ [NS]: b.mod });
@@ -587,3 +588,5 @@ export const symbolOf = (key, prop, negate = false) => ({ [SYM]: { key, prop, ne
 /** {key, negate} of a prop symbol, or null for a literal value. */
 export const symbolInfo = v => (isSym(v) ? { key: v[SYM].key, negate: v[SYM].negate } : null);
 export const styledClass = (name, text) => `sc-${name}-${hash(text)}`;
+/** A component's stable class (what `${Component}` refers to): its name qualified by its module. */
+export const stableClass = def => `sc-${def.name}-${hash(`${def.mod?.file ?? ''}\u0000${def.name}`)}`;

@@ -18,14 +18,14 @@ test('styled-components: props driving interpolations are states; theme and cons
   const closed = states.find(s => s.choices.open === false && s.choices.emphasis === false);
   // a stable class per component (for ${Title} selectors) and one per evaluated CSS
   const [bodyBase, bodyOpen] = classOf(open.html, 'div'), [, bodyClosed] = classOf(closed.html, 'div');
-  assert.equal(bodyBase, 'sc-Body');
+  assert.match(bodyBase, /^sc-Body-\w+$/);
   assert.notEqual(bodyOpen, bodyClosed);
   assert.match(css, new RegExp(`\\.${bodyOpen}\\{height:120px\\}`));
   assert.match(css, new RegExp(`\\.${bodyClosed}\\{height:40px\\}`));
   const [, card] = classOf(open.html, 'section');
   assert.match(css, new RegExp(`\\.${card}\\{display:grid;grid-template-columns:minmax\\(0, 1fr\\);row-gap:8px;padding:16px;color:#222\\}`));
   // ${Title} is the component's stable class
-  assert.match(css, new RegExp(`\\.${card} > \\.sc-Title\\{line-height:1.4\\}`));
+  assert.match(css, new RegExp(`\\.${card} > \\.sc-Title-\\w+\\{line-height:1.4\\}`));
   // $emphasis adds its declarations to the same rule (the css`` fragment is inlined where it is interpolated)
   const emphasised = states.find(s => s.choices.emphasis === true);
   assert.match(css, new RegExp(`\\.${classOf(emphasised.html, 'section')[1]}\\{[^}]*border:2px solid red\\}`));
@@ -69,7 +69,9 @@ export default function R() { return <Row><div><Label>x</Label></div></Row>; }`;
   assert.equal(w.file, 'Row.jsx');
   assert.equal(w.line, 7);
   assert.equal(w.component, 'Row');
-  assert.deepEqual(w.nesting.relation, {parent: w.nesting.path[0], combinator: '>', child: '.sc-Label'});
+  const {parent, combinator, child} = w.nesting.relation;
+  assert.deepEqual([parent, combinator], [w.nesting.path[0], '>']);
+  assert.match(child, /^\.sc-Label-\w+$/);
 });
 
 test('styled-components: every state has the structure styled-components itself renders (transient props not forwarded)', async () => {
@@ -99,11 +101,11 @@ test('styled-components across modules: namespace and named imports, imported fr
   assert.equal(states.length, 2);
   const large = states.find(s => s.choices.large === true);
   const [iconBase, iconLarge] = classOf(large.html, 'span');
-  assert.equal(iconBase, 'sc-Icon');
+  assert.match(iconBase, /^sc-Icon-\w+$/);
   assert.match(css, new RegExp(`\\.${iconLarge}\\{display:block;width:24px;height:24px\\}`));
   assert.match(css, /\{line-height:1\.5;display:block;height:20px\}/);
   assert.match(css, /row-gap:8px/);
-  assert.match(css, /> \.sc-Icon\{justify-self:start\}/);
+  assert.match(css, /> \.sc-Icon-\w+\{justify-self:start\}/);
 });
 
 test('styled-components across modules: a relation warning points into the module that holds the template', () => {
@@ -282,7 +284,7 @@ export const Card = styled(Box)\`
 export default function C() { return <Card>x</Card>; }`;
   const {states, css, unknowns} = expandReact(source, {file: 'C.jsx', resolveModule: memoryResolver(files)});
   assert.deepEqual(unknowns, []);
-  assert.match(states[0].html, /^<div class="sc-Box sc-Card sc-Box-\w+ sc-Card-\w+">x<\/div>$/);
+  assert.match(states[0].html, /^<div class="sc-Box-\w+ sc-Card-\w+ sc-Box-\w+ sc-Card-\w+">x<\/div>$/);
   assert.match(css, /\{display:flex\}/);
   assert.match(css, /\{padding:4px\}/);
 });
@@ -299,8 +301,8 @@ test('styled(Component): the component is expanded with the generated classes an
   assert.deepEqual(unknowns, []);
   assert.equal(states.length, 2); // off: the outer condition decides the inner branch
   const off = states.find(s => s.choices.off === true), on = states.find(s => s.choices.off === false);
-  assert.match(off.html, /^<section><p class="sc-Wrap sc-Wrap-\w+ sc-Danger sc-Danger-\w+" aria-disabled="true">!<\/p><button class="sc-Primary sc-Primary-\w+" type="button">Go<\/button><\/section>$/);
-  assert.match(on.html, /<p class="sc-Wrap sc-Wrap-\w+ sc-Danger sc-Danger-\w+">!<\/p>/);
+  assert.match(off.html, /^<section><p class="sc-Wrap-\w+ sc-Wrap-\w+ sc-Danger-\w+ sc-Danger-\w+" aria-disabled="true">!<\/p><button class="sc-Primary-\w+ sc-Primary-\w+" type="button">Go<\/button><\/section>$/);
+  assert.match(on.html, /<p class="sc-Wrap-\w+ sc-Wrap-\w+ sc-Danger-\w+ sc-Danger-\w+">!<\/p>/);
   assert.match(css, /\{color:red\}/);
   assert.match(css, /\{margin:0;height:20px\}/);
   assert.match(css, /\{display:block;height:32px\}/);
@@ -835,4 +837,29 @@ export default function C({ disabled }) { return <Box $c={disabled ? 'gray' : 'b
   const w = analyzeReact(never, {pageCSS, viewport, selectors: true, file: 'C.tsx'}).selectors.warnings.filter(x => x.code === 'W_CSS_SELECTOR_UNMATCHED');
   assert.equal(w.length, 1);
   assert.equal(w[0].line, 4);
+});
+
+test('styled-components: two modules that each declare Icon get different stable classes, so ${Icon} matches only its own', () => {
+  const files = {
+    a: `import styled from 'styled-components';
+export const Icon = styled.span\`
+  width: 10px;
+\`;`,
+    b: `import styled from 'styled-components';
+export const Icon = styled.i\`
+  width: 20px;
+\`;
+export const Row = styled.div\`
+  & > \${Icon} { display: none; }
+\`;`,
+  };
+  const source = `import { Icon as A } from './a';
+import { Icon as B, Row } from './b';
+export default function C() { return <Row><A /><B /></Row>; }`;
+  const {states, css, unknowns} = expandReact(source, {file: 'C.jsx', resolveModule: memoryResolver(files)});
+  assert.deepEqual(unknowns, []);
+  const [stableA] = classOf(states[0].html, 'span'), [stableB] = classOf(states[0].html, 'i');
+  assert.notEqual(stableA, stableB);
+  assert.match(css, new RegExp(`> \\.${stableB}\\{display:none\\}`));
+  assert.ok(!css.includes(`.${stableA}{display:none}`), css);
 });

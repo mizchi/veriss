@@ -23,7 +23,7 @@ argument winning (StyleX's rule, independent of definition order), including con
 blocks are flattened.
 
 **styled-components** (imported from `styled-components`): a `styled.tag` / `styled(Styled)` template is evaluated
-for the props each element passes. An element gets a stable class per component (`sc-Name`, what `${Other}` selectors
+for the props each element passes. An element gets a stable class per component (`sc-Name-<hash of its module>`, what `${Other}` selectors
 refer to) and one class per evaluated CSS. A literal prop is its value; any other prop expression is first evaluated in
 the component (its props, the `const` bindings of its body, module tables and functions, `useTheme()`), and otherwise
 is a condition when the template tests it (`$open ? … : …`, `$x && css```) and one of its values when the
