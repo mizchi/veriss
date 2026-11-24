@@ -93,7 +93,15 @@ export function compareCase(oracle, {css, tree, width, height = 768, name = 'Doc
     try { style = computeStyle(rules, box, active, inherited); }
     catch (error) { failure = `${box.path}: ${error.message}`; return; }
     const theirs = oracleRows.get(box.path);
+    // A box a declaration the verifier does not model applies to: its layout is Unknown there, so it is not compared
+    // (before, the unread declaration made the whole case unsupported).
+    if (style.$unmodeled?.length) { rows.push({path: box.path, status: 'verifier-unsupported', reason: style.$unmodeled[0].message}); for (const child of box.children) visit(child, style); return; }
     for (const property of comparedProperties) {
+      // A declaration the verifier drops on purpose (it does nothing for the layout: overflow on an inline box, F57) keeps
+      // its computed value in the other engine: not compared.
+      // (The two overflow axes go together: one axis's computed value depends on the other, visible becoming auto.)
+      const dropped = (style.$dropped ?? []).find(d => d.property === property || (/^overflow-/.test(d.property) && /^overflow-/.test(property)));
+      if (dropped) { rows.push({path: box.path, property, status: 'verifier-dropped', reason: dropped.reason}); continue; }
       const ours = normalizeVerifier(property, style[property]);
       if (ours.unsupported) { rows.push({path: box.path, property, status: 'verifier-unsupported', reason: ours.unsupported}); continue; }
       const other = normalizeOracle(property, theirs?.[property]);
@@ -170,7 +178,7 @@ export function generateCase(seed) {
     const selector = r.chance(0.2) ? `${r.pick(selectors)}, ${r.pick(selectors)}` : r.pick(selectors);
     // The verifier rejects overlapping shorthand/longhand writes in one rule
     // (E_CSS_SHORTHAND_CONFLICT); keep one declaration per family per rule.
-    const family = text => /^padding/.test(text) ? 'padding' : /^(?:gap|column-gap|row-gap)\b/.test(text) ? 'gap' : /^flex(?:-grow|-shrink|-basis)?:/.test(text) ? 'flex' : /^flex-(?:flow|direction|wrap)\b/.test(text) ? 'flex-flow' : text.split(':')[0];
+    const family = text => /^padding/.test(text) ? 'padding' : /^border/.test(text) ? 'border' : /^(?:gap|column-gap|row-gap)\b/.test(text) ? 'gap' : /^flex(?:-grow|-shrink|-basis)?:/.test(text) ? 'flex' : /^flex-(?:flow|direction|wrap)\b/.test(text) ? 'flex-flow' : text.split(':')[0];
     const seen = new Set(), list = [];
     for (const text of Array.from({length: r.int(1, 3)}, () => declaration(r))) if (!seen.has(family(text))) { seen.add(family(text)); list.push(text); }
     const body = `${selector} { ${list.join('; ')} }`;
