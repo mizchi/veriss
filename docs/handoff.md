@@ -73,7 +73,7 @@ tools/gate.sh                                     # push の前に毎回。20〜
 
 ## 次にやること
 
-- **実ページの Unknown**: [チェックリスト I](static-check-checklist.md) の残り。:active のレイアウト、結合子の前の状態、hr・col・br、::-webkit-scrollbar、テキストと子要素の混ざる箱
+- **実ページの Unknown**: [チェックリスト I](static-check-checklist.md) の残り(flex の中の absolute / fixed の子の静的位置)。自分で書く側の規約は [安全なサブセット](safe-subset.md)。Unknown の原因を潰すたびに、サブセットの「書いてよい形」へ移す
 
 - **eval の基準**: `evals/results/component-lint/` は Chromium 156(Playwright 1.64.1)で記録した。結果の `browser` が記録した版。別の版では文字の組み方の差で狭い幅の判定が動くので、gate で eval が変わったら、まず `browser` の行(gate が並べて出す)を見る
 - **M6 の残り**: layout が style を書き換えて報告する inert(% の高さ → auto、block flow の auto の上下 margin → 0、block flow の grid 配置)と inline の box の効かない寸法は engine に残る。`solve` の正規化(`$blockFlow`・`$inertMain`・`$anonymousGridText`)を style の段に出せれば、規則に移せる

@@ -1,0 +1,127 @@
+# veriss で判定できる書き方(安全なサブセット)
+
+veriss は、判定できない書き方に出会うと Unknown にする(成功にはしない)。このページは、自分で書くコンポーネントやページを、
+veriss が判定できる形で書くための規約である。エンジンが何を計算するかは [layout-checking.md](layout-checking.md) にあり、
+ここではそれを「書く側の規則」に直している。
+
+各項目は次の 3 つを持つ。
+
+- **書いてよい形**
+- **外れたときに出る Unknown**(メッセージの先頭)
+- **代わりの書き方**
+
+自分で書き換えられない CSS(コンポーネントライブラリの CSS)の扱いは、最後の節にある。
+
+## 1. 箱の並べ方
+
+- 子を並べる箱は、grid か flex にする。
+  - flex は `flex-direction: row | column`、`flex-wrap: nowrap`(row なら `wrap` も可)、すべての item で `order: 0`。
+- grid の列は、px か `minmax(0, Nfr)` にする。
+  - 素の `1fr` は、中身による最小幅を持つ。veriss がそれを判定できるのは、中身の最小幅が定数で分かる場合だけで、それ以外は Unknown になる。確実に判定させるには `minmax(0, 1fr)` と書く。
+- `float` と段組(`columns`)は使わない(`Unsupported layout property: clear` / `columns`)。
+- `position: absolute` / `fixed` の箱には、両方の軸に inset を書く(`top` か `bottom`、`left` か `right`)。
+  - 書かない軸は静的位置(流れの中にあったときの位置)に置かれる。
+  - grid の container や block の中なら veriss は静的位置を求められるが、flex の container の中では求められない(`Absolute children of a flex container use flex static positions`)。
+- 意図して重ねる箱は、`position: absolute` か、grid の同じ領域に置いたうえで、重なりを宣言する
+  (宣言のない重なりは `E_LAYOUT_OVERLAP`)。
+
+## 2. 寸法
+
+- 長さは px、%、viewport 単位、`rem` / `em`(既定のフォントサイズで解決する)、`calc()`(演算子の両側に空白)。
+- `box-sizing: border-box` を推奨する。content-box の `width: 100%` は、padding と border の分だけはみ出す(`W_LAYOUT_CONTENT_BOX_FULL`)。
+- 画像と動画には、`max-width: 100%` と、`aspect-ratio` か `width` / `height` 属性を付ける。
+
+## 3. テキスト
+
+- テキストと子要素を、同じ箱の中に混ぜない。
+  - 混ぜたいときは、テキストを `<span>` で包む。
+  - 混ざっていると、テキストは名前のない箱(anonymous box)になる。ページに `*` のセレクターがあると veriss は span で包めず、
+    Unknown になる(`… mixes text with child elements …`)。
+- テキストの寸法は、次のどちらかで与える。
+  - テキストの契約(`boxes` オプション)
+  - フォントファイル(`--font`)
+  - どちらもなければ、1 行 24px と仮定するので、文字のはみ出しは判定しない。
+- `line-height` は px か数値にする。
+- `text-box`(`text-box-trim`)は使わない(Unknown)。
+
+## 4. border と背景
+
+- `border` / `border-top` などの一括指定は、width・style・color をどの順でも書いてよい(省略も可)。
+- 角丸は `border-radius` の一括指定で書く。角ごとの longhand(`border-top-left-radius` など)は、当たる箱が Unknown になる。
+- `border-image` は使わない。
+- 枠のない箱には `border: none` か `border: 0` と書く。style を書かずに幅だけ書くと、border は描かれず、`W_CSS_BORDER_NO_STYLE` になる。
+
+## 5. 状態(`:hover` / `:focus` / `:active` / `:checked` …)
+
+- 状態のルールは、次の 2 つの範囲で書く。
+  - 描画だけを変える: `color`、`background`、`border-*-color`、`border-radius`、`outline`、`box-shadow`、`text-decoration`、
+    `opacity`、`visibility`、`cursor`
+  - `transform` / `translate` / `scale` / `rotate` で箱を動かす
+- `:hover` と `:focus` でレイアウトを変えるルールは、veriss が hover・focus した状態で配置し直して検査する。
+  - hover で別の箱がずれれば `E_LAYOUT_HOVER_SHIFT`、focus でずれれば `W_LAYOUT_FOCUS_SHIFT` になる。
+- それ以外の状態(`:active`、`:checked`、`:disabled` との組み合わせなど)で、レイアウトを変えない。
+  - 変えると Unknown になる(`State selector rules may only change paint …`)。
+  - 押したときに中身を下げる(`padding-top: 2px`)代わりに、`transform: translateY(2px)` と書く。
+- 1 つの複合セレクターに書ける状態は 1 つ(`.btn:hover:not([disabled])` は可、`.btn:hover:focus` は Unknown)。
+- 状態を結合子の前に置かない(`.check:checked + span::before`、`.row:hover > td`)。
+  - Unknown になる(`… a state or pseudo-element before a combinator`)。
+  - 代わりに、状態を持つ要素自身か、スタイルを当てる要素に属性を付けて、属性セレクターで書く。
+    例: `<span data-checked="true">` と `[data-checked="true"]::before`。属性セレクターは veriss が読める。属性の値をどう展開して検査するかは、アダプターの対応範囲([component-lint.md](component-lint.md))による。
+
+## 6. 擬似要素
+
+- `::before` / `::after` には `content` を書く。ないと生成されず、`W_CSS_PSEUDO_NO_CONTENT` になる。
+  - `*, *::before, *::after { box-sizing: border-box }` のような全称のリセットは、報告しない。
+- `::-webkit-scrollbar` は使わない(Unknown)。
+  - スクロールバーの幅は `scrollbar-width`、場所の確保は `scrollbar-gutter: stable` で書く。
+  - Chromium と Safari は、`scrollbar-width` / `scrollbar-color` があると `::-webkit-scrollbar` を無視する(F130)。
+
+## 7. HTML の要素と属性
+
+- 寸法と色は CSS で書く。
+  - `width` / `height` 属性を使ってよいのは、`img`・`video`・`canvas`・`iframe` と `svg` だけ。表の `th width="320px"` は、
+    当たる要素が Unknown になる(`HTML rendering attribute needs an adapter: width`)。CSS の `width` で書く。
+  - それ以外の要素では、`width` / `height` / `size` / `color` / `align` などは効かない(`W_HTML_ATTRIBUTE_INERT`)。
+- コンポーネントの props を DOM に漏らさない。
+  - styled-components では transient props(`$size`)にする。
+  - 漏れても描画には効かないので、veriss は止まらない。ただし `size` などの HTML の属性名は警告になる。
+- `<hr>`、`<br>`、`<col>` / `<colgroup>` は、今は大きさを持つ箱として扱えない(`Native or foreign element needs a size adapter`)。
+  - 区切り線は、`border-top` を持つ `<div role="separator">` か、`border-bottom` で書く。
+  - 改行は、ブロックを分けて書く。
+  - 表の列幅は、`th` / `td` の CSS で書く。
+- `contenteditable` は Unknown になる(フォーカスと編集の挙動を持つため)。
+
+## 8. 使えない CSS(Unknown になるもの)
+
+| 書き方 | 代わり |
+|---|---|
+| `float`、`columns` | grid / flex |
+| `transform: scale(0)`(畳む・隠す) | `visibility: hidden` か `opacity: 0`、閉じるなら `display: none` |
+| `mix-blend-mode` | なし(描画の合成は判定しない) |
+| `text-box` | `line-height` と padding で揃える |
+| `border-image` | `border` と `background` |
+| 角ごとの `border-*-radius` | `border-radius` の一括指定 |
+| SVG の `stroke-*` を CSS で書く | svg の属性で書く(`stroke-width="2"`) |
+
+当たる要素がページにない場合、これらのルールは何もしないので、Unknown にはならない。
+
+## 9. 書き換えられない CSS(コンポーネントライブラリ)
+
+- ライブラリの CSS がサブセットの外にあっても、Unknown になるのは、そのルールが当たりうる箱だけである。
+  - 宣言を読めないルールは、当たる箱だけが Unknown になる。
+  - セレクターを読めないルールは、擬似クラスと擬似要素を外したセレクターに当たる箱だけが Unknown になる(どの状態で当たる箱も含む、上位集合)。描画だけを変えるルールなら、配置は判定され、その箱の色(コントラスト)だけを判定しない。
+  - 要素や属性を読めない場合(大きさを持たない要素、効く属性、テキストと子要素の混在)も、その箱だけが Unknown になる。隠れている箱なら何も変わらない。
+  - ページにないコンポーネントのルールは、何もしない。
+- Unknown の箱の大きさに依存する箱(同じ container の後ろの兄弟、親)は、判定されない。そこから先は止まる。
+- 結果の status は、Unknown の箱が 1 つでもあれば `unknown` になる。
+  - ほかの箱の違反(`E_*`)は報告されるので、違反を探す目的には使える。
+  - 「ページ全体が正しい」と言うには、Unknown の箱をなくす必要がある。ライブラリのコンポーネントを包むか、テーマで上書きする。
+
+## このページの更新
+
+veriss が新しい書き方を判定できるようになったら、その項目を「書いてよい形」へ移す。そのとき、次も合わせて更新する。
+
+- [static-check-checklist.md](static-check-checklist.md) の対応する項目
+- Unknown のメッセージ
+
+3 ブラウザーでの実測が前提である。
