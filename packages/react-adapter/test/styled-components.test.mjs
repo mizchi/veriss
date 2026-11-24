@@ -413,3 +413,72 @@ export default function C({ on }) { return <Box $on={on} />; }`;
   assert.ok(unknowns.some(u => u.code === 'U_STYLED_INTERPOLATION' && /the statement for \(const x of \[\]\) \{\} is not modeled/.test(u.message)), JSON.stringify(unknowns));
   assert.match(css, /display:block/);
 });
+
+test('styled-components: a module function interpolated as ${helper} is called with the props (not taken for a component)', () => {
+  const source = `import styled from 'styled-components';
+const spacing = (p) => { return \`margin: \${p.$gap ? 8 : 0}px;\`; };
+function border({ $gap }) { return $gap ? 'border: 1px solid;' : ''; }
+const Box = styled.div\`
+  \${spacing}
+  \${border}
+  display: block;
+\`;
+export default function C({ gap }) { return <Box $gap={gap} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  const rule = on => { const [, cls] = classOf(states.find(s => s.choices.gap === on).html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.equal(rule(true), 'margin:8px;border:1px solid;display:block');
+  assert.equal(rule(false), 'margin:0px;display:block');
+});
+
+test('styled-components: module functions called with arguments (positional, destructured, defaulted, nested calls)', () => {
+  const source = `import styled from 'styled-components';
+const px = (n) => \`\${n * 4}px\`;
+const step = ({ $size }) => ($size === 'small' ? 1 : 2);
+function edge(width, style = 'solid') { const w = px(width); return \`\${w} \${style}\`; }
+const Box = styled.div\`
+  padding: \${(props) => px(step(props))};
+  border: \${({ $size }) => edge($size === 'small' ? 1 : 3)};
+\`;
+type P = { size: 'small' | 'large' };
+export default function C({ size }: P) { return <Box $size={size} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  const rule = size => { const [, cls] = classOf(states.find(s => s.choices.size === size).html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.equal(rule('small'), 'padding:4px;border:4px solid');
+  assert.equal(rule('large'), 'padding:8px;border:12px solid');
+});
+
+test('styled-components: a call the evaluator cannot follow is Unknown with the call named', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  color: \${() => pick('x')};
+  display: block;
+\`;
+export default function C() { return <Box />; }`;
+  const {unknowns, css} = expandReact(source);
+  assert.equal(unknowns.length, 1);
+  assert.match(unknowns[0].message, /pick/);
+  assert.doesNotMatch(unknowns[0].message, /undefined$/);
+  assert.match(css, /display:block/);
+});
+
+test('styled-components across modules: an imported helper runs in its own module (its constants and functions)', () => {
+  const files = {
+    'spacer.ts': `const UNIT = 4;
+const side = (n) => n * UNIT;
+export const spacer = (payload) => { const m = payload.m || 0; return \`margin: \${side(m)}px;\`; };`,
+  };
+  const resolveModule = spec => spec === './spacer' ? {file: 'spacer.ts', source: files['spacer.ts']} : null;
+  const source = `import styled from 'styled-components';
+import { spacer } from './spacer';
+const Box = styled.div\`
+  \${spacer}
+  display: block;
+\`;
+export default function C() { return <Box m={2} />; }`;
+  const {states, css, unknowns} = expandReact(source, {file: 'C.tsx', resolveModule});
+  assert.deepEqual(unknowns, []);
+  const [, cls] = classOf(states[0].html, 'div');
+  assert.match(css, new RegExp(`\\.${cls}\\{margin:8px;display:block\\}`));
+});

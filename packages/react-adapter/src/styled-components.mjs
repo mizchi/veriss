@@ -111,6 +111,15 @@ export function loadModule({ file, source, ast }, resolveModule, cache = new Map
  * What a name means in a module: a styled component, a css fragment, a const, an imported module namespace, an import
  * that could not be read ({missing}), or null (not something styled evaluation knows).
  */
+// a function declaration of the module by name (export default function counts as 'default')
+function functionDeclaration(mod, name) {
+  for (const stmt of mod.ast.program.body) {
+    const decl = stmt.type === 'ExportNamedDeclaration' || stmt.type === 'ExportDefaultDeclaration' ? stmt.declaration : stmt;
+    if (decl?.type === 'FunctionDeclaration' && (decl.id?.name === name || (name === 'default' && stmt.type === 'ExportDefaultDeclaration'))) return decl;
+  }
+  return null;
+}
+
 export function binding(mod, name, seen = new Set()) {
   if (mod.defs.has(name)) return { kind: 'def', def: mod.defs.get(name) };
   if (mod.fragments.has(name)) return { kind: 'fragment', fragment: mod.fragments.get(name) };
@@ -165,6 +174,11 @@ export function evaluateStyled(def, props, ctx) {
     if (b.kind === 'fragment') return inModule(b.fragment.mod, () => template(b.fragment.quasi));
     if (b.kind === 'const') return inModule(b.mod, () => ev(b.node));
     if (b.kind === 'ns') return one({ [NS]: b.mod });
+    // a module function (binding() names any function a component): as a value it is the function
+    if (b.kind === 'component') {
+      const fn = b.mod.consts.get(b.name) ?? functionDeclaration(b.mod, b.name);
+      if (fn) return inModule(b.mod, () => fn.type === 'FunctionDeclaration' ? one({ [FN]: fn, mod: b.mod, env: [] }) : ev(fn));
+    }
     return one(unknownValue('U_STYLED_INTERPOLATION', b.message));
   };
   const propsLookup = key => key === 'theme'
@@ -191,7 +205,8 @@ export function evaluateStyled(def, props, ctx) {
 
   // a missing theme path is reported with the whole expression that reads it (theme.colors.text, not theme.colors)
   const themeMissing = (node, missing) => ({ [UNK]: { code: 'U_STYLED_THEME', message: `${src(node)}: ${missing} is not in the theme`, missing } });
-  const member = (objNode, keyOf, node) => combine([ev(objNode), keyOf], ([o, k]) => {
+  const member = (objNode, keyOf, node) => combine([ev(objNode), keyOf], ([o, k]) => getKey(o, k, node));
+  const getKey = (o, k, node) => {
     if (isUnknown(o)) return one(o[UNK].missing ? themeMissing(node, o[UNK].missing) : o);
     if (o === PROPS) return propsLookup(k);
     if (o && typeof o === 'object' && NS in o) return fromBinding(binding(o[NS], k), `${src(objNode)}.${k}`);
@@ -203,9 +218,9 @@ export function evaluateStyled(def, props, ctx) {
     }
     if (o && typeof o === 'object' && 'path' in o) return one(themeMissing(node, `${o.path}.${k}`));
     return one(unknownValue('U_STYLED_VALUE', `${src(node)} is not known statically`));
-  });
+  };
 
-  const scopes = [];
+  let scopes = [];
   const lookup = name => { for (let i = scopes.length - 1; i >= 0; i--) if (scopes[i].has(name)) return scopes[i].get(name); return null; };
 
   function ev(node) {
@@ -253,7 +268,8 @@ export function evaluateStyled(def, props, ctx) {
       case 'TaggedTemplateExpression':
         if (node.tag.type === 'Identifier' && node.tag.name === cur().names.css) return template(node.quasi);
         break;
-      case 'ArrowFunctionExpression': case 'FunctionExpression': return one({ [FN]: node });
+      case 'ArrowFunctionExpression': case 'FunctionExpression': return one({ [FN]: node, mod: cur(), env: scopes.slice() });
+      case 'CallExpression': return callExpression(node);
       case 'ObjectExpression': case 'ArrayExpression': {
         // a literal object or array of single values (a token table); anything else is Unknown
         const out = node.type === 'ArrayExpression' ? [] : {};
@@ -269,27 +285,52 @@ export function evaluateStyled(def, props, ctx) {
     return one(unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`));
   }
 
-  // call a function interpolation with the props: (props) => …, ({ a, theme }) => …, ({ size = 'm' }) => …
-  const call = fn => {
-    const param = fn.params[0], scope = new Map();
-    if (param?.type === 'Identifier') scope.set(param.name, one(PROPS));
-    else if (param?.type === 'ObjectPattern') {
-      for (const p of param.properties) {
-        if (p.type !== 'ObjectProperty' || p.computed) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: a rest or computed props pattern`));
-        const key = p.key.name ?? p.key.value;
-        if (p.value.type === 'Identifier') scope.set(p.value.name, propsLookup(key));
-        else if (p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier') {
-          const def = ev(p.value.right);
-          scope.set(p.value.left.name, propsLookup(key).flatMap(r => r.v === undefined ? def.map(d => ({ v: d.v, choices: merge(r.choices, d.choices) })).filter(x => x.choices) : [r]));
-        } else return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: a nested props pattern`));
-      }
-    } else if (param) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: its parameter is not modeled`));
-    scopes.push(scope);
-    try {
-      if (fn.body.type !== 'BlockStatement') return ev(fn.body);
-      // falling off the end returns undefined
-      return run(fn.body.body).map(p => ({ v: p.done ? p.v : undefined, choices: p.choices }));
-    } finally { scopes.pop(); }
+  // A function value applied to argument variants (a function interpolation gets the props): parameters are bound by
+  // name, by object pattern ({ a, theme }) and with defaults ({ size = 'm' }, style = 'solid'); the body is evaluated
+  // in the function's module, over the scopes it closed over.
+  let depth = 0;
+  // a destructured field: a plain object (an argument built in the template) without the key gives undefined, as in JS
+  const fieldOf = (v, key, node) => {
+    const plain = v !== PROPS && !isUnknown(v) && !isSym(v) && !(v && typeof v === 'object' && ('path' in v || NS in v || FN in v));
+    return plain && (v === null || typeof v !== 'object' || !Object.hasOwn(v, key)) ? one(undefined) : getKey(v, key, node);
+  };
+  const call = f => apply(f, [one(PROPS)]);
+  const apply = (f, args) => {
+    const fn = f[FN];
+    if (depth > 32) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: calls nested too deep`));
+    return inModule(f.mod, () => {
+      const saved = scopes, scope = new Map();
+      scopes = [...(f.env ?? []), scope]; depth++;
+      try {
+        const withDefault = (variants, right) => variants.flatMap(r => r.v === undefined ? ev(right).map(d => ({ v: d.v, choices: merge(r.choices, d.choices) })).filter(x => x.choices) : [r]);
+        const bind = (pattern, variants) => {
+          if (pattern.type === 'Identifier') { scope.set(pattern.name, variants); return true; }
+          if (pattern.type === 'AssignmentPattern' && pattern.left.type === 'Identifier') { scope.set(pattern.left.name, withDefault(variants, pattern.right)); return true; }
+          if (pattern.type !== 'ObjectPattern') return false;
+          for (const p of pattern.properties) {
+            if (p.type !== 'ObjectProperty' || p.computed) return false;
+            const key = p.key.name ?? p.key.value;
+            const field = variants.flatMap(a => fieldOf(a.v, key, p).map(x => ({ v: x.v, choices: merge(a.choices, x.choices) })).filter(x => x.choices));
+            if (!bind(p.value, field)) return false;
+          }
+          return true;
+        };
+        for (const [i, param] of fn.params.entries()) {
+          if (!bind(param, args[i] ?? one(undefined))) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: the parameter ${src(param)} is not modeled`));
+        }
+        if (fn.body.type !== 'BlockStatement') return ev(fn.body);
+        // falling off the end returns undefined
+        return run(fn.body.body).map(p => ({ v: p.done ? p.v : undefined, choices: p.choices }));
+      } finally { scopes = saved; depth--; }
+    });
+  };
+  // a call of a function value (a module function, an imported one, a local arrow); other calls are Unknown
+  const callExpression = node => {
+    if (node.arguments.some(a => a.type === 'SpreadElement')) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`));
+    return ev(node.callee).flatMap(c => {
+      if (!(c.v && typeof c.v === 'object' && FN in c.v)) return [{ v: isUnknown(c.v) ? c.v : unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`), choices: c.choices }];
+      return thread(c, apply(c.v, node.arguments.map(a => ev(a))));
+    });
   };
 
   // A function body, statement by statement: paths of {done (returned or broke), v, choices}. Modeled: return, if /
@@ -337,7 +378,7 @@ export function evaluateStyled(def, props, ctx) {
   let slot = 0;
   const marks = new Map();
   function template(quasi) {
-    const parts = quasi.expressions.map(e => ev(e).flatMap(r => (r.v && typeof r.v === 'object' && FN in r.v ? call(r.v[FN]).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })) : [r])).filter(x => x.choices)
+    const parts = quasi.expressions.map(e => ev(e).flatMap(r => (r.v && typeof r.v === 'object' && FN in r.v ? call(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })) : [r])).filter(x => x.choices)
       .flatMap(r => valueOf(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })).filter(x => x.choices)));
     // The template's own text, with // line comments dropped as stylis does (outside strings and parentheses, so
     // url(http://…) stays). Values are written on one line; templateLines says which template line each line is.
