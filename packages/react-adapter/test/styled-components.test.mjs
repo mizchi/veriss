@@ -1002,3 +1002,18 @@ export default function C() { return <section><W>a</W><W>b</W></section>; }`;
   assert.equal(css.split(`.${sx}{width:100px}`).length - 1, 1, css);
   assert.equal(css.split('{height:20px}').length - 1, 1, css);
 });
+
+test('styled(Component): a rest spread without className (destructured out) does not carry the wrapper\'s classes', async () => {
+  const {renderStyled} = await import('./ssr.mjs');
+  const source = `import styled from 'styled-components';
+function Base({ className, ...rest }) { return <div {...rest}>x</div>; }
+const W = styled(Base)\`
+  color: red;
+\`;
+export default function C() { return <W />; }`;
+  const {states} = expandReact(source);
+  assert.equal(states.length, 1);
+  const {html} = await renderStyled(source, {});
+  assert.equal(html, '<div>x</div>');
+  assert.equal(states[0].html, '<div>x</div>');
+});

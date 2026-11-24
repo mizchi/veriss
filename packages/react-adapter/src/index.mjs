@@ -313,8 +313,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         if (a.argument.type === 'CallExpression' && text(a.argument.callee) === 'stylex.props') {
           refLists = a.argument.arguments.reduce((acc, arg) => acc.flatMap(l => refVariants(arg).map(r => { const choices = merge(l.choices, r.choices); return choices && { refs: [...l.refs, ...r.refs], choices }; }).filter(Boolean)), refLists ?? [{ refs: [], choices: {} }]);
         } else if (inject && a.argument.type === 'Identifier' && (a.argument.name === restName || a.argument.name === propsName)) {
-          // the wrapper's props passed on: its className joins this element's classes
-          classLists = classLists.map(l => ({ ...l, classes: [...l.classes, ...inject.classes] }));
+          // the wrapper's props passed on: its className joins this element's classes (unless destructured out of rest)
+          if (a.argument.name === propsName || !destructuredNames.has('className')) classLists = classLists.map(l => ({ ...l, classes: [...l.classes, ...inject.classes] }));
           assumptions.add(`props spread onto <${tag}> carry the styled wrapper's className; other props are not rendered as attributes`);
         } else unknown('U_REACT_SPREAD', `<${tag}> spreads ${text(a.argument)}; its attributes are not known`);
         continue;
