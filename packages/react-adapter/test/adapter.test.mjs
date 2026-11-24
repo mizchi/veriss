@@ -176,3 +176,19 @@ test('checked and selected are written only where React writes them (input, opti
     assert.deepEqual(attrs(s.html), attrs(real), JSON.stringify(s.choices));
   }
 });
+
+test('size, span, cols and rows are written only for a positive number, like react-dom/server (values evaluated in the component)', async () => {
+  const {render} = await import('./ssr.mjs');
+  const source = `const DOT = { small: '8px', large: '12px' };
+const PX = { sm: 12, lg: 0 };
+export default function C({ size, dot, icon }: { size: 'small' | 'medium'; dot: 'small' | 'large'; icon: 'sm' | 'lg' }) {
+  return <div><div size={size} /><span size={DOT[dot]} /><span size={PX[icon]} /><span size={18} /><span size="medium" /><td colSpan={2} /><i span="x" /></div>;
+}`;
+  const {states} = expandReact(source);
+  assert.ok(states.length > 1);
+  const attrs = html => [...html.matchAll(/<(\w+)([^>]*)>/g)].map(m => `${m[1]}:${[...m[2].matchAll(/\s(size|span|cols|rows)="([^"]*)"/g)].map(x => `${x[1]}=${x[2]}`).join(',')}`);
+  for (const s of states) {
+    const real = await render(source.replace(/: \{ size[^}]*\}/, ''), s.choices);
+    assert.deepEqual(attrs(s.html), attrs(real), JSON.stringify(s.choices));
+  }
+});

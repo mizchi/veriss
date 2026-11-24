@@ -86,7 +86,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const empty = [{ html: '', choices: {} }];
   // Props typed as a union of string or number literals (status: 'Active' | 'Pending review'): their text is one of
   // those values, a state each (the choice is the prop's value).
-  let literalProps = new Map(), propsName = null, textProps = new Set(), componentEnv = null; const defaultProps = new Map();
+  let literalProps = new Map(), propsName = null, textProps = new Set(), componentEnv = null, staticVariants = () => null; const defaultProps = new Map();
   const text = node => source.slice(node.start, node.end);
   const choice = (node, value) => { const { key, negate } = conditionKey(text(node)); return choose(key, value !== negate); };
 
@@ -331,6 +331,13 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         else unknown('U_REACT_DYNAMIC_STYLE', `<${tag}> has a dynamic style={${text(value)}}`);
         continue;
       }
+      // size, span, cols, rows: React writes them only for a number of at least 1 ('medium', '8px', 0 are dropped); a
+      // value the component determines (a literal, a literal-union prop, a module table) decides it per state
+      if (['size', 'span', 'cols', 'rows'].includes(key)) {
+        const shown = v => typeof v !== 'boolean' && v !== null && v !== undefined && v !== '' && !Number.isNaN(Number(v)) && Number(v) >= 1;
+        const known = value === null ? [{ v: true, choices: {} }] : staticVariants(value);
+        if (known) { attrLists.push(known.map(r => ({ html: shown(r.v) ? ` ${attrName(key)}="${escapeAttr(String(r.v))}"` : '', choices: r.choices }))); continue; }
+      }
       if (value === null) { statics.push(` ${attrName(key)}`); continue; }
       if (value.type === 'StringLiteral' || value.type === 'NumericLiteral') { statics.push(` ${attrName(key)}="${escapeAttr(String(value.value))}"`); continue; }
       if (value.type === 'BooleanLiteral') { if (value.value) statics.push(` ${attrName(key)}${/^(?:aria|data)-/.test(key) ? '="true"' : ''}`); else if (/^(?:aria|data)-/.test(key)) statics.push(` ${attrName(key)}="false"`); continue; }
@@ -451,9 +458,22 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // A prop with a literal default ({ label = 'Save changes' }): its default is a state of its own (the prop left out).
   for (const p of param?.type === 'ObjectPattern' ? param.properties : []) if (p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier' && p.value.left.name === p.key.name && ['StringLiteral', 'NumericLiteral'].includes(p.value.right.type) && !literalProps.has(p.key.name)) defaultProps.set(p.key.name, p.value.right.value);
   if (defaultProps.size) assumptions.add(`props with a literal default (${[...defaultProps.keys()].join(', ')}) are checked with that default and with placeholder text for any other value`);
+  // The values an expression of the component takes, each with its choices (a literal-union prop expanded to its
+  // values), or null when any is not known statically.
+  staticVariants = node => {
+    if (['StringLiteral', 'NumericLiteral', 'BooleanLiteral'].includes(node.type)) return [{ v: node.value, choices: {} }];
+    if (!componentEnv) return null;
+    const out = evaluateExpression(node, sc, { ...componentEnv, theme, literalProps }).flatMap(r => {
+      const sym = symbolInfo(r.v);
+      if (!sym) return [r];
+      const values = !sym.negate && literalProps.get(sym.key);
+      return values ? values.map(x => { const choices = merge(r.choices, choose(sym.key, x)); return choices ? { v: x, choices } : null; }).filter(Boolean) : [{ v: r.v, choices: r.choices }];
+    });
+    return out.length && out.every(r => !isUnknownValue(r.v) && !symbolInfo(r.v) && (r.v === null || typeof r.v !== 'object')) ? out : null;
+  };
   // The component's environment for expressions passed to styled elements: its props by name (symbols; literal unions
   // take their values when read) and the const / let bindings of its body before the return, in order.
-  if (sc.defs.size || sc.imports.size) {
+  {
     const names = new Set([...(local ?? []), ...defaults.keys()]);
     const bindings = target.fn.body.type === 'BlockStatement' ? target.fn.body.body.filter(st => st.type === 'VariableDeclaration' && st.kind !== 'var').flatMap(st => st.declarations.filter(d => d.init).map(d => [d.id, d.init])) : [];
     componentEnv = { scope: [...names].map(n => [n, [{ v: symbolOf(n, n), choices: {} }]]), bindings };
