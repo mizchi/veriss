@@ -6,7 +6,7 @@ import {q, cmp} from './linear.mjs';
 import {fontShorthand} from './css.mjs';
 
 const fontKeys = new Set(['family', 'size', 'lineHeight', 'weight', 'style', 'letterSpacing']);
-const metricKeys = new Set(['kind', 'text', 'width', 'characters', 'maxLength', 'perCharacter', 'pairAdjustment', 'bounds', 'widest', 'font', 'allowance', 'minContent', 'overflowWrap', 'profile', 'lang', 'spacedProfile', 'inline', 'baseline', 'lineWidth', 'inlineEdges', 'inlineWeights', 'inlineAtomics']);
+const metricKeys = new Set(['kind', 'text', 'width', 'characters', 'maxLength', 'perCharacter', 'pairAdjustment', 'bounds', 'widest', 'font', 'allowance', 'minContent', 'overflowWrap', 'wordBreak', 'profile', 'lang', 'spacedProfile', 'inline', 'baseline', 'lineWidth', 'inlineEdges', 'inlineWeights', 'inlineAtomics']);
 export const languageTag = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 // Languages whose break opportunities were compared with Chromium (e2e). Chinese differs (e.g. !〜).
 // he: Hebrew letters break at spaces only (measured against Chromium with right-to-left text).
@@ -25,6 +25,8 @@ export function validateFontContract(font) {
 export function validateTextMetrics(metrics) {
   if (!metrics || typeof metrics !== 'object' || Object.keys(metrics).some(key => !metricKeys.has(key)) || !['content', 'domain', 'lines'].includes(metrics.kind)) throw new Error('Invalid text metrics');
   if (metrics.lang !== undefined && (typeof metrics.lang !== 'string' || !languageTag.test(metrics.lang))) throw new Error('Invalid text metrics lang');
+  // wordBreak: the lines were broken under word-break: break-all (only wrapping lines are measured with it).
+  if (metrics.wordBreak !== undefined && !(metrics.kind === 'lines' && metrics.wordBreak === 'break-all')) throw new Error('Invalid text metrics wordBreak');
   if (metrics.kind === 'lines') {
     const {profile} = metrics;
     if (!['normal', 'anywhere', 'break-word'].includes(metrics.overflowWrap) || !Array.isArray(profile) || !profile.length || profile.length > 256) throw new Error('Invalid text line profile');

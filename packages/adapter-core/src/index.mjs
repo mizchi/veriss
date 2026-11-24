@@ -179,7 +179,7 @@ function measuredContract(facts, textMetrics, fonts, defaultFontSize) {
   const nowrap = ['nowrap', 'pre'].includes(facts.whiteSpace);
   const wrap = nowrap ? 'nowrap' : facts.oneLine ? 'one-line' : domain ? null : ['normal', 'pre-line', 'pre-wrap'].includes(facts.whiteSpace) ? (facts.overflowWrap === 'anywhere' ? 'anywhere' : 'normal') : null;
   if (!wrap) return null;
-  const contract = { text: { font: { family, size, lineHeight, weight }, ...(domain ?? { content: facts.text }), ...(facts.lang ? { lang: facts.lang } : {}), ...(wrap === 'normal' && facts.overflowWrap !== 'normal' ? { overflowWrap: facts.overflowWrap } : {}) }, wrap };
+  const contract = { text: { font: { family, size, lineHeight, weight }, ...(domain ?? { content: facts.text }), ...(facts.lang ? { lang: facts.lang } : {}), ...(wrap === 'normal' && facts.overflowWrap !== 'normal' ? { overflowWrap: facts.overflowWrap } : {}), ...(['normal', 'anywhere'].includes(wrap) && facts.wordBreak === 'break-all' ? { wordBreak: 'break-all' } : {}) }, wrap };
   // A text the font file cannot measure (a character it lacks, a feature not modeled): not a size, but a reason the
   // caller reports as Unknown (its text is then only assumed to fit).
   try { return textMetrics.resolveBoxes({ x: contract }).x; } catch (error) { return { unmeasurable: error.message }; }

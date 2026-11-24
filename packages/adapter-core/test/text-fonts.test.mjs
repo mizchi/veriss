@@ -79,3 +79,15 @@ test('dynamic text with no length bound in a nowrap box is a warning (a long val
   assert.ok(!has(run('', '.name{overflow:hidden;text-overflow:ellipsis}')));
   assert.ok(!has(run('', '.name{white-space:normal}')));
 });
+
+test('word-break: break-all text is measured with break-all; without font files it stays Unknown', async () => {
+  const textMetrics = await loadTextMetrics({fonts});
+  const states = [{html: '<div class="c"><div class="w"><p class="t">Notification preferences</p></div></div>', choices: {}}];
+  const breakAll = '.c{display:grid;grid-template-columns:120px}.t{font-family:Roboto;font-size:16px;line-height:24px;font-weight:400;color:#000}';
+  // On the text itself, and inherited from its parent.
+  for (const css of [breakAll + '.t{word-break:break-all}', breakAll + '.w{word-break:break-all}']) {
+    assert.equal(analyzeStates({states, css}, {pageCSS, viewport, assumeText: true}).status, 'unknown', css);
+    const result = analyzeStates({states, css}, {pageCSS, viewport, assumeText: true, textMetrics, fonts});
+    assert.equal(result.status, 'verified', `${css}: ${JSON.stringify(result.states.map(s => s.report.diagnostics.map(d => d.message)))}`);
+  }
+});

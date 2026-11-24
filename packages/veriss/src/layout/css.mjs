@@ -1303,7 +1303,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     'overflow-x': 'visible', 'overflow-y': 'visible', 'white-space': inherited['white-space'] ?? 'normal',
     'scrollbar-gutter':'auto', 'scrollbar-width':'auto',
     appearance:'auto',
-    'overflow-wrap': inherited['overflow-wrap'] ?? 'normal', float: 'none', position: 'static',
+    'overflow-wrap': inherited['overflow-wrap'] ?? 'normal', ...(inherited['word-break'] === 'break-all' ? { 'word-break': 'break-all' } : {}), float: 'none', position: 'static',
     left:'auto',right:'auto',top:'auto',bottom:'auto',
     'writing-mode': inherited['writing-mode'] ?? 'horizontal-tb', direction: inherited.direction ?? 'ltr',
     ...Object.fromEntries(textProperties.map(key => [key, inherited[key] ?? textInitial[key]])),
@@ -1398,7 +1398,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   if(box.hiddenAttr==='until-found' || box.hiddenAttr==='dynamic') throw Object.assign(new Error(`hidden=${box.hiddenAttr === 'dynamic' ? '(dynamic)' : 'until-found'} is outside the modeled rendering`),{code:'U_LAYOUT_ELEMENT'});
   const ua = { ...values };
   const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0' };
-  const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
+  const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'word-break', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
   const priorities = new Map(), sources = {},custom=new Map(),dormant={},overridden={}, candidates = {};
   // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions), and
   // whether a rule the analysis cannot read may repaint the box.
@@ -1683,11 +1683,15 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // nothing (measured in Chromium, Firefox and WebKit); elsewhere they move the lines, which is not modeled.
   // F106: with white-space nowrap or pre the text has no soft wrap opportunity, so word-break and line-break (which add or
   // remove some) do nothing (measured in Chromium, Firefox and WebKit on Latin, Japanese and hyphenated text). They are
-  // inherited, so only a box with no element inside is judged; where lines wrap they move the breaks (not modeled).
+  // inherited, so only a box with no element inside is judged (and warned of only where declared on it); where lines wrap
+  // line-break moves the breaks (not modeled), and word-break: break-all is kept (inherited by the text inside) for the
+  // layout, which lays the text out only where it was measured with it.
   for (const [key, idle] of [['word-break', 'normal'], ['line-break', 'auto']]) {
     if (values[key] === undefined) continue;
     if ([idle, 'initial', 'unset', 'revert', 'revert-layer'].includes(String(values[key]))) { delete values[key]; continue; }
-    if (!box.pseudo && ['nowrap', 'pre'].includes(String(values['white-space'])) && String(values['text-wrap-mode'] ?? 'white-space') !== 'wrap' && !(box.children ?? []).some(c => !c.anonymous) && !(box.inline ?? []).length) { drop(values, 'one-line', key, values[key]); delete values[key]; }
+    if (!box.pseudo && ['nowrap', 'pre'].includes(String(values['white-space'])) && String(values['text-wrap-mode'] ?? 'white-space') !== 'wrap' && !(box.children ?? []).some(c => !c.anonymous) && !(box.inline ?? []).length) { if (sources[key]) drop(values, 'one-line', key, values[key]); delete values[key]; }
+    // word-break: break-all where lines wrap: kept; the layout lays out its text only where it was measured with it.
+    else if (key === 'word-break' && values[key] === 'break-all') continue;
     else throw new Error(key === 'line-break' ? `Unsupported layout property: line-break (${values[key]} changes line breaking, which is not modeled)` : `Unsupported word-break: ${values[key]} (it changes line breaking, shaping, containing blocks or paint, which are not modeled)`);
   }
   // F84: white-space normal, nowrap and pre-line turn a tab into a space that collapses, so tab-size does nothing there

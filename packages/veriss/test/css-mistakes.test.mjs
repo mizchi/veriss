@@ -1185,14 +1185,18 @@ test('F106: line-breaking properties do nothing where white-space keeps the text
     assert.deepEqual(inert(`.a{white-space:nowrap;${decl}}`, prop), ['verified', true], decl);
     assert.deepEqual(inert(`.a{white-space:pre;${decl}}`, prop), ['verified', true], `pre ${decl}`);
   }
-  // where lines wrap they change the breaks: word-break and line-break stay Unknown, hyphens is not reported
-  assert.equal(run('.a{word-break:break-all}').status, 'unknown');
+  // where lines wrap they change the breaks: keep-all and line-break stay Unknown, hyphens is not reported; break-all is
+  // laid out where the text was measured with it (word-break-all.test.mjs), and moves nothing in a box without text
+  assert.equal(run('.a{word-break:keep-all}').status, 'unknown');
+  assert.equal(run('.a{word-break:break-all}').status, 'verified');
+  assert.deepEqual(inert('.a{word-break:break-all}', 'word-break'), ['verified', false]);
   assert.equal(run('.a{line-break:anywhere}').status, 'unknown');
   assert.deepEqual(inert('.a{hyphens:auto}', 'hyphens'), ['verified', false]);
   // a text-wrap shorthand after white-space turns wrapping back on: not inert
   assert.equal(inert('.a{white-space:nowrap;text-wrap:balance}', 'text-wrap-style')[1], false);
-  // inherited by an element inside, which may wrap again: still Unknown / not reported
-  assert.equal(run('.p{white-space:nowrap;word-break:break-all}', '<div class="p"><div class="a"></div></div>').status, 'unknown');
+  // inherited by an element inside, which may wrap again: not reported; break-all is kept for the text inside (laid out
+  // only where measured with it, word-break-all.test.mjs), and moves nothing in a box without text
+  assert.deepEqual(inert('.p{white-space:nowrap;word-break:break-all}', 'word-break', '<div class="p"><div class="a"></div></div>'), ['verified', false]);
   assert.deepEqual(inert('.p{white-space:nowrap;hyphens:auto}', 'hyphens', '<div class="p"><div class="a"></div></div>')[1], false);
 });
 

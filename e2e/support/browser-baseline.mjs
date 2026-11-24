@@ -125,6 +125,15 @@ export const browserBaseline = [
   }
  },
  {
+  "file": "layout-word-break.spec.mjs",
+  "title": "word-break: break-all text takes at least as many lines as Chromium gives it",
+  "firefox": {
+   "kind": "baseline",
+   "category": "text",
+   "note": "break opportunities under word-break: break-all differ (fewer between ASCII punctuation and letters; measured pair by pair)"
+  }
+ },
+ {
   "file": "layout-cls-facts.spec.mjs",
   "title": "a long word: the text overflows its 200px box in Chromium exactly where the static check warns, and ",
   "firefox": {

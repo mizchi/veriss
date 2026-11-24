@@ -11,6 +11,7 @@
 // layout rounding allowance described in `layoutAllowance`.
 
 import {languageTag, breakingLanguages, breaksModeled} from './layout/text-font.mjs';
+import {breakAllCharacters, breakAllPairs} from './text-break-all.mjs';
 const UNIT = 64; // Chromium LayoutUnit: 1/64 CSS px
 const contentLanguages = ['ja', 'zh-Hans', 'zh-Hant', 'ko'];
 const fail = message => { throw Object.assign(new Error(message), {code: 'U_LAYOUT_TEXT_METRICS'}); };
@@ -123,13 +124,53 @@ function breakBefore(chars, classes, i) {
  * Break opportunities of collapsed text (indices i, a break before character
  * i), or a U_LAYOUT_TEXT_METRICS error for characters and pairs outside the model.
  */
-export function breakOpportunities(text) {
+export function breakOpportunities(text, {wordBreak = 'normal'} = {}) {
+  if (wordBreak === 'break-all') return breakAllOpportunities(text);
+  if (wordBreak !== 'normal') fail(`word-break ${wordBreak} is outside the line-breaking model`);
   const chars = [...text], classes = chars.map(lineClass);
   const bad = chars.findIndex((c, i) => !classes[i]);
   if (bad >= 0) fail(`Line breaking around U+${chars[bad].codePointAt(0).toString(16).toUpperCase().padStart(4, '0')} is not modeled`);
   for (let i = 1; i < chars.length; i++) { const reason = unmodeledPair(chars[i - 1], chars[i]); if (reason) fail(`Line breaking at ${reason}, which is not modeled`); }
   const out = [];
   for (let i = 1; i < chars.length; i++) if (breakBefore(chars, classes, i)) out.push(i);
+  return out;
+}
+// word-break: break-all (CSS Text 3 §5.2) adds break opportunities inside words. Chromium's, measured pair by pair
+// (tools/measure-break-all.mjs), do not follow one class rule (+ and \\ differ, as do ! and )), so the measured pairs are
+// used as they are. A character outside the measured set stands for its group's measured one (each group was checked to
+// agree next to every measured character): Latin-1 letters, ideographs and kana, small kana, iteration marks. Hebrew
+// is not modeled under break-all.
+let breakAllTable;
+const smallKana = new Set([...'ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶ']);
+function breakAllRepresentative(c) {
+  if (breakAllTable.at.has(c)) return c;
+  if (latin1(c) && c !== '\u00B7') return 'é';
+  if (smallKana.has(c)) return 'ぁ';
+  if (c === 'ヾ' || c === 'ゞ') return 'ヽ';
+  if (lineClass(c) === 'ID') return '日';
+  return null;
+}
+function breakAllOpportunities(text) {
+  breakAllTable ??= (() => { const bytes = Uint8Array.from(atob(breakAllPairs), c => c.charCodeAt(0)), list = [...breakAllCharacters]; return {bytes, n: list.length, at: new Map(list.map((c, i) => [c, i]))}; })();
+  const chars = [...text], {bytes, n, at} = breakAllTable;
+  const reps = chars.map(c => c === ' ' ? ' ' : breakAllRepresentative(c));
+  const bad = reps.findIndex(r => r === null);
+  if (bad >= 0) fail(`Line breaking around U+${chars[bad].codePointAt(0).toString(16).toUpperCase().padStart(4, '0')} under word-break: break-all is not modeled`);
+  // $ % + \\ next to a non-ASCII character follow ICU's numeric rule (UAX #14 LB25) by the digits around them, as under
+  // word-break: normal (measured in triples); not modeled.
+  const numeric = c => '$%+\\'.includes(c), other = c => !ascii(c) && c !== ' ';
+  for (let i = 1; i < chars.length; i++) if ((numeric(chars[i - 1]) && other(chars[i])) || (numeric(chars[i]) && other(chars[i - 1]))) fail(`Line breaking at ${chars[i - 1]}${chars[i]} follows ICU's numeric rule, which is not modeled`);
+  // A hyphen before a Latin-1 letter breaks or not by the character before it (measured in triples); not modeled.
+  const hyphen = chars.findIndex((c, i) => c === '-' && i + 1 < chars.length && latin1(chars[i + 1]) && chars[i + 1] !== '\u00B7');
+  if (hyphen >= 0) fail(`Line breaking at -${chars[hyphen + 1]} under word-break: break-all depends on the character before the hyphen, which is not modeled`);
+  const out = [];
+  for (let i = 1; i < chars.length; i++) {
+    // A space always gives a break after it, never before it.
+    if (reps[i] === ' ') continue;
+    if (reps[i - 1] === ' ') { out.push(i); continue; }
+    const k = at.get(reps[i - 1]) * n + at.get(reps[i]);
+    if (bytes[k >> 3] & (1 << (k & 7))) out.push(i);
+  }
   return out;
 }
 const collapse = text => text.replace(/[ \t\n\r\f]+/g, ' ').trim();
@@ -241,7 +282,7 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
    * when the modeled one does).
    */
   /** spacing: extra px per character (letter-spacing) and per space (word-spacing), e.g. WCAG 1.4.12. */
-  function breakLines({font, text, overflowWrap = 'normal', lang, spacing, extra: extraAt, weightAt}) {
+  function breakLines({font, text, overflowWrap = 'normal', wordBreak = 'normal', lang, spacing, extra: extraAt, weightAt}) {
     spacing ??= font.letterSpacing ? {letter: font.letterSpacing, word: 0} : undefined;
     checkLang(lang);
     if (lang !== undefined && !breaksModeled(lang)) fail(`lang ${lang}: line breaking is verified for ${[...breakingLanguages].join(', ')}`);
@@ -259,10 +300,10 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
       const map = [];
       chars.forEach((c, i) => { if (c !== placeholder) map.push(i); });
       map.push(n);
-      const set = new Set(breakOpportunities(chars.filter(c => c !== placeholder).join('')).map(o => map[o]));
+      const set = new Set(breakOpportunities(chars.filter(c => c !== placeholder).join(''), {wordBreak}).map(o => map[o]));
       chars.forEach((c, i) => { if (c === placeholder) { set.add(i); set.add(i + 1); } });
       opportunities = [...set].filter(o => o > 0 && o < n).sort((a, b) => a - b);
-    } else opportunities = breakOpportunities(collapsed);
+    } else opportunities = breakOpportunities(collapsed, {wordBreak});
     // text-spacing-trim (Chromium's default) halves adjacent fullwidth punctuation
     // through the font's halt feature, which the shaper does not apply.
     const punctuation = c => openings.has(c) || (closings.has(c) && !iterationMarks.has(c));
@@ -588,14 +629,17 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
         }
         const overflowWrap = rest.wrap === 'anywhere' ? 'anywhere' : (text.overflowWrap ?? 'normal');
         if (rest.wrap === 'anywhere' && text.overflowWrap !== undefined && text.overflowWrap !== 'anywhere') fail(`${selector}: wrap anywhere measures overflow-wrap: anywhere`);
-        const lines = breakLines({font, text: wrapContent, overflowWrap, lang: text.lang, extra: extraAt, weightAt});
+        // word-break: break-all (the measured Chromium pairs, breakOpportunities) moves the breaks inside words.
+        const wordBreak = text.wordBreak ?? 'normal';
+        if (!['normal', 'break-all'].includes(wordBreak)) fail(`${selector}: wordBreak must be normal or break-all`);
+        const lines = breakLines({font, text: wrapContent, overflowWrap, wordBreak, lang: text.lang, extra: extraAt, weightAt});
         // The max-content width: the narrowest width at which the text takes one line (the profile's upper bound).
         const oneLine = lines.profile.find(entry => entry.lines === 1)?.atLeastInlineSize;
         out[selector] = {...rest, minInlineSize: lines.minContent, ...(oneLine !== undefined ? {maxInlineSize: Math.max(oneLine, lines.minContent)} : {}), intrinsicBlockSize: lines.profile.map(entry => ({atLeastInlineSize: entry.atLeastInlineSize, blockSize: entry.lines === null ? null : entry.lines * font.lineHeight})),
-          font: fontContract, textMetrics: {kind: 'lines', text: lines.text, width: lines.width, minContent: lines.minContent, overflowWrap, profile: lines.profile, ...(text.lang !== undefined ? {lang: text.lang} : {}),
+          font: fontContract, textMetrics: {kind: 'lines', text: lines.text, width: lines.width, minContent: lines.minContent, overflowWrap, ...(wordBreak !== 'normal' ? {wordBreak} : {}), profile: lines.profile, ...(text.lang !== undefined ? {lang: text.lang} : {}),
             ...(text.inline ? {inline: wrappedInlineBounds({font, text: wrapContent, lang: text.lang, inline: Object.fromEntries(Object.entries(text.inline).filter(([, v]) => v?.atomic === undefined).map(([k, v]) => [k, pieceOf(v)])), lines, extraAt, edges: wrapEdges, weights: wrapWeights, atomics: wrapAtomics}), ...(extraAt ? {inlineEdges: wrapEdges} : {}), ...(weightAt ? {inlineWeights: wrapWeights} : {}), ...(wrapAtomics.length ? {inlineAtomics: Object.fromEntries(wrapAtomics.map(a => [a.k, [a.w, a.h]]))} : {})} : {}), baseline: baselineMetrics(font),
             // WCAG 1.4.12 text spacing: the same text with letter-spacing 0.12em and word-spacing 0.16em.
-            spacedProfile: breakLines({font, text: wrapContent, overflowWrap, lang: text.lang, spacing: {letter: 0.12 * font.size, word: 0.16 * font.size}, extra: extraAt, weightAt}).profile,
+            spacedProfile: breakLines({font, text: wrapContent, overflowWrap, wordBreak, lang: text.lang, spacing: {letter: 0.12 * font.size, word: 0.16 * font.size}, extra: extraAt, weightAt}).profile,
             font: provenance(font), allowance: layoutAllowance.rule}};
         continue;
       }
