@@ -37,18 +37,19 @@ const resolve = (parent, nested) => (hasParent(nested) ? nested.trim().replace(P
 export function lowerNested(blocks) {
   const lines = [], map = [];
   // wrappers: the conditional at-rules around the rule, outermost first ({name, params})
-  const emit = (selector, decls, wrappers, origin, path, relation, nodeLine) => {
+  const emit = (selector, decls, wrappers, block, path, relation, nodeLine) => {
     const prefix = wrappers.map(w => `@${w.name} ${w.params}{`).join('');
     lines.push(`${prefix}${selector}{${decls.map(decl).join(';')}}${'}'.repeat(wrappers.length)}`);
     // origin.lines (optional): the template line of each text line, when the text is not line-for-line the template
     // (an interpolation written over several lines collapsed into its value)
+    const { origin } = block;
     const { lines: lineMap, ...rest } = origin;
     const templateLine = l => lineMap?.[l - 1] ?? origin.line + l - 1;
     // each declaration: its 1-based column in the emitted line, and where it is in the template (the column only when
-    // the text is line-for-line the template)
+    // the text is line-for-line the template; on the first line, less the `${block.selector}{` the text is parsed after)
     let column = prefix.length + selector.length + 2;
     const declarations = decls.map(d => {
-      const at = { column, line: templateLine(d.source.start.line), ...(lineMap ? {} : { templateColumn: d.source.start.line === 1 ? d.source.start.column - selector.length - 1 : d.source.start.column }) };
+      const at = { column, line: templateLine(d.source.start.line), ...(lineMap ? {} : { templateColumn: d.source.start.line === 1 ? d.source.start.column - block.selector.length - 1 : d.source.start.column }) };
       column += decl(d).length + 1;
       return at;
     });
@@ -60,7 +61,7 @@ export function lowerNested(blocks) {
     // later runs, and runs inside @media, at their first declaration.
     const walk = (node, selector, wrappers, path, relation, head = null) => {
       let run = [];
-      const flush = () => { if (run.length) { emit(selector, run, wrappers, block.origin, path, relation, head ?? run[0].source.start.line); head = null; } run = []; };
+      const flush = () => { if (run.length) { emit(selector, run, wrappers, block, path, relation, head ?? run[0].source.start.line); head = null; } run = []; };
       for (const n of node.nodes ?? []) {
         if (n.type === 'decl') { run.push(n); continue; }
         if (n.type === 'comment') continue;

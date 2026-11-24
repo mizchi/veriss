@@ -140,3 +140,8 @@ test('relocateSelectorWarnings: a warning on a page rule with the same selector 
   assert.deepEqual(relocateSelectorWarnings([w], map, {offset: 5}), [w]);
   assert.equal(relocateSelectorWarnings([{...w, line: 6}], map, {offset: 5})[0].line, 3);
 });
+
+test('lowerNested: a declaration on the text\'s first line in a nested rule has its column in the template', () => {
+  const {map} = lowerNested([{selector: '.sc-A', text: '& > .x { color:red; }', origin: {file: 'f.ts', line: 1, name: 'A'}}]);
+  assert.equal(map[0].declarations[0].templateColumn, 10);
+});
