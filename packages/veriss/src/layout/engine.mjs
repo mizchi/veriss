@@ -2933,7 +2933,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // A containing block that hides its overflow (overflow: hidden, not scrolling) clips the box at its
     // padding box: the box is laid out as usual, and what reaches past that edge is cut off
     // (E_LAYOUT_ABSOLUTE_CLIPPED). Any other clipping ancestor stays Unknown.
-    const clipping = finalAncestors.filter(ancestor => ancestor.clipped);
+    // A clipping or scrolling ancestor of the containing block clips the box as it clips the containing block's other
+    // content (CSS Overflow 3 §3: the containing block chain passes through it), and the box is placed against the
+    // containing block as in-flow content is: only those at or below the containing block are judged here.
+    const containingAt = finalAncestors.indexOf(containing);
+    const clipping = finalAncestors.filter((ancestor, index) => ancestor.clipped && index >= containingAt);
     const ownClip = clipping.length === 1 && clipping[0] === finalAncestors.at(-1) && ['hidden', 'visible'].includes(clipping[0].style?.['overflow-x']) && ['hidden', 'visible'].includes(clipping[0].style?.['overflow-y']);
     // A scroll container that is the containing block: the box is placed against its padding box at
     // scroll offset 0 and scrolls with the content (what reaches past the end extends the scrollable

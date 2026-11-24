@@ -549,6 +549,11 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   share から縮み、伸びる行では max-width で止まる)。スクロールコンテナや空の箱のように自動の最小幅を持たない item も、% の basis で受ける。
   3 ブラウザーで、340px・450px・700px の位置と幅が解析と一致した(中央寄せ、伸びる item、縮む行、`flex: 1 1 30%`、auto の margin。
   `e2e/layout-flex.spec.mjs`)。
+- [x] **I13. clip する祖先の中の containing block**: absolute の箱は、祖先のどこかが clip かスクロールをすると Unknown にしていた
+  (アイコンの `overflow: hidden` の span の中の svg が、横スクロールのナビの中にあるだけで止まる)。containing block より上の clip する
+  祖先は、containing block のほかの中身と同じように箱を clip するだけなので(CSS Overflow 3 §3)、containing block とその内側の clip だけを
+  判定する。3 ブラウザーで、スクロールする祖先と `overflow: hidden` の祖先の中で、containing block の外に出た箱の
+  `E_LAYOUT_ABSOLUTE_CLIPPED` が実際の clip と一致した(`e2e/layout-accessibility.spec.mjs`)。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
