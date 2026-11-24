@@ -383,3 +383,19 @@ test('a focused position inside a centred content-sized box moves with the box',
   }
   expect([...verdicts].sort()).toEqual([false, true]);
 });
+
+test('absolute and fixed children of a flex container: placed against their containing block, at the content start when both insets of an axis are auto', async ({page}) => {
+  const base = '*{margin:0;box-sizing:border-box}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.top{height:40px}.f{display:flex;height:60px;padding:10px 12px}.i{width:30px;height:20px}.a{width:20px;height:16px}';
+  const html = '<div class="top"></div><div class="f"><div class="i"></div><div class="a"></div></div>';
+  for (const [css, decided] of [['.f{position:relative}.a{position:absolute;top:4px;left:6px}', true], ['.f{position:relative}.a{position:absolute}', true], ['.f{position:relative}.a{position:absolute;top:4px}', true],
+    ['.a{position:fixed}', true], ['.f{position:relative;align-items:stretch}.a{position:absolute}', true], ['.f{position:relative;justify-content:center}.a{position:absolute}', false]]) {
+    const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: base + css, viewport: {min: 320, max: 800, height: {min: 400, max: 800}}, block: true, integrity: true});
+    expect(report.status === 'verified', `${css}: ${JSON.stringify(report.diagnostics)}`).toBe(decided);
+    if (!decided) continue;
+    await page.setViewportSize({width: 400, height: 600});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${base}${css}</style></head><body>${html}</body></html>`);
+    const browser = await page.evaluate(() => [...document.querySelectorAll('.i, .a')].map(n => { const r = n.getBoundingClientRect(); return [n.className, r.x, r.y]; }));
+    const at = box => { const s = report.sizes.find(x => x.box === box && x.rect); return [box.slice(1), Number(s.rect.inlineStart.constant) + 400 * Number(s.rect.inlineStart.coefficient), Number(s.rect.blockStart.constant)]; };
+    expect([at('.i'), at('.a')], css).toEqual(browser);
+  }
+});

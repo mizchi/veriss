@@ -30,6 +30,8 @@ import {fact, sizeChain, sizeProperties, trackProperties, contractFact, explanat
 import {phrasingTags} from '../tree.mjs';
 
 const zero = q(0), one = q(1), minusOne = q(-1);
+// An absolutely positioned box with both insets of an axis auto: it sits at its static position on that axis.
+const staticAxis = style => ['left', 'right'].every(side => [undefined, 'auto'].includes(style[side])) || ['top', 'bottom'].every(side => [undefined, 'auto'].includes(style[side]));
 const total = values => values.reduce(sum, scalar(0));
 const trackStart = (values,gap,index) => sum(total(values.slice(0,index)),scalar(mul(gap,q(index))));
 // Visually hidden (the "sr-only" pattern): clipped to nothing, or a box of at most 1px that hides its overflow. Its
@@ -1309,7 +1311,23 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       return states;
     };
     for (const state of collect(region).flatMap(fitColumnItems)) {
-      if (state.children.some(child => child.style.position === 'absolute')) throw flexUnknown('Absolute children of a flex container use flex static positions');
+      // Absolutely positioned (and fixed) children are not flex items (CSS Flexbox 1 §4.1): they are laid out against their
+      // containing block once the container's size is known (placeOutOfFlow). On an axis whose insets are both auto they sit
+      // at their static position: as if each were the container's sole item, with stretch as flex-start and auto margins as 0.
+      // That is where the content box starts when the container aligns to the start (ltr; justify-content, align-content and
+      // the item's align-self or the container's align-items at the start); otherwise it is not known (Unknown there).
+      const outOfFlow = state.children.filter(child => child.style.position === 'absolute');
+      state.children = state.children.filter(child => child.style.position !== 'absolute');
+      const atStart = value => ['normal', 'stretch', 'start', 'flex-start', 'self-start'].includes(String(value ?? 'normal'));
+      const startAligned = item => style.direction !== 'rtl' && ['row', 'column'].includes(String(style['flex-direction'] ?? 'row')) && ['normal', 'start', 'flex-start', ...(main === 'inline' ? ['left'] : [])].includes(String(style['justify-content'] ?? 'normal'))
+        && atStart(style['align-content']) && atStart(String(item.style['align-self'] ?? 'auto') === 'auto' ? style['align-items'] : item.style['align-self'])
+        && ['margin-left', 'margin-top'].every(key => ['0', '0px', 'auto', undefined].includes(item.style[key] === undefined ? undefined : String(item.style[key])));
+      const placeOutOfFlow = (endings, contentBlock, blockSize) => {
+        if (!outOfFlow.length) return endings;
+        const finalAncestors = [...parents, { ...ancestors.at(-1), block: contentBlock, paddingBlock: diff(blockSize, scalar(add(px(style['border-top']), px(style['border-bottom'])))) }];
+        for (const item of outOfFlow) endings = bounded(endings.flatMap(r => solveOutOfFlow(item, r, finalAncestors, style, emit, startAligned(item) ? (contentOrigin ?? null) : undefined)));
+        return endings;
+      };
       if (columnBasis) state.children = state.children.map(columnShares);
       const model = state.children.map(child => {
         try {
@@ -1418,6 +1436,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
             if (!block) {
               let endings = [combo.region];
               for (const line of combo.lines) line.indices.forEach((i, k) => { endings = bounded(endings.flatMap(r => solve(model[i].child.box, itemAvailable(model[i], { inline: line.values[k], fitInline }), r, ancestors, inheritedOf(model[i]), emit).map(result => result.region))); });
+              if (outOfFlow.length) throw flexUnknown('Absolute children of a flex container whose height is not known');
               for (const r of endings) out.push(finish(box, style, r, inline, contentInline, null, null, available, parents, emit));
               continue;
             }
@@ -1447,6 +1466,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                   });
                   lineStart = sum(sum(lineStart, st.sizes[l]), scalar(crossGap));
                 });
+                endings = placeOutOfFlow(endings, contentBlock, blockSize);
                 for (const r of endings) out.push(finish(box, style, r, inline, contentInline, blockSize, contentBlock, available, parents, emit));
               }
             }
@@ -1459,6 +1479,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (!block) {
         let endings = [state.region];
         for (const entry of model) endings = bounded(endings.flatMap(r => solve(entry.child.box, itemAvailable(entry, { inline: contentInline, fitInline }), r, ancestors, inheritedOf(entry), emit).map(result => result.region)));
+        if (outOfFlow.length) throw flexUnknown('Absolute children of a flex container whose height is not known');
         for (const r of endings) out.push(finish(box, style, r, inline, contentInline, null, null, available, parents, emit));
         continue;
       }
@@ -1493,6 +1514,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
             const origin = placed.starts ? offset(contentOrigin, scalar(0), placed.starts[i]) : null;
             endings = bounded(endings.flatMap(r => solve(entry.child.box, itemAvailable(entry, { inline: contentInline, block: line.values[i], origin, fitInline, fitBlock }), r, ancestors, inheritedOf(entry), emit).map(result => result.region)));
           });
+          endings = placeOutOfFlow(endings, contentBlock, blockSize);
           for (const r of endings) out.push(finish(box, style, r, inline, contentInline, blockSize, contentBlock, available, parents, emit));
         }
       }
@@ -1758,15 +1780,17 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (!containing || !blockSize) throw new Error('Absolute box has no independently resolved local containing block');
         // The static position (available.staticOrigin, page coordinates) on an axis whose insets are both auto, relative to
         // the containing block's origin.
+        // (The static position not known in the pass that reports: Unknown; in a measuring pass, no position yet.)
+        if (available.staticOrigin === null && staticAxis(style) && emit) throw new Error(`${box.label}: its static position (both insets of an axis auto) is not known: the position of its flex container is not known`);
         const staticRelative = available.staticOrigin && containing.origin ? { inline: diff(available.staticOrigin.inline, containing.origin.inline), block: diff(available.staticOrigin.block, containing.origin.block) } : undefined;
-        const origin = absoluteOrigin(style, containing, {inline, block:blockSize}, staticRelative);
-        for (const [axis, dimension] of [['inline',inline],['block',blockSize]]) {
+        const origin = available.staticOrigin === null && staticAxis(style) ? null : absoluteOrigin(style, containing, {inline, block:blockSize}, staticRelative);
+        if (origin) for (const [axis, dimension] of [['inline',inline],['block',blockSize]]) {
           // Against a containing block that clips on this axis, reaching past it is the box being cut off.
           const cut = containing.clips && containing.clips[axis === 'inline' ? 'x' : 'y'];
           obligation(origin[axis], scalar(0), box, region, cut ? 'E_LAYOUT_ABSOLUTE_CLIPPED' : 'E_LAYOUT_ABSOLUTE_START', axis);
           obligation(containing[axis], sum(origin[axis],dimension), box, region, cut ? 'E_LAYOUT_ABSOLUTE_CLIPPED' : 'E_LAYOUT_ABSOLUTE_END', axis);
         }
-        positioned = {origin:{inline:affine(origin.inline),block:affine(origin.block)},containingBlock:{path:containing.path,inline:affine(containing.inline),block:affine(containing.block)}};
+        if (origin) positioned = {origin:{inline:affine(origin.inline),block:affine(origin.block)},containingBlock:{path:containing.path,inline:affine(containing.inline),block:affine(containing.block)}};
       }
       const origin=resolvedOrigin(style,available,inline,blockSize,parents);
       // The descendants were laid out from the start edge (deferAlign): move them by the alignment offset, or withhold
@@ -2153,7 +2177,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // A content-sized height is not known while the children are laid out: a box placed by its top does not need it.
     const startPlaced = style.top !== undefined && style.top !== 'auto';
     if(!containing?.origin || (!blockSize && !startPlaced)) return null;
-    const local=absoluteOrigin(style,containing,{inline,block:blockSize ?? scalar(0)});
+    // (The static position on an axis whose insets are both auto, as in finish; not known yet in this pass: no position.)
+    if (available.staticOrigin === null && staticAxis(style)) return null;
+    const staticRelative = available.staticOrigin ? { inline: diff(available.staticOrigin.inline, containing.origin.inline), block: diff(available.staticOrigin.block, containing.origin.block) } : undefined;
+    const local=absoluteOrigin(style,containing,{inline,block:blockSize ?? scalar(0)},staticRelative);
     return offset(containing.origin,local.inline,local.block);
   }
 
@@ -2872,7 +2899,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (trap) throw Object.assign(new Error(`${item.box.label} is position: fixed, but its ancestor ${trap.box.label} has ${fixedContainer(trap.style)}, which makes it the containing block: ${item.box.label} is placed against ${trap.box.label} and scrolls with it, not with the viewport. Move it outside that box (for example to the end of body), or drop the property`), { code: 'U_LAYOUT_FIXED_CONTAINED', box: item.box, region: r, ancestor: trap.box.label, ancestorPath: trap.box.path, property: 'transform' });
       if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible'))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
       const viewport = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
-      return solve(item.box,{inline:viewport.inline,block:viewport.block,containingBlock:{path:'viewport',...viewport},...(staticOrigin ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
+      return solve(item.box,{inline:viewport.inline,block:viewport.block,containingBlock:{path:'viewport',...viewport},...(staticOrigin !== undefined ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
     }
     const containing = finalAncestors.findLast(ancestor=>ancestor.positioned);
     // No positioned (or transformed) ancestor: the initial containing block — the viewport's size at the
@@ -2884,7 +2911,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (emit && !layoutWarnings.some(w => w.code === 'W_LAYOUT_ABSOLUTE_PAGE' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_ABSOLUTE_PAGE', severity: 'warning', box: item.box.label, path: item.box.path, ...(parent ? { parent: parent.label } : {}),
         message: `${item.box.label} is position: absolute with no positioned ancestor, so it is placed against the page (the initial containing block), not ${parent ? parent.label : 'its parent'}. Give the box it belongs to position: relative`, ...ranges(r) });
       const initial = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
-      return solve(item.box,{inline:initial.inline,block:initial.block,containingBlock:{path:'initial',...initial},...(staticOrigin ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
+      return solve(item.box,{inline:initial.inline,block:initial.block,containingBlock:{path:'initial',...initial},...(staticOrigin !== undefined ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
     }
     // A containing block that hides its overflow (overflow: hidden, not scrolling) clips the box at its
     // padding box: the box is laid out as usual, and what reaches past that edge is cut off
@@ -2898,7 +2925,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const ownScroll = clipping.length === 1 && clipping[0] === finalAncestors.at(-1) && containing === clipping[0] && [clipping[0].style?.['overflow-x'], clipping[0].style?.['overflow-y']].every(v => ['auto', 'scroll', 'hidden', 'visible'].includes(String(v))) && !ownClip;
     if (!containing?.paddingBlock || containing.subgrid || (clipping.length && !ownClip && !ownScroll)) throw new Error('Absolute boxes require an owned non-scrolling, unclipped containing block without subgrid placement');
     if (ownClip) containing.clips = { box: clipping[0].box.label, x: clipping[0].style['overflow-x'] === 'hidden', y: clipping[0].style['overflow-y'] === 'hidden' };
-    return solve(item.box,{inline:containing.paddingInline,block:containing.paddingBlock,...(staticOrigin ? { staticOrigin } : {}),
+    return solve(item.box,{inline:containing.paddingInline,block:containing.paddingBlock,...(staticOrigin !== undefined ? { staticOrigin } : {}),
       containingBlock:{path:containing.box.path,inline:containing.paddingInline,block:containing.paddingBlock,origin:containing.paddingOrigin,...(containing.clips ? { clips: containing.clips } : {})}},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
 
   }
