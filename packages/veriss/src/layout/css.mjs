@@ -165,8 +165,8 @@ const linearAny = (maps, value) => {
 function expand(property, value) {
   property = aliases[property] ?? property;
   property = insets[property] ?? property;
-  // Area names are case-sensitive identifiers.
-  if (!['container', 'container-name', 'content', 'grid-template-areas', 'grid-area'].includes(property) && !(['grid-row', 'grid-column'].includes(property) && /^-?[A-Za-z_][\w-]*$/.test(value.trim()))) value = value.toLowerCase();
+  // Area names and keyframes names are case-sensitive identifiers (their keywords are lowercased where they are read).
+  if (!['container', 'container-name', 'content', 'grid-template-areas', 'grid-area', 'animation', 'animation-name'].includes(property) && !(['grid-row', 'grid-column'].includes(property) && /^-?[A-Za-z_][\w-]*$/.test(value.trim()))) value = value.toLowerCase();
   if (property === 'container-name' && value.toLowerCase() === 'none') value = 'none';
   // white-space also writes text-wrap-mode (CSS Text 4); its mark says white-space itself decides after substitution.
   if (property === 'white-space') return [['white-space', value], ['text-wrap-mode', 'white-space']];
@@ -390,18 +390,22 @@ function expand(property, value) {
   // The delay before an animation starts, and what it shows before and after it runs (CSS Animations 1 §3).
   if (property === 'animation-delay' || property === 'animation-fill-mode') return [[property, wide.has(value) ? value : postcss.list.comma(value).join(', ')]];
   if (property === 'animation-timing-function') return [[property, wide.has(value) ? value : postcss.list.comma(value).join(', ')]];
+  // animation-name: a keyframes name keeps its case; none and the CSS-wide keywords are keywords in any case.
+  if (property === 'animation-name') return [[property, postcss.list.comma(value).map(name => wide.has(name.toLowerCase()) || name.toLowerCase() === 'none' ? name.toLowerCase() : name).join(', ')]];
   if (property === 'animation') {
     const keys = ['animation-name', 'animation-duration', 'animation-iteration-count', 'animation-play-state', 'animation-direction', 'animation-timing-function', 'animation-delay', 'animation-fill-mode', 'animation-timeline'];
-    if (wide.has(value)) return keys.map(key => [key, value]);
+    if (wide.has(value.trim().toLowerCase())) return keys.map(key => [key, value.trim().toLowerCase()]);
     // A list of animations: each item sets one entry of every longhand list (CSS Animations 1 §4).
     const items = postcss.list.comma(value).map(item => one(item));
     return keys.map((key, i) => [key, items.map(item => item[i][1]).join(', ')]);
   }
-  function one(value) {
+  function one(item) {
+    // Every part but the keyframes name is a keyword or a number: matched lowercased; the name keeps its case.
+    const original = postcss.list.space(item), value = item.toLowerCase();
     const parts = postcss.list.space(value), times = parts.filter(p => /^-?(?:\d+(?:\.\d+)?|\.\d+)m?s$/.test(p));
     const count = parts.find(p => p === 'infinite' || /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(p)), state = parts.find(p => ['running', 'paused'].includes(p));
     const keyword = /^(?:infinite|running|paused|normal|reverse|alternate|alternate-reverse|none|forwards|backwards|both|linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|(?:cubic-bezier|steps|linear)\(.*)$/;
-    const name = parts.find(p => !times.includes(p) && p !== count && !keyword.test(p)) ?? (parts.includes('none') ? 'none' : 'none');
+    const at = parts.findIndex(p => !times.includes(p) && p !== count && !keyword.test(p)), name = at >= 0 ? original[at] : 'none';
     const direction = parts.find(p => ['normal', 'reverse', 'alternate', 'alternate-reverse'].includes(p)) ?? 'normal';
     const easing = parts.find(p => /^(?:linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|(?:cubic-bezier|steps|linear)\(.*\))$/.test(p)) ?? 'ease';
     return [['animation-name', name], ['animation-duration', times[0] ?? '0s'], ['animation-iteration-count', count ?? '1'], ['animation-play-state', state ?? 'running'], ['animation-direction', direction], ['animation-timing-function', easing], ['animation-delay', times[1] ?? '0s'], ['animation-fill-mode', parts.find(p => ['none', 'forwards', 'backwards', 'both'].includes(p) && p !== name) ?? 'none'], ['animation-timeline', 'auto']]; // the shorthand resets the timeline

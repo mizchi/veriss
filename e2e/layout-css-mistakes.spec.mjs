@@ -10,7 +10,10 @@ const load = async (page, css) => page.setContent(`<!doctype html><html lang="en
 
 test('F1, F2: an animation that never runs', async ({page}) => {
   for (const [css, code] of [['.a{animation:spin 1s infinite}', 'W_CSS_KEYFRAMES_MISSING'], ['.a{animation:spn 1s infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_KEYFRAMES_MISSING'], ['.a{animation:spin 1s infinite}@keyframes spin{to{opacity:.5}}', null],
-    ['.a{animation:spin infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_ANIMATION_NO_DURATION'], ['.a{animation:spin 0s forwards}@keyframes spin{to{opacity:.5}}', null]]) {
+    ['.a{animation:spin infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_ANIMATION_NO_DURATION'], ['.a{animation:spin 0s forwards}@keyframes spin{to{opacity:.5}}', null],
+    // Keyframes names are case-sensitive: a mixed-case name runs its own @keyframes, another case runs none.
+    ['.a{animation:2s linear 0s infinite normal none running cqkDSr}@keyframes cqkDSr{to{opacity:.5}}', null], ['.a{animation-name:cqkDSr;animation-duration:2s;animation-iteration-count:infinite}@keyframes cqkDSr{to{opacity:.5}}', null],
+    ['.a{animation:Spin 1s infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_KEYFRAMES_MISSING']]) {
     await load(page, css);
     // Running for some time: a missing @keyframes gives no animation; a 0s one never shows a frame between its ends.
     const running = await page.evaluate(() => document.getAnimations().some(a => a.effect.getComputedTiming().duration > 0));

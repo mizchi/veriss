@@ -14,6 +14,14 @@ test('F1: an animation whose name has no @keyframes does nothing', () => {
   // A typo in a list: only the missing one.
   assert.deepEqual(codes(run('.a{animation:fade 1s,spn 2s}@keyframes fade{to{opacity:.5}}'), 'W_CSS_KEYFRAMES_MISSING').map(w => w.keyframes), ['spn']);
   assert.equal(codes(run('.a{animation:none}'), 'W_CSS_KEYFRAMES_MISSING').length, 0);
+  // Keyframes names are case-sensitive (generated names such as a CSS-in-JS library's mix the cases): an animation
+  // naming @keyframes cqkDSr runs it, and one naming Spin does not run @keyframes spin.
+  for (const css of ['.a{animation:2s linear 0s infinite normal none running cqkDSr}', '.a{animation-name:cqkDSr;animation-duration:2s}', '.a{animation:cqkDSr 2s, fade 1s}@keyframes fade{to{opacity:.5}}'])
+    assert.equal(codes(run(`${css}@keyframes cqkDSr{to{opacity:.5}}`), 'W_CSS_KEYFRAMES_MISSING').length, 0, css);
+  assert.deepEqual(codes(run('.a{animation:Spin 1s}@keyframes spin{to{opacity:.5}}'), 'W_CSS_KEYFRAMES_MISSING').map(w => w.keyframes), ['Spin']);
+  // The CSS-wide keywords and none are not names, in any case.
+  assert.equal(codes(run('.a{animation:NONE}'), 'W_CSS_KEYFRAMES_MISSING').length, 0);
+  assert.equal(codes(run('.a{animation-name:None}'), 'W_CSS_KEYFRAMES_MISSING').length, 0);
 });
 
 test('F2: an animation with no duration runs for 0s', () => {
