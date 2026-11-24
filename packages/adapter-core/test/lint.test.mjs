@@ -270,7 +270,7 @@ test('uas: a finding that holds in some browsers only says which (a button label
   assert.match(m.message, /\(in chromium, webkit; not in firefox\)$/);
 });
 
-test('lint: a click-catcher is an invisible blocker, with a fix', () => {
+test('lint: a click-catcher is an invisible blocker, and an overlay with no way out a click trap, each with a fix', () => {
   const component = cover => `<template>
   <main class="page">
     <button class="go" aria-label="Go"></button>
@@ -282,4 +282,7 @@ test('lint: a click-catcher is an invisible blocker, with a fix', () => {
   const blocker = run('').find(m => m.code === 'E_A11Y_INVISIBLE_BLOCKER');
   assert.ok(blocker && blocker.severity === 'error' && blocker.fix, JSON.stringify(run('')));
   assert.equal(blocker.line, 3);
+  const trap = run('background:#000').find(m => m.code === 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap && trap.severity === 'error' && trap.fix, JSON.stringify(run('background:#000')));
+  assert.equal(trap.line, 4);
 });

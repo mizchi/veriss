@@ -8,6 +8,7 @@
 //   text-contrast    → E_A11Y_CONTRAST          WCAG 2.2 SC 1.4.3 (AA) or 1.4.6 (AAA)
 //   occluded-target  → E_A11Y_OCCLUDED          a box painted later, hit-testable, covers part of a target
 //   invisible-blocker → E_A11Y_INVISIBLE_BLOCKER a box that paints nothing is the top hit-test target over a control that shows (replaces E_A11Y_OCCLUDED for the pair)
+//   click-trap       → E_A11Y_CLICK_TRAP / U_A11Y_CLICK_TRAP  a layer covers page controls for good and has no control that shows and can be operated (Unknown: it shows a frame)
 //   target-overlap   → E_A11Y_TARGET_OVERLAP    two interactive targets intersect
 //   visual-order     → W_A11Y_ORDER             a later sibling is placed visually before an earlier one (SC 1.3.2)
 //   hidden-focusable → E_A11Y_HIDDEN_FOCUSABLE  a rendered focusable element inside aria-hidden
@@ -118,13 +119,13 @@ export const accessibilityRules = ['accessible-name', 'text-contrast', 'occluded
   'role-parent', 'role-children', 'role-attr', 'aria-attr', 'aria-value', 'presentation-conflict', 'empty-th', 'redundant-alt', 'title-only', 'input-button-name', 'autocomplete', 'scope',
   'html-lang', 'lang-valid', 'meta-viewport', 'touch-zoom', 'forced-colors', 'page-h1', 'region', 'bypass', 'landmark-top-level', 'duplicate-landmark', 'p-as-heading', 'orientation', 'focus-visible', 'text-spacing', 'state-contrast', 'frame-title', 'video-caption', 'autoplay-audio', 'hover-only',
   'clickable-look', 'list-style-semantics', 'motion', 'blink', 'definition-list', 'accesskeys', 'server-side-image-map', 'aria-hidden-body',
-  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable', 'invisible-blocker'];
+  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable', 'invisible-blocker', 'click-trap'];
 
 // Usefulness tiers (docs/accessibility-rule-evaluation.md). core: depends on the CSS result and is proved over the
 // viewport region and states; dom: decided by the DOM alone (lint overlaps); heuristic: a Technique or a guess that
 // legitimate designs can trip; legacy: rare or obsolete markup. profile 'core' keeps core and dom only.
 const tierLists = {
-  core: ['invisible-blocker', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
+  core: ['invisible-blocker', 'click-trap', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
   heuristic: ['color-only-state', 'visual-order', 'p-as-heading', 'link-text', 'link-purpose', 'new-window', 'redundant-alt', 'title-only', 'form-submit', 'clickable-look', 'list-style-semantics', 'small-text', 'region', 'bypass', 'page-h1', 'page-main', 'landmark-name', 'landmark-top-level', 'duplicate-landmark', 'radio-group', 'fieldset-name', 'motion', 'autoplay-audio'],
   legacy: ['blink', 'server-side-image-map', 'accesskeys', 'aria-hidden-body'],
 };
@@ -428,6 +429,8 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // The topmost of boxes that all cover one target (paint order, as hit testing goes).
   const topmost = rows => rows.reduce((a, b) => paintsAbove(b, layer(b), a, layer(a)) ? b : a);
   const blockerMessage = (target, cover) => `${target.box.label} shows, but ${cover.box.label} ${invisible(cover) ? 'is invisible (opacity 0)' : 'paints nothing'} and lies over it, painted later: clicks land on ${cover.box.label}, which the user cannot see. Give ${cover.box.label} pointer-events: none, or display: none while it is not shown`;
+  // Every (target, cover, region) pair: what the click-trap rule reads.
+  const coverPairs = [];
   for (const target of targets) {
     const own = layer(target);
     // Every cover counts where it covers: one cover's region is not another's (the first found used to end the
@@ -437,6 +440,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
     const covers = placed.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
       .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
+    for (const c of covers) coverPairs.push({ target, ...c });
     // Where something that paints covers the target, it is not seen as it is: the covers are occlusions there.
     const seenOver = covers.filter(c => !paintsNothing(c.cover)).map(c => c.region);
     const targetShows = !invisible(target);
@@ -2179,6 +2183,98 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       if (!a || !b) continue;
       if (contrastRatio(a, b) >= 3) continue;
       report(warnings, 'W_A11Y_COLOR_ONLY_STATE', 'warning', `${one.box.label} is set apart from its ${rows.length - 1} siblings only by its color (contrast ${contrastRatio(a, b).toFixed(2)}:1 with theirs, below 3:1): people who do not perceive the hue cannot tell it apart. Add another cue (weight, an underline, an icon or a border)`, one, one.region, { rule: 'color-only-state' });
+    }
+  }
+  // click-trap: a layer painted over the page covers its controls entirely, and neither the layer nor anything painted
+  // above it offers a control that shows and can be operated: the page cannot be used and the layer cannot be left.
+  // The layer of a cover (against one target) is its outermost positioned ancestor-or-self that does not contain the
+  // target. Only covers that paint count (a cover that paints nothing is E_A11Y_INVISIBLE_BLOCKER), and only where the
+  // target stays under the layer whatever the scroll position: both fixed, both scrolled with the page, or a fixed
+  // layer over the whole viewport. A frame (iframe, object, embed) in the layer that paints may hold the way out: Unknown.
+  {
+    const isFrame = row => ['iframe', 'object', 'embed', 'frame'].includes(row.box.tag);
+    const layerOf = (cover, target) => { let found = null; for (let p = cover.path; p && !isAncestor(p, target.path); p = parentPath(p)) { const r = rowAt(p); if (r && r.position !== 'static') found = r; } return found; };
+    const meet = (as, bs) => as.flatMap(a => bs.map(b => intersect(a, b)).filter(Boolean));
+    const minus = (as, bs) => bs.reduce((rest, b) => rest.flatMap(a => subtract(a, b)), as);
+    const contains = (outer, inner, region) => {
+      let r = atMost(region, outer.origin.inline, inner.origin.inline); r = atMost(r, right(inner), right(outer));
+      r = atMost(r, outer.origin.block, inner.origin.block); return atMost(r, bottom(inner), bottom(outer));
+    };
+    const fillsViewport = (row, region) => {
+      if (!viewportBlock) return null;
+      let r = atMost(region, row.origin.inline, scalar(0)); r = atMost(r, domainWidth, right(row));
+      r = atMost(r, row.origin.block, scalar(0)); return atMost(r, viewportBlock, bottom(row));
+    };
+    const pinnedFixed = row => pinnedPieces(row, r => r.fixed);
+    // Where the target stays under the layer at every scroll position.
+    const stuck = (layerRow, target, region) => {
+      const lp = meet([region], pinnedFixed(layerRow)), tp = meet([region], pinnedFixed(target));
+      const lf = minus([region], lp), tf = minus([region], tp);
+      return [...meet(lp, tp), ...meet(lf, tf), ...meet(lp, tf).map(r => fillsViewport(layerRow, r)).filter(Boolean)];
+    };
+    const sized = (row, region) => below(below(region, scalar(0), row.inline), scalar(0), row.block);
+    const onScreen = (row, region) => {
+      if (!pinnedFixed(row).length) return region;
+      let r = below(region, row.origin.inline, domainWidth); r = below(r, scalar(0), right(row)); r = below(r, scalar(0), bottom(row));
+      return viewportBlock ? below(r, row.origin.block, viewportBlock) : r;
+    };
+    const ownPointer = row => row.paint.cursor === 'pointer' && row.chain?.at(-2)?.cursor !== 'pointer';
+    const takesFocus = row => interactive(row) || row.box.tabIndex >= 0 || row.box.focusable === true || row.box.focusable === 'dynamic';
+    // Why a candidate is no way out whatever the viewport (empty: it may be one where it renders, uncovered).
+    const staticWhy = row => {
+      const why = [];
+      if (inertAt(row)) why.push('is inert');
+      if (row.paint.pointerEvents === 'none') why.push('takes no pointer (pointer-events: none)');
+      if (row.box.nativeStates?.disabled === true) why.push('is disabled');
+      const shows = [row, ...placed.filter(d => isAncestor(row.path, d.path))].some(d => !paintsNothing(d));
+      if (!shows) { const reason = paintsNothing(row); why.push(reason === 'opacity 0' ? 'is invisible (opacity 0)' : reason === 'visibility: hidden' ? 'is hidden (visibility: hidden)' : reason === 'it is clipped to nothing' ? 'is clipped to nothing' : `paints nothing (${reason})`); }
+      if (!isFrame(row) && !takesFocus(row)) why.push('cannot take focus and has no role (only cursor: pointer)');
+      return why;
+    };
+    const byLayer = new Map();
+    for (const pair of coverPairs) {
+      const { target, cover } = pair;
+      if (paintsNothing(cover) || inControl(cover) || target.box.pseudo) continue;
+      const layerRow = layerOf(cover, target);
+      if (!layerRow || inControl(layerRow)) continue;
+      const whole = contains(cover, target, pair.region);
+      if (!whole) continue;
+      const pieces = stuck(layerRow, target, whole);
+      if (!pieces.length) continue;
+      if (!byLayer.has(layerRow.path)) byLayer.set(layerRow.path, { layerRow, pieces: [], covered: new Map() });
+      const entry = byLayer.get(layerRow.path);
+      entry.pieces.push(...minus(pieces, entry.pieces));
+      entry.covered.set(target.path, target);
+    }
+    for (const { layerRow, pieces, covered } of byLayer.values()) {
+      // Candidates: controls, focusable boxes, boxes that look clickable, and frames, in the layer or painted above it
+      // where they overlap it.
+      const candidate = row => !row.box.pseudo && row.path !== layerRow.path && visible(row) && (interactive(row) || takesFocus(row) || ownPointer(row) || isFrame(row));
+      const inside = placed.filter(row => candidate(row) && isAncestor(layerRow.path, row.path));
+      const above = placed.filter(row => candidate(row) && !related(row.path, layerRow.path) && !covered.has(row.path) && paintsAbove(row, layer(row), layerRow, layer(layerRow)) && overlap(row, layerRow))
+        .map(row => ({ ...row, region: overlap(row, layerRow) }));
+      const candidates = [...inside, ...above];
+      const exits = [], frames = [], failing = [];
+      for (const row of candidates) {
+        const why = staticWhy(row);
+        const where = (() => { let r = sized(row, row.region); r = r && onScreen(row, r); if (!r) return []; return minus([r], coverPairs.filter(p => p.target.path === row.path && !paintsNothing(p.cover)).map(p => contains(p.cover, row, p.region)).filter(Boolean)); })();
+        if (isFrame(row) && !why.length) { frames.push({ row, where }); continue; }
+        if (!why.length && where.length) exits.push({ row, where });
+        failing.push({ box: row.box.label, path: row.path, why: why.length ? why.join(' and ') : 'is covered, has no size or is off-screen here' });
+      }
+      const coveredRows = [...covered.values()].sort((a, b) => treeOrder(a.path, b.path));
+      const labels = coveredRows.map(r => r.box.label);
+      const named = `${labels.length} control${labels.length === 1 ? '' : 's'} of the page (${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ', …' : ''})`;
+      const reasons = failing.length ? failing.slice(0, 4).map(f => `${f.box} ${f.why}`).join('; ') + (failing.length > 4 ? `; and ${failing.length - 4} more` : '') : 'it has no control, and none is painted above it';
+      const extra = { rule: 'click-trap', covered: labels, exits: failing };
+      let trapped = pieces;
+      for (const exit of exits) trapped = minus(trapped, exit.where);
+      for (const { row, where } of frames) {
+        const maybe = meet(trapped, where);
+        for (const piece of maybe) report(unknowns, 'U_A11Y_CLICK_TRAP', 'unknown', `${layerRow.box.label} covers ${named}, and nothing in it that the analysis can see is a way out (${reasons}); but it shows ${row.box.label}, whose content is not analysed: the way out may be inside it`, layerRow, piece, { ...extra, frame: row.path });
+        trapped = minus(trapped, where);
+      }
+      for (const piece of trapped) report(findings, 'E_A11Y_CLICK_TRAP', 'error', `${layerRow.box.label} covers ${named} and offers no way out: ${reasons}. Give it a close button that shows and takes focus (a <button> with a name) in or above the layer, or do not show the layer`, layerRow, piece, extra);
     }
   }
   return { findings: dedupe(findings), warnings: dedupe(warnings), unknowns: dedupe(unknowns), exempted: dedupe(exempted), notes };

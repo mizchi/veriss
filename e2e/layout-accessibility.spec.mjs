@@ -2399,3 +2399,49 @@ test('text-contrast where the layout is Unknown (ADR-0016 M7): a warning exactly
   expect(low).toEqual(['.b', '.c']);
 });
 
+// A layer with no way out (E_A11Y_CLICK_TRAP) and a box that paints nothing over a control (E_A11Y_INVISIBLE_BLOCKER):
+// in the browser, every control the trap names is not the element at its centre, every way-out candidate paints
+// nothing or cannot take focus, and the blocker is the element at the control's centre while painting nothing.
+test('click traps and invisible blockers match hit testing and what the browser paints', async ({page}) => {
+  const viewport = {min: 320, max: 800, height: {min: 600, max: 900}};
+  const line = {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20};
+  const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#fff;color:#000}main{display:block}.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px;font-family:sans-serif}button{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;font-size:16px;line-height:20px}';
+  const host = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>';
+  const overlay = '.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#000}';
+  const frame = '<iframe class="f" title="Advertisement" srcdoc="<p>ad</p>"></iframe>';
+  const cases = [
+    {name: 'invisible close control', layer: '<div class="ov"><div class="x"></div></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-image:https://example.com/close.png}', trap: true},
+    {name: 'visible close button', layer: '<div class="ov"><button class="x" aria-label="Close">x</button></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff;color:#000}', boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}, trap: false, exit: '.x'},
+    {name: 'opacity-0 frame', layer: `<div class="ov">${frame}</div>`, css: overlay + '.f{display:block;position:absolute;top:100px;left:10px;width:300px;height:250px;border:0;opacity:0}', trap: true},
+    {name: 'stuck transparent box', layer: `<div class="box">${frame}</div>`, css: '.box{position:fixed;top:0;left:0;width:300px;height:250px;z-index:2147483647}.f{display:block;width:300px;height:250px;border:0;opacity:0}', trap: false, blocker: true},
+    {name: 'click-catcher', layer: '<div class="catch"></div>', css: '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}', trap: false, blocker: true},
+  ];
+  await page.setViewportSize({width: 800, height: 800});
+  for (const c of cases) {
+    const css = base + c.css, html = `<html lang="en"><body>${host}${c.layer}</body></html>`;
+    const report = analyzeHTML(html, {name: 'P', viewport, accessibility: true, boxes: {'.l': line, '.m': line, ...(c.boxes ?? {})}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css});
+    const traps = report.diagnostics.filter(d => d.code === 'E_A11Y_CLICK_TRAP'), blockers = report.diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER');
+    expect(traps.length > 0, c.name).toBe(c.trap);
+    expect(blockers.length > 0, c.name).toBe(Boolean(c.blocker));
+    await page.setContent(`<!doctype html>${html.replace('<body>', `<head><style>${css}</style></head><body>`)}`);
+    const facts = await page.evaluate(() => {
+      const opacity = e => { for (let n = e; n; n = n.parentElement) if (getComputedStyle(n).opacity === '0') return 0; return 1; };
+      const paints = e => { const s = getComputedStyle(e); return opacity(e) > 0 && s.visibility === 'visible' && (s.backgroundImage !== 'none' || !/^(?:transparent|rgba\(0, 0, 0, 0\))$/.test(s.backgroundColor) || ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(s[`border${side}Width`]) > 0) || e.textContent.trim() !== '' || ['IFRAME', 'IMG', 'VIDEO', 'CANVAS'].includes(e.tagName)); };
+      const at = sel => { const e = document.querySelector(sel), r = e.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); };
+      const label = e => e ? `.${e.className}` : null;
+      const layer = document.querySelector('.ov, .box, .catch');
+      const candidates = [...layer.querySelectorAll('*')].map(e => ({box: label(e), paints: paints(e), focusable: e.tabIndex >= 0, role: e.getAttribute('role'), takesClick: (() => { const r = e.getBoundingClientRect(); return r.width > 0 && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === e; })()}));
+      return {hit: {'.l': label(at('.l')), '.m': label(at('.m'))}, candidates, blockerPaints: Object.fromEntries(['.l', '.m'].map(sel => [sel, at(sel) && at(sel) !== document.querySelector(sel) ? paints(at(sel)) : null]))};
+    });
+    for (const t of traps) for (const covered of t.covered) {
+      expect(facts.hit[covered], `${c.name}: ${covered} does not take the click`).not.toBe(covered);
+      // No candidate in the layer both shows and can take focus (or a role).
+      expect(facts.candidates.filter(e => e.paints && (e.focusable || e.role)), c.name).toEqual([]);
+    }
+    if (c.exit) expect(facts.candidates.find(e => e.box === c.exit), c.name).toMatchObject({paints: true, focusable: true, takesClick: true});
+    for (const b of blockers) {
+      expect(facts.hit[b.box], `${c.name}: ${b.box} does not take the click`).not.toBe(b.box);
+      expect(facts.blockerPaints[b.box], `${c.name}: what takes ${b.box}'s click (${facts.hit[b.box]}, static ${b.cover}) paints nothing`).toBe(false);
+    }
+  }
+});
