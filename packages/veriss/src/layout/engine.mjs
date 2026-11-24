@@ -1756,7 +1756,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (style.position === 'absolute') {
         const containing = available.containingBlock;
         if (!containing || !blockSize) throw new Error('Absolute box has no independently resolved local containing block');
-        const origin = absoluteOrigin(style, containing, {inline, block:blockSize});
+        // The static position (available.staticOrigin, page coordinates) on an axis whose insets are both auto, relative to
+        // the containing block's origin.
+        const staticRelative = available.staticOrigin && containing.origin ? { inline: diff(available.staticOrigin.inline, containing.origin.inline), block: diff(available.staticOrigin.block, containing.origin.block) } : undefined;
+        const origin = absoluteOrigin(style, containing, {inline, block:blockSize}, staticRelative);
         for (const [axis, dimension] of [['inline',inline],['block',blockSize]]) {
           // Against a containing block that clips on this axis, reaching past it is the box being cut off.
           const cut = containing.clips && containing.clips[axis === 'inline' ? 'x' : 'y'];
@@ -2852,6 +2855,53 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const empty = !(box.children ?? []).length && !box.text && !box.inline?.length;
     return style[`min-${size}`] !== 'auto' || scroller || empty ? size : null;
   }
+  // An absolutely positioned or fixed child of a grid or flex container, laid out against its containing block once the
+  // container's size is known (finalAncestors: the ancestors with the container's final size). staticOrigin: where it
+  // sits on an axis whose insets are both auto (its static position, page coordinates), when the container knows it.
+  function solveOutOfFlow(item, r, finalAncestors, style, emit, staticOrigin) {
+    // position: fixed: the viewport is the containing block, unless an ancestor transform (or a clip or
+    // scroll that would move it relative to the page) intervenes, which is not modeled.
+    if (item.style.$fixed) {
+      // An ancestor transform makes that ancestor the containing block of fixed descendants (CSS Transforms 1
+      // §2): the box is placed against it and scrolls with it instead of staying on the viewport.
+      const trap = finalAncestors.findLast(ancestor => ancestor.style && containsFixed(ancestor.style) && ancestor.box);
+      // The trap is a likely bug (a toast or modal meant for the viewport, placed against a header or a
+      // card): a warning besides the Unknown, so it is not only a not-checked line.
+      if (trap && !layoutWarnings.some(w => w.code === 'W_LAYOUT_FIXED_TRAPPED' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_FIXED_TRAPPED', severity: 'warning', box: item.box.label, path: item.box.path, ancestor: trap.box.label,
+        message: `${item.box.label} is position: fixed, but ${trap.box.label} (${fixedContainer(trap.style)}) becomes its containing block: it is placed against ${trap.box.label} and moves with it instead of staying on the viewport. Render it outside that box (a portal to the end of body), or drop the property`, ...ranges(r) });
+      if (trap) throw Object.assign(new Error(`${item.box.label} is position: fixed, but its ancestor ${trap.box.label} has ${fixedContainer(trap.style)}, which makes it the containing block: ${item.box.label} is placed against ${trap.box.label} and scrolls with it, not with the viewport. Move it outside that box (for example to the end of body), or drop the property`), { code: 'U_LAYOUT_FIXED_CONTAINED', box: item.box, region: r, ancestor: trap.box.label, ancestorPath: trap.box.path, property: 'transform' });
+      if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible'))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
+      const viewport = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
+      return solve(item.box,{inline:viewport.inline,block:viewport.block,containingBlock:{path:'viewport',...viewport},...(staticOrigin ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
+    }
+    const containing = finalAncestors.findLast(ancestor=>ancestor.positioned);
+    // No positioned (or transformed) ancestor: the initial containing block — the viewport's size at the
+    // top of the page — places it (CSS 2 §10.1), and it scrolls with the page. Usually a missing
+    // position: relative on the box it was meant to sit in (a badge that jumps to the page corner).
+    // A clipping or scrolling ancestor in between (does it clip the box?) stays Unknown.
+    if (!containing && height && !finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible')))) {
+      const parent = finalAncestors.at(-1)?.box;
+      if (emit && !layoutWarnings.some(w => w.code === 'W_LAYOUT_ABSOLUTE_PAGE' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_ABSOLUTE_PAGE', severity: 'warning', box: item.box.label, path: item.box.path, ...(parent ? { parent: parent.label } : {}),
+        message: `${item.box.label} is position: absolute with no positioned ancestor, so it is placed against the page (the initial containing block), not ${parent ? parent.label : 'its parent'}. Give the box it belongs to position: relative`, ...ranges(r) });
+      const initial = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
+      return solve(item.box,{inline:initial.inline,block:initial.block,containingBlock:{path:'initial',...initial},...(staticOrigin ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
+    }
+    // A containing block that hides its overflow (overflow: hidden, not scrolling) clips the box at its
+    // padding box: the box is laid out as usual, and what reaches past that edge is cut off
+    // (E_LAYOUT_ABSOLUTE_CLIPPED). Any other clipping ancestor stays Unknown.
+    const clipping = finalAncestors.filter(ancestor => ancestor.clipped);
+    const ownClip = clipping.length === 1 && clipping[0] === finalAncestors.at(-1) && ['hidden', 'visible'].includes(clipping[0].style?.['overflow-x']) && ['hidden', 'visible'].includes(clipping[0].style?.['overflow-y']);
+    // A scroll container that is the containing block: the box is placed against its padding box at
+    // scroll offset 0 and scrolls with the content (what reaches past the end extends the scrollable
+    // area instead of being cut off). Its size is known; its position, like the content's, only at
+    // offset 0 (scroll-zero), so it has none otherwise.
+    const ownScroll = clipping.length === 1 && clipping[0] === finalAncestors.at(-1) && containing === clipping[0] && [clipping[0].style?.['overflow-x'], clipping[0].style?.['overflow-y']].every(v => ['auto', 'scroll', 'hidden', 'visible'].includes(String(v))) && !ownClip;
+    if (!containing?.paddingBlock || containing.subgrid || (clipping.length && !ownClip && !ownScroll)) throw new Error('Absolute boxes require an owned non-scrolling, unclipped containing block without subgrid placement');
+    if (ownClip) containing.clips = { box: clipping[0].box.label, x: clipping[0].style['overflow-x'] === 'hidden', y: clipping[0].style['overflow-y'] === 'hidden' };
+    return solve(item.box,{inline:containing.paddingInline,block:containing.paddingBlock,...(staticOrigin ? { staticOrigin } : {}),
+      containingBlock:{path:containing.box.path,inline:containing.paddingInline,block:containing.paddingBlock,origin:containing.paddingOrigin,...(containing.clips ? { clips: containing.clips } : {})}},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
+
+  }
   function solve(box, available, region, parents = [], inherited, emit = true) {
     let results = [];
     if (emit) box.$starts = { geometry: geometry.length, sizes: sizes.length };
@@ -3645,49 +3695,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                         origin:cs.shift ? offset(contentOrigin,sum(sum(sum(sum(trackStart(cs.values,columnGap,item.start),cs.shift.lead),times(cs.shift.extra,q(item.start))),scalar(marginOf(item, 'left'))),autoLead),sum(sum(trackStart(rs.values,rowGap,item.row),blockLead),scalar(marginOf(item, 'top')))) : null,
                         tracks: { inline: childColumns(item), block: trackSlice(rs.values, rowGap, box, item.row, item.rowSpan) },
                         fitInline: (box.contract?.overflow ?? 'fit') === 'fit', fitBlock: (box.contract?.overflowBlock ?? 'fit') === 'fit' }, r, finalAncestors, item.inherited ?? style, emit).map(result => result.region)));
-                      for (const item of children.children.filter(child=>child.style.position==='absolute')) endings = bounded(endings.flatMap(r => {
-                        // position: fixed: the viewport is the containing block, unless an ancestor transform (or a clip or
-                        // scroll that would move it relative to the page) intervenes, which is not modeled.
-                        if (item.style.$fixed) {
-                          // An ancestor transform makes that ancestor the containing block of fixed descendants (CSS Transforms 1
-                          // §2): the box is placed against it and scrolls with it instead of staying on the viewport.
-                          const trap = finalAncestors.findLast(ancestor => ancestor.style && containsFixed(ancestor.style) && ancestor.box);
-                          // The trap is a likely bug (a toast or modal meant for the viewport, placed against a header or a
-                          // card): a warning besides the Unknown, so it is not only a not-checked line.
-                          if (trap && !layoutWarnings.some(w => w.code === 'W_LAYOUT_FIXED_TRAPPED' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_FIXED_TRAPPED', severity: 'warning', box: item.box.label, path: item.box.path, ancestor: trap.box.label,
-                            message: `${item.box.label} is position: fixed, but ${trap.box.label} (${fixedContainer(trap.style)}) becomes its containing block: it is placed against ${trap.box.label} and moves with it instead of staying on the viewport. Render it outside that box (a portal to the end of body), or drop the property`, ...ranges(r) });
-                          if (trap) throw Object.assign(new Error(`${item.box.label} is position: fixed, but its ancestor ${trap.box.label} has ${fixedContainer(trap.style)}, which makes it the containing block: ${item.box.label} is placed against ${trap.box.label} and scrolls with it, not with the viewport. Move it outside that box (for example to the end of body), or drop the property`), { code: 'U_LAYOUT_FIXED_CONTAINED', box: item.box, region: r, ancestor: trap.box.label, ancestorPath: trap.box.path, property: 'transform' });
-                          if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible'))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
-                          const viewport = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
-                          return solve(item.box,{inline:viewport.inline,block:viewport.block,containingBlock:{path:'viewport',...viewport}},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
-                        }
-                        const containing = finalAncestors.findLast(ancestor=>ancestor.positioned);
-                        // No positioned (or transformed) ancestor: the initial containing block — the viewport's size at the
-                        // top of the page — places it (CSS 2 §10.1), and it scrolls with the page. Usually a missing
-                        // position: relative on the box it was meant to sit in (a badge that jumps to the page corner).
-                        // A clipping or scrolling ancestor in between (does it clip the box?) stays Unknown.
-                        if (!containing && height && !finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible')))) {
-                          const parent = finalAncestors.at(-1)?.box;
-                          if (emit && !layoutWarnings.some(w => w.code === 'W_LAYOUT_ABSOLUTE_PAGE' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_ABSOLUTE_PAGE', severity: 'warning', box: item.box.label, path: item.box.path, ...(parent ? { parent: parent.label } : {}),
-                            message: `${item.box.label} is position: absolute with no positioned ancestor, so it is placed against the page (the initial containing block), not ${parent ? parent.label : 'its parent'}. Give the box it belongs to position: relative`, ...ranges(r) });
-                          const initial = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
-                          return solve(item.box,{inline:initial.inline,block:initial.block,containingBlock:{path:'initial',...initial}},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
-                        }
-                        // A containing block that hides its overflow (overflow: hidden, not scrolling) clips the box at its
-                        // padding box: the box is laid out as usual, and what reaches past that edge is cut off
-                        // (E_LAYOUT_ABSOLUTE_CLIPPED). Any other clipping ancestor stays Unknown.
-                        const clipping = finalAncestors.filter(ancestor => ancestor.clipped);
-                        const ownClip = clipping.length === 1 && clipping[0] === finalAncestors.at(-1) && ['hidden', 'visible'].includes(clipping[0].style?.['overflow-x']) && ['hidden', 'visible'].includes(clipping[0].style?.['overflow-y']);
-                        // A scroll container that is the containing block: the box is placed against its padding box at
-                        // scroll offset 0 and scrolls with the content (what reaches past the end extends the scrollable
-                        // area instead of being cut off). Its size is known; its position, like the content's, only at
-                        // offset 0 (scroll-zero), so it has none otherwise.
-                        const ownScroll = clipping.length === 1 && clipping[0] === finalAncestors.at(-1) && containing === clipping[0] && [clipping[0].style?.['overflow-x'], clipping[0].style?.['overflow-y']].every(v => ['auto', 'scroll', 'hidden', 'visible'].includes(String(v))) && !ownClip;
-                        if (!containing?.paddingBlock || containing.subgrid || (clipping.length && !ownClip && !ownScroll)) throw new Error('Absolute boxes require an owned non-scrolling, unclipped containing block without subgrid placement');
-                        if (ownClip) containing.clips = { box: clipping[0].box.label, x: clipping[0].style['overflow-x'] === 'hidden', y: clipping[0].style['overflow-y'] === 'hidden' };
-                        return solve(item.box,{inline:containing.paddingInline,block:containing.paddingBlock,
-                          containingBlock:{path:containing.box.path,inline:containing.paddingInline,block:containing.paddingBlock,origin:containing.paddingOrigin,...(containing.clips ? { clips: containing.clips } : {})}},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
-                      }));
+                      for (const item of children.children.filter(child=>child.style.position==='absolute')) endings = bounded(endings.flatMap(r => solveOutOfFlow(item, r, finalAncestors, style, emit)));
                       for (const r of endings) results.push(finish(box, style, r, inline, contentInline, blockSize, contentBlock, available, parents, emit));
                     }
                   }

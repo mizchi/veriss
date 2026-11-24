@@ -19,10 +19,12 @@ export function insetLength(text, basis) {
   return result;
 }
 
-export function absoluteOrigin(style, containing, size) {
-  const coordinate = (start, end, basis, dimension) => {
+// staticPosition: where the box sits on an axis whose insets are both auto (relative to the containing block), when known.
+export function absoluteOrigin(style, containing, size, staticPosition) {
+  const coordinate = (start, end, basis, dimension, axis) => {
+    if (style[start] === 'auto' && style[end] === 'auto' && staticPosition?.[axis]) return staticPosition[axis];
     if ((style[start] === 'auto') === (style[end] === 'auto')) throw new Error('Absolute positioning requires exactly one inset per axis');
     return style[start] !== 'auto' ? insetLength(style[start], basis) : diff(diff(basis, insetLength(style[end], basis)), dimension);
   };
-  return {inline: coordinate('left', 'right', containing.inline, size.inline), block: coordinate('top', 'bottom', containing.block, size.block)};
+  return {inline: coordinate('left', 'right', containing.inline, size.inline, 'inline'), block: coordinate('top', 'bottom', containing.block, size.block, 'block')};
 }
