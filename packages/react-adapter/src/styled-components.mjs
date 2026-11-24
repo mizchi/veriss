@@ -198,6 +198,9 @@ export function styledTag(mod, tag) {
 export const evaluateExpression = (expression, mod, ctx) => evaluateStyled({ mod, name: '' }, new Map(), { ...ctx, expression });
 export const isUnknownValue = v => isUnknown(v);
 
+// Thrown when an evaluation would hold more than ctx.maxVariants variants (the product is never built past it).
+export class TooManyVariants extends Error {}
+
 export function evaluateStyled(def, props, ctx) {
   // the module being evaluated: a fragment or const from another module is read in that module
   const mods = [def.mod];
@@ -222,8 +225,9 @@ export function evaluateStyled(def, props, ctx) {
     : props.get(key) ?? one(undefined);
   // theme values carry their path, for the message when a key is missing
   const unwrap = v => (v && typeof v === 'object' && 'theme' in v && 'path' in v ? v.theme : v);
-  const combine = (lists, f) => lists.reduce((acc, list) => acc.flatMap(a => list.map(b => { const choices = merge(a.choices, b.choices); return choices && { vs: [...a.vs, b.v], choices }; }).filter(Boolean)), [{ vs: [], choices: {} }])
-    .flatMap(({ vs, choices }) => f(vs).map(r => { const c = merge(choices, r.choices); return c && { v: r.v, choices: c }; }).filter(Boolean));
+  const budget = list => { if (ctx.maxVariants !== undefined && list.length > ctx.maxVariants) throw new TooManyVariants(`more than ${ctx.maxVariants} variants`); return list; };
+  const combine = (lists, f) => budget(lists.reduce((acc, list) => budget(acc.flatMap(a => list.map(b => { const choices = merge(a.choices, b.choices); return choices && { vs: [...a.vs, b.v], choices }; }).filter(Boolean))), [{ vs: [], choices: {} }])
+    .flatMap(({ vs, choices }) => f(vs).map(r => { const c = merge(choices, r.choices); return c && { v: r.v, choices: c }; }).filter(Boolean)));
 
   // truthiness of a value: a symbol splits on its key (per value when the key has literal values, so the branches
   // record the same choices as the value itself)

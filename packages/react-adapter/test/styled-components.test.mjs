@@ -1063,3 +1063,19 @@ export default function C(props: P) { return <Box ${attrs} />; }`;
   assert.deepEqual(widths(after), [[undefined, '10px']]);
   assert.match((await renderStyled(after, {size: 'large'})).css, /width:10px/);
 });
+
+test('styled props: a spread carrying many props stops evaluating at the budget (no full product of their variants)', () => {
+  const keys = Array.from({length: 24}, (_, i) => `k${i}`);
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  ${keys.map(k => `\${({ ${k} }) => (${k} ? 'outline: 1px solid;' : '')}`).join('\n  ')}
+  display: block;
+\`;
+export default function C(props) { return <Box {...props}>x</Box>; }`;
+  const start = performance.now();
+  const {states, css, unknowns} = expandReact(source, {maxStates: 16});
+  assert.ok(performance.now() - start < 2000, `took ${Math.round(performance.now() - start)}ms`);
+  assert.equal(states.length, 1);
+  assert.match(css, /\{display:block\}/);
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_PROPS' && /more than 16/.test(u.message)), JSON.stringify(unknowns));
+});

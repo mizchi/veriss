@@ -14,7 +14,7 @@
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
 import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings, relocateFindings } from '@mizchi/veriss-adapter-core';
-import { loadModule, binding, styledTag, evaluateStyled, evaluateExpression, isUnknownValue, symbolOf, symbolInfo, styledClass, stableClass } from './styled-components.mjs';
+import { loadModule, binding, styledTag, evaluateStyled, evaluateExpression, isUnknownValue, symbolOf, symbolInfo, styledClass, stableClass, TooManyVariants } from './styled-components.mjs';
 import { typeMembers, literalValues, isTextType } from './types.mjs';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -260,15 +260,17 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       }
     }
     // a key read but not given as an attribute comes through the spread: the component's prop of that name
-    const evaluated = props => chain.map(d => evaluateStyled(d, props, { theme, literalProps, dynamicValues, dynamics, ignoredDynamics, keyframes }));
+    const evaluated = (props, maxVariants) => chain.map(d => evaluateStyled(d, props, { theme, literalProps, dynamicValues, dynamics, ignoredDynamics, keyframes, maxVariants }));
     let perDef = null;
     if (forwarded) {
       const given = props, excluded = forwarded, through = new Map(given);
       const carried = key => !excluded.has(key) && key !== 'children';
       through.get = key => given.has(key) && !(overridden.has(key) && carried(key)) ? given.get(key) : carried(key) ? [{ v: symbolOf(key, key), choices: {} }] : undefined;
-      const spread = evaluated(through);
+      // evaluated within the budget: past maxStates variants of one component it stops (the product is not built)
+      let spread = null;
+      try { spread = evaluated(through, maxStates); } catch (e) { if (!(e instanceof TooManyVariants)) throw e; }
       // too many variants (many props read only for their values): the spread's props are read as absent
-      if (spread.reduce((n, vs) => n * vs.length, 1) > maxStates) unknown('U_STYLED_PROPS', `<${name}>: the props its spread carries make more than ${maxStates} variants of its styles; they are read as absent`);
+      if (!spread || spread.reduce((n, vs) => n * vs.length, 1) > maxStates) unknown('U_STYLED_PROPS', `<${name}>: the props its spread carries make more than ${maxStates} variants of its styles; they are read as absent`);
       else { perDef = spread; props = through; }
     }
     perDef ??= evaluated(props);
