@@ -793,18 +793,29 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (box.text) throw new Error('Automatic text height needs an intrinsicBlockSize contract');
     return [{ region, value: scalar(0) }];
   }
-  function validate(style, box, region, emit, available = {}, parentStyle = null) {
+  function validate(style, box, region, emit, available = {}, parentStyle = null, parents = []) {
     if (style.display === 'none') return false;
     if(box.whitespace && !['normal','nowrap'].includes(style['white-space'])) throw new Error('Preserved whitespace needs explicit text geometry from the input adapter');
     // A px height on text whose font-size follows the user's default font size: a larger default makes the text
     // taller than the box, which then overflows it or clips it (min-height grows, so it is fine).
     // Visually hidden text (clipped to nothing, or a 1px box that hides its overflow) is meant not to be seen.
     const visuallyHidden = visuallyHiddenStyle(style);
-    if ((box.text || box.inline?.length) && !box.pseudo && emit && !visuallyHidden && /^\d+(?:\.\d+)?px$/.test(String(style['block-size'])) && style.$sources?.['block-size'] && !layoutWarnings.some(w => w.code === 'W_LAYOUT_HEIGHT_FIXED_TEXT' && w.path === box.path)) {
+    // A collapsed box (a closed accordion panel: a 0px padding box that does not show its block overflow) hides its text
+    // on purpose at every font size, and the text of every box inside it (those it clips).
+    const collapsed = st => ['0', '0px'].includes(String(st['block-size'])) && ['top', 'bottom'].every(side => ['0', '0px'].includes(String(st[`padding-${side}`]))) && String(st['overflow-y'] ?? 'visible') !== 'visible';
+    const hiddenByCollapse = collapsed(style) || clipChain(parents, style).some(p => p.style && collapsed(p.style));
+    // Dynamic content alone (the adapters render {expression} and component children as '…') may be text or an icon. An
+    // inline icon (an svg or img) sits on the line's baseline under the strut, which grows with the default font size
+    // too (measured in Chromium: a 12px inline svg in a 12px box that hides its overflow sits 2px down at a 16px default
+    // and entirely below the box at 32px), so the warning stands, but it does not claim the content is text.
+    const dynamicOnly = box.text && !box.inline?.length && box.textContent !== undefined && !/[^\s\u2026]/.test(String(box.textContent));
+    if ((box.text || box.inline?.length) && !box.pseudo && emit && !visuallyHidden && !hiddenByCollapse && /^\d+(?:\.\d+)?px$/.test(String(style['block-size'])) && style.$sources?.['block-size'] && !layoutWarnings.some(w => w.code === 'W_LAYOUT_HEIGHT_FIXED_TEXT' && w.path === box.path)) {
       const size = String(style['font-size']);
       const keyword = /^(?:medium|small|large|x-small|x-large|xx-small|xx-large|xxx-large|smaller|larger|ua)$/.test(size);
       if (!/^\d+(?:\.\d+)?px$/.test(size) && (keyword || !unitContext.rootFontSize)) layoutWarnings.push({ code: 'W_LAYOUT_HEIGHT_FIXED_TEXT', severity: 'warning', box: box.label, path: box.path, blockSize: style['block-size'], fontSize: size,
-        message: `${box.label} has height: ${style['block-size']} but its text follows the user's default font size (font-size: ${size === 'ua' ? 'the UA default' : size}): with a larger default the text outgrows the box and ${['hidden', 'clip'].includes(style['overflow-y']) ? 'is cut off' : 'overflows it'}. Use min-height (or padding) instead`, ...ranges(region) });
+        message: dynamicOnly
+          ? `${box.label} has height: ${style['block-size']} and dynamic content (an expression or children, '…' here) whose line follows the user's default font size (font-size: ${size === 'ua' ? 'the UA default' : size}): text, or an inline icon on the text baseline, outgrows the box with a larger default and ${['hidden', 'clip'].includes(style['overflow-y']) ? 'is cut off' : 'overflows it'}. Use min-height (or padding) for text; give an icon display: block`
+          : `${box.label} has height: ${style['block-size']} but its text follows the user's default font size (font-size: ${size === 'ua' ? 'the UA default' : size}): with a larger default the text outgrows the box and ${['hidden', 'clip'].includes(style['overflow-y']) ? 'is cut off' : 'overflows it'}. Use min-height (or padding) instead`, ...(dynamicOnly ? { content: 'dynamic' } : {}), ...ranges(region) });
     }
     // A px line-height on text whose font-size follows the user's default font size (no px root size and a
     // relative size, or a keyword such as medium): a larger default grows the glyphs, not the line, so wrapped lines
@@ -3222,7 +3233,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           if (text === null) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
           style = { ...style, 'inline-size': `${text}px`, 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
         }
-        if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null)) continue;
+        if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null, parents)) continue;
         // A fieldset's first legend is rendered in its block-start border (HTML §15.3.13): it is not a
         // layout child, and the fieldset's effective border-top is max(border-top, legend height).
         const rendered = renderedLegend(box, style, state.region, parents);
