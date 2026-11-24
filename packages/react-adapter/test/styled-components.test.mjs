@@ -960,3 +960,19 @@ export default function C({ w }) { return <Box $w={w} />; }`;
   assert.match(css, /\{height:10px\}/);
   assert.deepEqual(dynamics, []);
 });
+
+test('typed-props fixtures: every name imported from a sibling module is exported by it (as tsc requires)', async () => {
+  const {parse} = await import('@babel/parser');
+  const ast = name => parse(typedSource(name), {sourceType: 'module', plugins: ['jsx', 'typescript']});
+  const exported = name => new Set(ast(name).program.body.flatMap(st => st.type !== 'ExportNamedDeclaration' ? [] : st.declaration
+    ? [st.declaration.id?.name, ...(st.declaration.declarations ?? []).map(d => d.id.name)]
+    : st.specifiers.map(sp => sp.exported.name ?? sp.exported.value)));
+  for (const file of ['Banner.tsx', 'Pill.tsx', 'styled.ts', 'tokens.ts', 'types.ts']) {
+    for (const st of ast(file).program.body) {
+      if (st.type !== 'ImportDeclaration' || !st.source.value.startsWith('./')) continue;
+      const target = ['.ts', '.tsx'].map(ext => `${st.source.value.slice(2)}${ext}`).find(f => { try { typedSource(f); return true; } catch { return false; } });
+      const names = exported(target);
+      for (const sp of st.specifiers) if (sp.type === 'ImportSpecifier') assert.ok(names.has(sp.imported.name ?? sp.imported.value), `${file} imports ${sp.imported.name} from ${target}, which does not export it`);
+    }
+  }
+});

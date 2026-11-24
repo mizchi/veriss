@@ -1,5 +1,6 @@
 import styled from "styled-components";
-import type { Size, Tone } from "./types";
+import type { Size } from "./tokens";
+import type { Tone } from "./types";
 
 export const Container = styled.div<{ size: Size; tone: Tone }>`
   display: grid;
