@@ -2,7 +2,7 @@ import postcss from 'postcss';
 import { calcOperatorProblem } from './calc-syntax.mjs';
 import { drop } from './dropped.mjs';
 import { colorSyntaxProblem, parseColor } from '../color/index.mjs';
-import { backgroundProblem } from './background-syntax.mjs';
+import { backgroundProblem, imageProblem, imageURL, shorthandImageToken, STRAY_COLON } from './background-syntax.mjs';
 import { sizeKeywordSplits } from './size-keyword-syntax.mjs';
 import { familyProblem, fontShorthandProblem } from './font-syntax.mjs';
 import { gridTrackProblem } from './grid-syntax.mjs';
@@ -743,7 +743,39 @@ function flexShorthand(value) {
   return [['flex-grow', factors[0] ?? '1'], ['flex-shrink', factors[1] ?? '1'], ['flex-basis', basis ?? '0%']];
 }
 
+// A declaration value with a ':' outside brackets and strings (background-image: https://…, or a missing semicolon:
+// "color: red\n background: blue") is one invalid declaration to the browser: it is dropped up to the next ';' and the
+// rest of the rule applies (CSS Syntax 3 §5.4.6; measured in Chromium, Firefox and WebKit). PostCSS throws "Missed
+// semicolon" for the whole sheet instead; the stray ':' is replaced with STRAY_COLON (same length, so lines and
+// columns stay) and the declaration loop drops the declaration and reports it.
+export function tolerateStrayColons(css) {
+  let text = String(css);
+  for (let round = 0; round < 10000; round++) {
+    try { postcss.parse(text); return text; }
+    catch (error) {
+      if (error?.reason !== 'Missed semicolon' || !error.line) return text;
+      let offset = 0;
+      for (let line = 1; line < error.line; line++) { const next = text.indexOf('\n', offset); if (next === -1) return text; offset = next + 1; }
+      offset += (error.column ?? 1) - 1;
+      let depth = 0, quote = null, at = -1;
+      for (let i = offset; i < text.length; i++) {
+        const ch = text[i];
+        if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = null; continue; }
+        if (ch === '"' || ch === "'") quote = ch;
+        else if (ch === '(') depth++;
+        else if (ch === ')') depth = Math.max(0, depth - 1);
+        else if (ch === ';' || ch === '{' || ch === '}') break;
+        else if (ch === ':' && depth === 0) { at = i; break; }
+      }
+      if (at === -1) return text;
+      text = text.slice(0, at) + STRAY_COLON + text.slice(at + 1);
+    }
+  }
+  return text;
+}
+
 export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error' } = {}) {
+  sheets = sheets.map(sheet => ({ ...sheet, css: tolerateStrayColons(sheet.css) }));
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
   const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
@@ -1125,6 +1157,16 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
             for (const name of names) { const flip = logicalFlip(property, name); declarations.push({ property: name, value: 'initial', ...(flip ? { flip } : {}), dynamic: { id: Number(dynamic[1]), written: `${declaration.prop}: ${declaration.value.trim()}` }, important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename }); }
             continue;
           } }
+        // A stray ':' in the value (tolerateStrayColons) or a background-image that is not an <image> (a bare URL without
+        // url(), a quoted string): the browser drops the declaration (measured in Chromium, Firefox and WebKit).
+        { const prop = declaration.prop.toLowerCase(), raw = declaration.value.trim(), value = raw.replaceAll(STRAY_COLON, ':');
+          const line = declaration.source.start.line;
+          if (!prop.startsWith('--') && ['background-image', 'background'].includes(prop)) {
+            const problem = prop === 'background-image' ? imageProblem(raw) : (t => t && { token: t })(shorthandImageToken(raw));
+            if (problem) { const token = prop === 'background' ? problem.token : postcss.list.comma(value).find(l => imageProblem(l)) ?? value;
+              note('W_CSS_IMAGE_INVALID', { property: prop, value, token: token.replaceAll(STRAY_COLON, ':'), url: imageURL(token), selector: node.selector, file: filename, line }); continue; }
+          }
+          if (!prop.startsWith('--') && raw.includes(STRAY_COLON)) { note('W_CSS_STRAY_COLON', { property: prop, value: value.replace(/\s+/g, ' '), selector: node.selector, file: filename, line }); continue; } }
         // F86: a "!word" other than !important at the end of a value makes the declaration invalid: the browser drops it
         // (measured in Chromium, Firefox and WebKit). PostCSS keeps it in the value; it is dropped here and reported.
         { const bang = !declaration.prop.startsWith('--') && !declaration.important && /!\s*([a-z][\w-]*)\s*$/i.exec(declaration.value);

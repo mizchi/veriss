@@ -15,7 +15,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 
 | # | 役割 | 何を見るか | 入力 | 主なコード | 検査できる | 検査しない(Unknown) |
 |---|---|---|---|---|---|---|
-| 1 | [CSS の構文](#1-css-の構文宣言ごと捨てられる値) | ブラウザーが宣言ごと捨てる値 | CSS だけ | `W_CSS_*_INVALID` など 16 | 構文が閉じた値(calc の空白、色、キーワード、grid のトラック…) | `var()` を含む値、`-webkit-` の値、システムフォント |
+| 1 | [CSS の構文](#1-css-の構文宣言ごと捨てられる値) | ブラウザーが宣言ごと捨てる値 | CSS だけ | `W_CSS_*_INVALID` など 18 | 構文が閉じた値(calc の空白、色、キーワード、grid のトラック…) | `var()` を含む値、`-webkit-` の値、システムフォント |
 | 2 | [at-rule とカスケード](#2-at-rule-とカスケード) | 決して当たらない `@media`・`@supports`、層や順番で負ける規則 | CSS だけ | `W_CSS_MEDIA_*` など 14 | 範囲が空の query、不正な query・`@property`・`@font-face`、層の順 | 別ファイルの `@import`、query の並びで当たりうるもの |
 | 3 | [効かない宣言](#3-文脈で効かない宣言) | 受け入れられるが何もしない宣言 | CSS + box の祖先 | `W_LAYOUT_DECLARATION_INERT` ほか 28 | 親の display・position・表の境界モデルなどで決まる 80 以上の組み合わせ | ブラウザーで効き方が違う組み合わせ(除外して記録) |
 | 4 | [セレクタ × DOM](#4-セレクタ--dom) | DOM の形や状態のせいで当たらないセレクタ | CSS + DOM | `W_CSS_STATE_UNREACHABLE` ほか 7 | フォーカス・リンク・フォームの状態、HTML の解析が補う要素 | 動的な属性(tabindex・lang・dir・value)、外から渡される子 |
@@ -49,6 +49,8 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_GRID_AREAS_INVALID` | 行ごとに数の違う、長方形でない `grid-template-areas`(F52) | 検査可 |
 | `W_CSS_TIMING_INVALID` | `transition: opacity 300`、知らない easing 名(F114) | 検査可 |
 | `W_CSS_BACKGROUND_INVALID` | 最後の層以外の色、位置のない `/` など(F115) | 検査可 |
+| `W_CSS_IMAGE_INVALID` | `background-image: https://…`(`url()` のない URL)、`"close.png"` のような文字列。一括指定 `background` の画像の位置にあるものも(F134)。以前は URL の `:` で PostCSS が止まり、シート全体が `U_LAYOUT_CSS` だった | 検査可 |
+| `W_CSS_STRAY_COLON` | 値の中の関数・文字列の外の `:`(セミコロンの書き忘れ `color: red` + 改行 + `background: blue`)。次の `;` までが 1 つの不正な宣言として捨てられる(F134) | 検査可 |
 | `W_CSS_VAR_INVALID` | 値も代わりもない `var()`(計算値の時点で無効、F3) | 検査可 |
 | `W_CSS_KEYFRAME_IMPORTANT` | キーフレームの中の `!important` | 検査可 |
 | `W_CSS_IMPORT_IGNORED` | 先頭にない `@import` | 検査可 |
