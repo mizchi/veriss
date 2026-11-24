@@ -59,3 +59,8 @@ test('lowerNested: a nested rule written over several lines maps to its selector
   const {map} = lowerNested([{selector: '.sc-Row', text: '\n  display: flex;\n  & > .label {\n    font-weight: bold;\n  }\n  gap: 0;\n', origin: {file: 'f.ts', line: 5, name: 'Row'}}]);
   assert.deepEqual(map.map(m => [m.selector, m.origin.line]), [['.sc-Row', 6], ['.sc-Row > .label', 7], ['.sc-Row', 10]]);
 });
+
+test('lowerNested: comments do not split a run of declarations', () => {
+  const {css} = lowerNested([{selector: '.a', text: 'color: red; /* note */ margin: 0;', origin: {file: 'f', line: 1, name: 'A'}}]);
+  assert.equal(css, '.a{color:red;margin:0}');
+});
