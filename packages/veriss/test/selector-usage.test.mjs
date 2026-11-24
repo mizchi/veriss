@@ -75,3 +75,10 @@ test('a single-compound selector is judged on the seen elements even when a boun
   const reported = brun('.label:disabled{color:gray}.lable{color:red}').selectors.warnings.map(w => w.selector).sort();
   assert.deepEqual(reported, ['.label:disabled', '.lable']);
 });
+
+test('the top-level shapes of an svg are its children and each other\'s siblings', () => {
+  const shtml = '<html lang="en"><body><main class="page"><svg class="icon" viewBox="0 0 10 10" width="10" height="10"><circle class="a" cx="3" cy="5" r="2"></circle><circle class="b" cx="7" cy="5" r="2"></circle></svg></main></body></html>';
+  const srun = css => analyzeHTML(shtml, {name: 'S', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const reported = srun('.a + .b{fill:none}.a ~ .b{fill:none}.a:first-child{fill:none}.icon:has(> .a){color:red}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, []);
+});

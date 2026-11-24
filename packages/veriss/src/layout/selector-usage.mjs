@@ -20,25 +20,29 @@ const distance = (a, b) => {
 };
 const relationWords = { '>': ['has a parent matching', 'parents'], ' ': ['is inside an element matching', 'ancestors'], '+': ['directly follows an element matching', 'previous siblings'], '~': ['follows an element matching', 'earlier siblings'] };
 
-// The elements inside an inline svg: not boxes, but elements a selector can style (its shapes).
+// The elements inside an inline svg: not boxes, but elements a selector can style (its shapes). The svg's box stands in
+// as a host copy whose children are its top-level shapes, so the shapes have a parent with siblings to match against
+// (+, ~, :first-child, :has(> …)); the laid-out box itself is left as it is.
 function svgElements(boxes) {
-  const out = [];
-  const add = (nodes, parent, path) => {
-    const made = nodes.map((n, i) => {
-      const el = { tag: n.tag, classes: [...n.classes], ...(n.id !== undefined ? { id: n.id } : {}), attributes: { ...(n.attributes ?? {}) }, path: `${path}/svg${i}`, label: n.id ? `#${n.id}` : n.classes.length ? n.classes.map(c => `.${c}`).join('') : `${n.tag}@${path}/svg${i}`, children: [] };
-      el[PARENT] = parent;
-      out.push(el);
-      el.children = add(n.children ?? [], el, el.path);
-      return el;
-    });
-    return made;
-  };
-  for (const box of boxes) if (box.svgTree?.length) add(box.svgTree, box, box.path);
-  return out;
+  const out = [], hosts = new Map();
+  const add = (nodes, parent, path) => nodes.map((n, i) => {
+    const el = { tag: n.tag, classes: [...n.classes], ...(n.id !== undefined ? { id: n.id } : {}), attributes: { ...(n.attributes ?? {}) }, path: `${path}/svg${i}`, label: n.id ? `#${n.id}` : n.classes.length ? n.classes.map(c => `.${c}`).join('') : `${n.tag}@${path}/svg${i}`, children: [] };
+    el[PARENT] = parent;
+    out.push(el);
+    el.children = add(n.children ?? [], el, el.path);
+    return el;
+  });
+  for (const box of boxes) if (box.svgTree?.length) {
+    const host = { ...box }; // keeps the PARENT symbol
+    host.children = [...(box.children ?? []), ...add(box.svgTree, host, box.path)];
+    hosts.set(box, host);
+  }
+  return { shapes: out, hosts };
 }
 
 export function selectorUsage(rules, boxes) {
-  const elements = [...boxes.filter(box => !box.anonymous && !box.pseudo), ...svgElements(boxes)];
+  const { shapes, hosts } = svgElements(boxes);
+  const elements = [...boxes.filter(box => !box.anonymous && !box.pseudo).map(box => hosts.get(box) ?? box), ...shapes];
   // Content an adapter could not see (a children slot, a child component) may hold the element a selector styles: the
   // selector is possible when its other compounds hold with that boundary's element as the subject's parent (>) or
   // as it or an ancestor of it (descendant); siblings (+, ~) of unseen content are unknown.
