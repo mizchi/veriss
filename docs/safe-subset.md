@@ -52,6 +52,9 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - フォントファイル(`--font`)
   - どちらもなければ、1 行 24px と仮定するので、文字のはみ出しは判定しない。
 - `line-height` は px か数値にする。
+- `word-break: break-all` は、フォントファイルで測るテキストにだけ使える。測ったテキストは、break-all の改行で判定する(Chromium の改行)。
+  寸法を仮定するテキストは Unknown になる。`keep-all` と `line-break` は、折り返すテキストでは Unknown になる。
+  - break-all の中でも、`$ % + \\` が漢字・かなの隣にある場合と、`-` の後に Latin-1 の文字が来る場合は Unknown になる(前後の文字で改行が変わる)。
 - `text-box`(`text-box-trim`)は使わない(Unknown)。
 
 ## 4. border と背景

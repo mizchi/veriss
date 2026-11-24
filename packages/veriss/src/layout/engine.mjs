@@ -551,7 +551,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       }
       if (options.reportTextFonts && !state && box.text && !box.pseudo && !(box.inline ?? []).length && !box.anonymous) {
         const hint = name => box.attributes && Object.hasOwn(box.attributes, name) ? box.attributes[name] : undefined;
-        const facts = { classes: box.classes, text: box.textContent ?? '', ...(hint('data-text-one-line') !== undefined ? { oneLine: true } : {}), ...(hint('data-text-max-length') !== undefined ? { maxLength: hint('data-text-max-length') } : {}), ...(hint('data-text-chars') !== undefined ? { characters: hint('data-text-chars') } : {}), family: style['font-family'], size: style['font-size'], lineHeight: style['line-height'], weight: style['font-weight'], style: style['font-style'], whiteSpace: style['white-space'], overflowWrap: style['overflow-wrap'], letterSpacing: style['letter-spacing'], lang: style.$lang, textOverflow: style['text-overflow'], overflowX: style['overflow-x'], label: box.label };
+        const facts = { classes: box.classes, text: box.textContent ?? '', ...(hint('data-text-one-line') !== undefined ? { oneLine: true } : {}), ...(hint('data-text-max-length') !== undefined ? { maxLength: hint('data-text-max-length') } : {}), ...(hint('data-text-chars') !== undefined ? { characters: hint('data-text-chars') } : {}), family: style['font-family'], size: style['font-size'], lineHeight: style['line-height'], weight: style['font-weight'], style: style['font-style'], whiteSpace: style['white-space'], overflowWrap: style['overflow-wrap'], wordBreak: style['word-break'] ?? 'normal', letterSpacing: style['letter-spacing'], lang: style.$lang, textOverflow: style['text-overflow'], overflowX: style['overflow-x'], label: box.label };
         const seen = textFonts.get(box.path);
         textFonts.set(box.path, seen && seen !== 'varied' && JSON.stringify(seen) !== JSON.stringify(facts) ? 'varied' : seen === 'varied' ? 'varied' : facts);
       }
@@ -948,6 +948,13 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     }
     if (!['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces'].includes(style['white-space']) || !['normal', 'anywhere', 'break-word'].includes(style['overflow-wrap'])) throw new Error('Unsupported text wrapping value');
     const nowrap = ['nowrap', 'pre'].includes(style['white-space']), wrap = box.contract?.wrap;
+    // word-break: break-all (kept by css.mjs where the text can wrap) moves the line breaks inside words: the text's lines
+    // are known only where they were measured with it (a font contract with wordBreak); assumed sizes are not.
+    if (style['word-break'] === 'break-all' && !nowrap && (box.text || (box.inline ?? []).length) && !box.pseudo) {
+      const metrics = box.contract?.textMetrics;
+      if (metrics?.kind !== 'lines' || metrics.wordBreak !== 'break-all') throw Object.assign(new Error(`${box.label}: word-break: break-all moves its line breaks inside words; its text is known only measured with it (font files, measured with word-break: break-all)`), { code: 'U_LAYOUT_TEXT_METRICS' });
+    }
+    if (box.contract?.textMetrics?.wordBreak === 'break-all' && style['word-break'] !== 'break-all') throw Object.assign(new Error(`${box.label}: its text was measured with word-break: break-all, but its CSS word-break is ${style['word-break'] ?? 'normal'}`), { code: 'U_LAYOUT_TEXT_METRICS' });
     if (emit && ((wrap === 'anywhere' && (nowrap || style['overflow-wrap'] !== 'anywhere')) || (wrap === 'normal' && nowrap) || (wrap === 'nowrap' && !nowrap))) issue('E_LAYOUT_WRAP', `Requested ${wrap} wrapping disagrees with CSS`, box, region);
     for (const axis of ['inline', 'block']) {
       if (axis === 'block' && !block) {

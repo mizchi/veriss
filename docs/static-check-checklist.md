@@ -554,6 +554,14 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   祖先は、containing block のほかの中身と同じように箱を clip するだけなので(CSS Overflow 3 §3)、containing block とその内側の clip だけを
   判定する。3 ブラウザーで、スクロールする祖先と `overflow: hidden` の祖先の中で、containing block の外に出た箱の
   `E_LAYOUT_ABSOLUTE_CLIPPED` が実際の clip と一致した(`e2e/layout-accessibility.spec.mjs`)。
+- [x] **I14. 折り返すテキストの `word-break: break-all`**: Unknown にしていた(CSS-in-JS の管理画面で、本文のスタイルに付いていた)。
+  改行の位置を Chromium で組ごとに測り(`tools/measure-break-all.mjs`、145 文字の全組、lang en と ja で同じ)、組の表として持つ
+  (`src/text-break-all.mjs`)。break-all の改行は一つのクラスの規則にならない(`+` と `\\`、`!` と `)` が違う)。測っていない文字は、
+  どの文字と組んでも同じ結果になるグループの代表で引く(Latin-1、漢字・かな、小書きかな、踊り字)。3 文字の組で、組の表から外れる
+  文脈は 2 つだけだった(`$ % + \\` と漢字・かなの隣、`-` と Latin-1)。どちらも Unknown にする。ランダムな 1 万件超の文字列で一致した。
+  break-all は継承し、break-all で測ったテキストだけを配置する(仮定の寸法のテキストは Unknown)。e2e(`e2e/layout-word-break.spec.mjs`)で、
+  英語と日本語の行数が Chromium 以上で、9 割以上の幅で一致した。Firefox は Chromium が切る 1,034 組で切らず、
+  WebKit は約物の前後を中心に 3,068 組で余分に切り、83 組で切らない(21,025 組中。Firefox は baseline に載せた。docs/css-baseline.md)。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
