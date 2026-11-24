@@ -90,7 +90,7 @@ export function accessibilityFacts(tag, attributes) {
 export const phrasingTags = new Set(['a', 'span', 'strong', 'em', 'b', 'i', 'small', 'img', 'output']);
 const phrasing = box => phrasingTags.has(box.tag) && (box.children ?? []).every(phrasing) && !(box.inline ?? []).length;
 
-const fields=new Set(['adapterUnknowns','canvasSize','notAttributes','placeholderAttr','inertAttributes','restructured','implied','disabledAttr','boundaries','autofocus','metaViewport','tag','id','lang','named','ariaHidden','focusable','references','labelledBy','tabIndex','equivalent','essential','alt','inputType','labelFor','placeholder','role','inputName','headers','ariaLabel','href','textContent','aria','nameSource','value','autocomplete','scope','controls','autoplay','muted','trackKind','accessKey','ismap','colSpan','rowSpan','hiddenAttr','inert','popover','inlineStyle','dirAttr','runs','target','buttonType','nativeStates','imageSize','svgSize','detailsOpen','dialogOpen','attributes','classes','children','text','whitespace','path','source','owner','documentRoot','layoutContracts','targets','targetIdentity']);
+const fields=new Set(['adapterUnknowns','canvasSize','notAttributes','placeholderAttr','inertAttributes','restructured','implied','disabledAttr','boundaries','svgTree','autofocus','metaViewport','tag','id','lang','named','ariaHidden','focusable','references','labelledBy','tabIndex','equivalent','essential','alt','inputType','labelFor','placeholder','role','inputName','headers','ariaLabel','href','textContent','aria','nameSource','value','autocomplete','scope','controls','autoplay','muted','trackKind','accessKey','ismap','colSpan','rowSpan','hiddenAttr','inert','popover','inlineStyle','dirAttr','runs','target','buttonType','nativeStates','imageSize','svgSize','detailsOpen','dialogOpen','attributes','classes','children','text','whitespace','path','source','owner','documentRoot','layoutContracts','targets','targetIdentity']);
 const object=value=>value!==null && typeof value==='object' && !Array.isArray(value);
 
 /** Clone the supplied model: analysis must never attach facts to caller state. */
@@ -119,6 +119,9 @@ export function normalizeTree(tree,name) {
     if(input.source!==undefined && (!object(input.source) || !Number.isSafeInteger(input.source.start) || !Number.isSafeInteger(input.source.end) || input.source.start<0 || input.source.end<input.source.start)) throw new TypeError('Invalid box source span');
     if(input.layoutContracts!==undefined && !Array.isArray(input.layoutContracts)) throw new TypeError('Invalid layout declarations');
     if(input.boundaries!==undefined && (!Array.isArray(input.boundaries) || input.boundaries.length>256 || input.boundaries.some(b=>!object(b) || !['component','slot','children','html'].includes(b.kind) || (b.name!==undefined && (typeof b.name!=='string' || b.name.length>256))))) throw new TypeError('Invalid box boundaries');
+    // the elements inside an inline svg (not laid out; read by selector checks): {tag, classes, id?, attributes?, children}
+    const svgTreeValid=(nodes,depth=0,count={n:0})=>Array.isArray(nodes) && depth<=32 && nodes.every(n=>object(n) && ++count.n<=2048 && typeof n.tag==='string' && Array.isArray(n.classes) && n.classes.every(c=>typeof c==='string') && (n.id===undefined || typeof n.id==='string') && (n.attributes===undefined || object(n.attributes)) && svgTreeValid(n.children ?? [],depth+1,count));
+    if(input.svgTree!==undefined && !svgTreeValid(input.svgTree)) throw new TypeError('Invalid svg tree');
     validateTargetMetadata(input);
     const path=input.path ?? (parent ? `${parent}/${index}` : name);
     if(!path || paths.has(path) || (parent && !path.startsWith(parent+'/'))) throw new TypeError('Box paths must be unique and nested below their parent');
@@ -130,7 +133,8 @@ export function normalizeTree(tree,name) {
       ...(input.targets?.length ? {targets:[...input.targets]} : {}),...(input.targetIdentity ? {targetIdentity:input.targetIdentity} : {}),
       documentRoot:input.documentRoot ?? (!parent && input.tag==='html'),
       ...(input.layoutContracts ? {layoutContracts:structuredClone(input.layoutContracts)} : {}),
-      ...(input.boundaries ? {boundaries:input.boundaries.map(b=>({...b}))} : {})};
+      ...(input.boundaries ? {boundaries:input.boundaries.map(b=>({...b}))} : {}),
+      ...(input.svgTree ? {svgTree:structuredClone(input.svgTree)} : {})};
     box.label=box.id ? `#${box.id}` : box.classes.length ? box.classes.map(c=>`.${c}`).join('') : `${box.tag}@${path}`;
     // What is not modeled on this box: Unknown where the layout reaches it (the engine throws there), so the rest of the
     // page is still laid out and a hidden box changes nothing.

@@ -60,3 +60,10 @@ test('a selector whose inner compounds may all be unseen content still needs its
   const reported = brun('.btn > span:only-child > svg{width:1px}.plain > span > svg{width:1px}.page > .btn > span > svg{width:1px}.nav > .btn > span{width:1px}').selectors.warnings.map(w => w.selector).sort();
   assert.deepEqual(reported, ['.nav > .btn > span', '.plain > span > svg']);
 });
+
+test('selectors on the shapes inside an svg (not laid out as boxes) match them; a misspelt one is still reported', () => {
+  const shtml = '<html lang="en"><body><main class="page"><svg class="icon" viewBox="0 0 10 10" width="10" height="10"><circle class="dot" cx="5" cy="5" r="4"></circle></svg></main></body></html>';
+  const srun = css => analyzeHTML(shtml, {name: 'S', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const reported = srun('.dot{fill:none}.icon > .dot{stroke-width:3}.missing{fill:none}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, ['.missing']);
+});

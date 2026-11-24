@@ -1,4 +1,4 @@
-import { compoundMatches as exactMatches, neighbors } from './selectors.mjs';
+import { compoundMatches as exactMatches, neighbors, PARENT } from './selectors.mjs';
 // A match that is not known (a dynamic attribute value) counts as a match: such a selector is never reported.
 const compoundMatches = (selector, box) => { try { return exactMatches(selector, box); } catch { return true; } };
 
@@ -20,8 +20,25 @@ const distance = (a, b) => {
 };
 const relationWords = { '>': ['has a parent matching', 'parents'], ' ': ['is inside an element matching', 'ancestors'], '+': ['directly follows an element matching', 'previous siblings'], '~': ['follows an element matching', 'earlier siblings'] };
 
+// The elements inside an inline svg: not boxes, but elements a selector can style (its shapes).
+function svgElements(boxes) {
+  const out = [];
+  const add = (nodes, parent, path) => {
+    const made = nodes.map((n, i) => {
+      const el = { tag: n.tag, classes: [...n.classes], ...(n.id !== undefined ? { id: n.id } : {}), attributes: { ...(n.attributes ?? {}) }, path: `${path}/svg${i}`, label: n.id ? `#${n.id}` : n.classes.length ? n.classes.map(c => `.${c}`).join('') : `${n.tag}@${path}/svg${i}`, children: [] };
+      el[PARENT] = parent;
+      out.push(el);
+      el.children = add(n.children ?? [], el, el.path);
+      return el;
+    });
+    return made;
+  };
+  for (const box of boxes) if (box.svgTree?.length) add(box.svgTree, box, box.path);
+  return out;
+}
+
 export function selectorUsage(rules, boxes) {
-  const elements = boxes.filter(box => !box.anonymous && !box.pseudo);
+  const elements = [...boxes.filter(box => !box.anonymous && !box.pseudo), ...svgElements(boxes)];
   // Content an adapter could not see (a children slot, a child component) may hold the element a selector styles: the
   // selector is possible when its other compounds hold with that boundary's element as the subject's parent (>) or
   // as it or an ancestor of it (descendant); siblings (+, ~) of unseen content are unknown.

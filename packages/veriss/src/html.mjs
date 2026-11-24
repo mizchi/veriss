@@ -123,7 +123,9 @@ export function htmlBoxTree(html) {
       const setByAll=key=>leaves.length>0 && !shapes.some(c=>c.attrs.some(a=>a.name==='style')) && leaves.every(chain=>{ const v=[...chain].reverse().map(c=>c.attrs.find(a=>a.name===key)?.value.trim().toLowerCase()).find(v=>v!==undefined); return v!==undefined && v!=='inherit'; });
       return {...own,...(of('fill')!==undefined ? {shapeFill:of('fill')} : {}),...(of('stroke')!==undefined ? {shapeStroke:of('stroke')} : {}),...(setByAll('fill') ? {fillSet:true} : {}),...(setByAll('stroke') ? {strokeSet:true} : {}),shapes:shapes.length};
     })();
-    if(inlineSvg) { const facts=accessibilityFacts('svg',attrs); facts.svgSize={...(facts.svgSize ?? {}),paint:svgPaint}; return {tag:'svg',attributes:attrs,...(attrs.id!==undefined ? {id:attrs.id} : {}),...facts,...(svgTitle ? {named:true} : {}),classes:(attrs.class ?? '').split(/\s+/).filter(Boolean),text:false,runs:[],children:[]}; }
+    // the svg's own elements, for selector checks only (class and tag selectors on its shapes)
+    const svgTree=inlineSvg ? (function tree(n){ return n.childNodes.filter(c=>c.tagName).map(c=>{ const a=Object.fromEntries(c.attrs.map(x=>[x.name,x.value])); return {tag:c.tagName,classes:(a.class ?? '').split(/\s+/).filter(Boolean),...(a.id!==undefined ? {id:a.id} : {}),attributes:a,children:tree(c)}; }); })(node) : undefined;
+    if(inlineSvg) { const facts=accessibilityFacts('svg',attrs); facts.svgSize={...(facts.svgSize ?? {}),paint:svgPaint}; return {tag:'svg',attributes:attrs,...(attrs.id!==undefined ? {id:attrs.id} : {}),...facts,...(svgTitle ? {named:true} : {}),classes:(attrs.class ?? '').split(/\s+/).filter(Boolean),text:false,runs:[],children:[],...(svgTree.length ? {svgTree} : {})}; }
     // (A table section or row the parser inserted — no start tag in the source — is marked implied: checklist F26.)
     // Checklist F27: the parser changed the structure written in the source — an element with no source location at all
     // (an empty <p> made from a stray </p>, after a block closed the open paragraph), or one whose required end tag the
