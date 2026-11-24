@@ -41,3 +41,15 @@ test('state and pseudo-element selectors are judged on their element; off by def
   assert.deepEqual(codes(run('.item:hover{color:red}.title::before{content:"";color:red}')), []);
   assert.equal(analyzeHTML(html, {name: 'P', css: `*{margin:0}html,body,.page,.list,.card{${g}}.item{height:10px}.nope{color:red}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}}).selectors, undefined);
 });
+
+// Content an adapter could not see (<!--isle-boundary:children-->, a child component) may hold the element a selector
+// styles: such a selector is not reported when its other compounds hold with the boundary's element as the parent or
+// ancestor; it is when they cannot.
+test('selectors that may style content behind a boundary (children, a child component) are not reported', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><button class="btn">…<!--isle-boundary:children--></button><div class="field"><!--isle-boundary:component Input--></div><div class="plain"><i class="x"></i></div></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const warnings = brun('.btn > span{color:red}.btn svg{width:1px}.field > input{color:red}.plain > span{color:red}.page > *:last-child{color:red}.other > input{color:red}').selectors.warnings;
+  const reported = warnings.map(w => w.selector).sort();
+  // .plain has no boundary; .other is not an element of the template at all
+  assert.deepEqual(reported, ['.other > input', '.plain > span']);
+});

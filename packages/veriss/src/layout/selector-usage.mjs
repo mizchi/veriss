@@ -22,6 +22,19 @@ const relationWords = { '>': ['has a parent matching', 'parents'], ' ': ['is ins
 
 export function selectorUsage(rules, boxes) {
   const elements = boxes.filter(box => !box.anonymous && !box.pseudo);
+  // Content an adapter could not see (a children slot, a child component) may hold the element a selector styles: the
+  // selector is possible when its other compounds hold with that boundary's element as the subject's parent (>) or
+  // as it or an ancestor of it (descendant); siblings (+, ~) of unseen content are unknown.
+  const holders = elements.filter(box => box.boundaries?.length);
+  const holdsFrom = (selector, box, i) => i >= (selector.chain ?? []).length || neighbors(box, selector.chain[i].combinator).some(n => compoundMatches(selector.chain[i].compound, n) && holdsFrom(selector, n, i + 1));
+  const behindBoundary = selector => holders.some(holder => {
+    const chain = selector.chain ?? [];
+    if (!chain.length) return true;
+    const { compound, combinator } = chain[0];
+    if (combinator === '+' || combinator === '~') return true;
+    const anchors = combinator === '>' ? [holder] : [holder, ...neighbors(holder, ' ')];
+    return anchors.some(a => compoundMatches(compound, a) && holdsFrom(selector, a, 1));
+  });
   const classes = new Set(elements.flatMap(box => box.classes));
   const rows = [], warnings = [];
   const seen = new Set();
@@ -41,6 +54,7 @@ export function selectorUsage(rules, boxes) {
     const matched = broken ? 0 : subjects.filter(box => holds(box, 0)).length;
     const row = { selector: selector.source, file: rule.file, line: rule.line, matched };
     rows.push(row);
+    if ((!subjects.length || broken) && behindBoundary(selector)) { row.unknown = 'boundary'; continue; }
     if (!subjects.length) {
       const missing = selector.parts.filter(part => part.kind === 'class' && !classes.has(part.value)).map(part => part.value);
       const near = missing.flatMap(name => [...classes].filter(c => c !== name && distance(c, name) <= (name.length <= 5 ? 1 : 2)).map(c => `.${c}`));
