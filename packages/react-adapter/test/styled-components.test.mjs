@@ -726,6 +726,11 @@ export default function C() { return <Box />; }`;
   assert.deepEqual(unknowns, []);
   const [, cls] = classOf(states[0].html, 'div');
   assert.match(css, new RegExp(`\\.${cls}\\{animation:sc-keyframes-\\w+ 1s linear infinite;display:block\\}`));
+  // the @keyframes rule is emitted under that name (otherwise the animation names nothing: W_CSS_KEYFRAMES_MISSING)
+  const name = /animation:(sc-keyframes-\w+)/.exec(css)[1];
+  assert.match(css, new RegExp(`@keyframes ${name}\\s*\\{\\s*100%\\s*\\{\\s*transform: rotate\\(360deg\\);?\\s*\\}\\s*\\}`));
+  const report = analyzeReact(source, {pageCSS, viewport});
+  assert.ok(!report.findings.some(f => f.code === 'W_CSS_KEYFRAMES_MISSING'), JSON.stringify(report.findings.map(f => f.code)));
 });
 
 const dynamicSource = `import styled from 'styled-components';

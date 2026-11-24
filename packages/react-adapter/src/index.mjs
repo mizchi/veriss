@@ -74,7 +74,7 @@ function linariaRules(className, text) {
  */
 // inject (internal, styled(Component)): the component rendered by a styled wrapper, with the wrapper's classes as its
 // className, the wrapper's children, and the props the wrapper was given ({v, choices} variants; v a literal or a symbol).
-export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component', resolveModule, dynamicValues, dynamics = [], ignoredDynamics = new Set(), inject } = {}) {
+export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component', resolveModule, dynamicValues, dynamics = [], ignoredDynamics = new Set(), keyframes = new Map(), inject } = {}) {
   const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   // styled-components (imported from 'styled-components'): evaluated per element from the props it passes.
   // Imported styled modules are read through options.resolveModule(specifier, importerFile).
@@ -254,7 +254,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       }
     }
     // a key read but not given as an attribute comes through the spread: the component's prop of that name
-    const evaluated = props => chain.map(d => evaluateStyled(d, props, { theme, literalProps, dynamicValues, dynamics, ignoredDynamics }));
+    const evaluated = props => chain.map(d => evaluateStyled(d, props, { theme, literalProps, dynamicValues, dynamics, ignoredDynamics, keyframes }));
     let perDef = null;
     if (forwarded) {
       const given = props, excluded = forwarded, through = new Map(given);
@@ -282,7 +282,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     // styled(Component): that component rendered with these classes as its className, these children and props
     const inner = children(node.children);
     const html = lists.flatMap(l => {
-      const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, dynamicValues, dynamics, ignoredDynamics, maxStates, eachCounts, sourceLines,
+      const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, dynamicValues, dynamics, ignoredDynamics, keyframes, maxStates, eachCounts, sourceLines,
         inject: { classes: [...chain.map(d => `sc-${d.name}`).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, prefix: `${chain[0].base}` } });
       for (const u of rendered.unknowns) unknown(u.code, `${chain[0].base}: ${u.message}`);
       for (const a of rendered.assumptions) assumptions.add(a);
@@ -483,7 +483,9 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const lowered = live.length && !inject ? lowerNested(live) : null;
   const owned = [...linaria.values(), ...[...styled.values()].map(v => v.className)];
   const scope = owned.length ? { mode: 'global', owned, escapes: scopeEscapes(linariaCSS, ['global']) } : undefined;
-  const css = [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : [])].join('\n');
+  // styled-components keyframes`` rules (after the lowered rules, so their line map is unchanged)
+  const keyframeRules = inject ? [] : [...keyframes].map(([name, text]) => `@keyframes ${name}{${text.replace(/\s*\n\s*/g, ' ').trim()}}`);
+  const css = [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : []), ...keyframeRules].join('\n');
   // the dynamic values the rendered CSS has (an evaluation dropped for too many variants registered its own too)
   if (ignoredDynamics.size && !inject) assumptions.add(`dynamic values ignored by options.dynamicValues (${[...ignoredDynamics].sort().join(', ')}): their declarations are left out and not checked`);
   const used = new Set([...css.matchAll(/-veriss-dynamic\((\d+)\)/g)].map(m => Number(m[1])));

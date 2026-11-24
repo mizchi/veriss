@@ -307,8 +307,13 @@ export function evaluateStyled(def, props, ctx) {
       }
       case 'TaggedTemplateExpression':
         if (node.tag.type === 'Identifier' && node.tag.name === cur().names.css) return template(node.quasi);
-        // keyframes``: the animation's generated name (the @keyframes rule itself is not emitted: it does not lay out)
-        if (node.tag.type === 'Identifier' && node.tag.name === cur().names.keyframes) return template(node.quasi).map(r => ({ v: `sc-keyframes-${hash(r.v)}`, choices: r.choices }));
+        // keyframes``: the animation's generated name; its @keyframes rule is registered (ctx.keyframes) for the caller
+        // to emit, with any Unknown interpolation in it left out
+        if (node.tag.type === 'Identifier' && node.tag.name === cur().names.keyframes) return template(node.quasi).map(r => {
+          const name = `sc-keyframes-${hash(r.v)}`;
+          ctx.keyframes?.set(name, String(r.v).replace(/\/\*\u0001\d+\u0001\*\/|\u0001\d+\u0001/g, ''));
+          return { v: name, choices: r.choices };
+        });
         break;
       case 'ArrowFunctionExpression': case 'FunctionExpression': return one({ [FN]: node, mod: cur(), env: scopes.slice() });
       case 'CallExpression': return callExpression(node);
