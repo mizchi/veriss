@@ -594,8 +594,10 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // focus-clipped: overflow: clip does not scroll a focused descendant into view (hidden does; measured), so a
   // focusable box entirely outside the clip edge (its padding box) on a clipped axis can never be seen focused.
   const clipPlaced = everything.filter(row => row.clipOrigin && row.block).map(row => ({ ...row, origin: row.clipOrigin }));
+  // An ancestor's overflow clips a box unless a position: fixed box between them (or the box itself) escapes it.
+  const clipsIt = (clipper, target) => isAncestor(clipper.path, target.path) && (!target.fixedFrom || clipper.path === target.fixedFrom || isAncestor(target.fixedFrom, clipper.path));
   for (const target of focusedRows(clipPlaced.filter(row => focusable(row) && !hiddenFrom(row.path) && !row.box.pseudo))) {
-    for (const clipper of clipPlaced.filter(row => isAncestor(row.path, target.path) && (row.clipAxes?.inline || row.clipAxes?.block))) {
+    for (const clipper of clipPlaced.filter(row => clipsIt(row, target) && (row.clipAxes?.inline || row.clipAxes?.block))) {
       const edges = { left: sum(clipper.origin.inline, scalar(clipper.borders.left)), right: diff(right(clipper), scalar(clipper.borders.right)), top: sum(clipper.origin.block, scalar(clipper.borders.top)), bottom: diff(bottom(clipper), scalar(clipper.borders.bottom)) };
       const base = intersect(target.region, clipper.region);
       const outside = [
@@ -619,7 +621,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const offset = author ? px(paint.outlineOffset ?? '0') ?? 0 : 0;
     if (width === null || width + offset <= 0) continue;
     const reach = q(String(width + offset));
-    const clipper = [...clipPlaced].reverse().find(row => isAncestor(row.path, target.path) && row.overflow === 'clip');
+    const clipper = [...clipPlaced].reverse().find(row => clipsIt(row, target) && row.overflow === 'clip');
     if (!clipper) continue;
     const edges = { left: sum(clipper.origin.inline, scalar(clipper.borders.left)), right: diff(right(clipper), scalar(clipper.borders.right)), top: sum(clipper.origin.block, scalar(clipper.borders.top)), bottom: diff(bottom(clipper), scalar(clipper.borders.bottom)) };
     const base = intersect(target.region, clipper.region);
