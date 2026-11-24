@@ -531,8 +531,14 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   スタイルの検査はその箱でも走る。
 - [x] **I7. 複合セレクターの途中の状態**: `.btn:hover:not([disabled])` を読めなかった。状態は複合の中のどこにあってもよい
   (一つだけ)。3 ブラウザーで、hover で下の箱が動く・動かないことが解析と一致した(e2e の hover の CLS)。
-- 残り(Unknown のまま): :active でレイアウトが変わるルール、結合子の前の状態(`.x:checked + span::before`)、hr・col・br の大きさ、
-  `::-webkit-scrollbar`、テキストと子要素が混ざる箱(`*` のセレクターがあると span で包めない)。
+- [x] **I8. 読めないセレクターは当たりうる箱だけ**: 結合子の前の状態、:not() の中の状態、`::-webkit-scrollbar`、解析しない状態(:active、:checked)
+  でレイアウトを変える状態ルールは、ページ全体を Unknown にしていた。擬似クラスと擬似要素を外したセレクター(どの状態で当たる箱も
+  含む上位集合)の当たる箱だけを Unknown にする。描画だけのルールは、配置を止めず、その箱のコントラストだけを判定しない。
+- [x] **I9. 入力の段の Unknown を箱に**: 大きさを持たない要素(hr、br、col)、その要素で効く属性、テキストと子要素の混在は、入力全体の
+  diagnostic で、入力に diagnostic があると配置がまったく走らなかった。箱に付けて、配置がその箱に来たところで Unknown にする。
+  select の option は箱として配置しないが select の大きさを決めるので、option の Unknown は select のものにする。
+- 残り(Unknown のまま): flex の container の中の absolute / fixed の子の静的位置(inset のない軸)。そのほかは、
+  [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
 
 ## 済み(このチェックリストを作る前に済んだもの)
 

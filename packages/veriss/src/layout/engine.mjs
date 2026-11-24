@@ -485,6 +485,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // True while the style stage's walk reads styles: a declaration that is not modeled does not stop it there.
   let readingStyles = false;
   function styles(box, region, ancestors, inherited, emit, gridItem = true, state) {
+    // What the input could not model on this box (an element with no size adapter, an attribute that renders here,
+    // text mixed with elements): Unknown where the layout reaches it.
+    if (box.$unknowns?.length && !readingStyles) { const u = box.$unknowns[0]; throw Object.assign(new Error(u.message), { code: u.code, box }); }
     spend(rules.length + 1);
     if (preferences.length) state = new Set([...(state ?? []), ...preferences]);
     if (box.pseudo) state = new Set([...(state ?? []), `::${box.pseudo}`]);

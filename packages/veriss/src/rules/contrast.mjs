@@ -17,7 +17,8 @@ export const large = facts => { const size = px(facts.fontSize); return size !==
 
 export function createContrast({ report: { report, findings, warnings, unknowns }, options: { contrast = 'AA', uaColors = null }, tools: { visible, control, speaks, isAncestor, behind } }) {
   // A filter on the box or an ancestor repaints its colors (brightness, invert, a drop shadow behind the glyphs): not modeled.
-  const backdrop = chain => chain.some(layer => (layer?.filter ?? 'none') !== 'none') ? { unknown: 'a filter on it or an ancestor changes the painted colors, which is not modeled' } : backdropOf(chain, uaColors);
+  // A rule the analysis cannot read (paintUnmodeled) or a filter may repaint the box or an ancestor: not judged.
+  const backdrop = chain => chain.some(layer => layer?.paintUnmodeled) ? { unknown: 'a rule the analysis cannot read (its selector) may repaint it or an ancestor' } : chain.some(layer => (layer?.filter ?? 'none') !== 'none') ? { unknown: 'a filter on it or an ancestor changes the painted colors, which is not modeled' } : backdropOf(chain, uaColors);
   const [normal, big] = contrast === 'AAA' ? [7, 4.5] : [4.5, 3];
   // text-contrast over the DOM ancestors' backgrounds.
   function textContrast(rows) {

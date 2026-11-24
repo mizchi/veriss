@@ -116,6 +116,39 @@ function propertyRuleProblem(rawSyntax, inherits, initial) {
 const wide = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
 const decoration = /^(?:background-(?:position|size|repeat|clip|origin|attachment)|border-radius|text-shadow|text-decoration-(?:color|style|thickness)|text-underline-offset|transition-behavior|list-style-(?:position|image))$/;
 // Properties a :hover/:focus rule may set: they repaint (or restack) without changing geometry.
+// The selector with its pseudo-classes and pseudo-elements removed (:not(), :is(), :has() and states included; tags,
+// classes, ids, attributes and combinators kept): fewer conditions, so it matches a superset of the boxes the selector
+// matches, in any state. An empty compound becomes *. Null when even that does not compile.
+function candidateSelector(text) {
+  let out = '';
+  for (let i = 0; i < text.length;) {
+    const c = text[i];
+    if (c === '[') { const end = text.indexOf(']', i); if (end < 0) return null; out += text.slice(i, end + 1); i = end + 1; continue; }
+    if (c === '\\') { out += text.slice(i, i + 2); i += 2; continue; }
+    if (c === ':') {
+      let j = i + 1; if (text[j] === ':') j++;
+      while (j < text.length && /[\w-]/.test(text[j])) j++;
+      if (text[j] === '(') { let depth = 0; for (; j < text.length; j++) { if (text[j] === '(') depth++; else if (text[j] === ')' && --depth === 0) { j++; break; } } }
+      i = j; continue;
+    }
+    out += c; i++;
+  }
+  out = out.replace(/\s*([>+~])\s*/g, ' $1 ').replace(/\s+/g, ' ').trim();
+  // Empty compounds (between combinators, or at either end) become *.
+  const parts = out.split(' ').filter(Boolean), fixed = [];
+  for (const part of parts) { if (/^[>+~]$/.test(part) && (!fixed.length || /^[>+~]$/.test(fixed.at(-1)))) fixed.push('*'); fixed.push(part); }
+  if (!fixed.length || /^[>+~]$/.test(fixed.at(-1))) fixed.push('*');
+  try { return compileSelector(fixed.join(' ')); } catch { return null; }
+}
+// The rule that stands for one the analysis cannot read: on the boxes its candidate selectors match, the layout is
+// Unknown ($unmodeled), or only the paint when its declarations only repaint ($paintUnmodeled).
+function markRule(candidates, message, node, contexts, layer, file, preferences, kind = paintsOnly(node) ? 'paint' : 'layout') {
+  const line = node.source.start.line;
+  const declaration = kind === 'paint' ? { property: '$paintUnmodeled', paintUnmodeled: message, file, line } : { property: '$unmodeled', unmodeled: message, code: 'U_LAYOUT_SELECTOR', file, line };
+  return { selectors: candidates.map(c => ({ ...c, specificity: [0, 0, 0] })), contexts, declarations: [declaration], layer, file, line, ...(preferences.length ? { preferences } : {}), marker: kind };
+}
+// Declarations that only repaint (the state paint list, and custom properties).
+const paintsOnly = node => (node.nodes ?? []).every(d => d.type !== 'decl' || d.prop.startsWith('--') || statePaint.test(d.prop.toLowerCase()));
 const statePaint = /^(?:z-index|color|clip|clip-path|background(?:-.*)?|border-(?:(?:top|right|bottom|left)-)?color|border-radius|outline(?:-.*)?|box-shadow|text-shadow|text-decoration(?:-.*)?|text-underline-offset|cursor|opacity|visibility|pointer-events|animation(?:-.*)?|transition(?:-.*)?|color-scheme)$/;
 // Paint and hit-testing facts for the accessibility rules (never geometry).
 // An element that is the containing block of its fixed (and absolute) descendants: a transform, a backdrop filter,
@@ -910,10 +943,17 @@ export function parseLayoutCSS(sheets, diagnostic) {
           return { ...rest, source: text, specificity: rest.specificity.map((v, i) => v + lead[i]), scope, scopeMode: m && m[2].trim() === '>' ? 'child' : 'descendant' };
         }) : node.selectors.map(selector => compileSelector(selector));
       } catch (error) {
-        problem('U_LAYOUT_SELECTOR', error.message, node.source.start.line);
         // A rule the analysis cannot match that may make a query container (F133 then cannot tell there is none).
         if ((node.nodes ?? []).some(d => d.type === 'decl' && /^container(?:-type)?$/i.test(d.prop) && /\b(?:inline-)?size\b/i.test(d.value))) unreadContainers.push({ selector: node.selector, file: filename, line: node.source.start.line });
-        continue;
+        // Outside @scope, the selectors it cannot read only mark the boxes they may match (candidateSelector), and the
+        // ones it can read keep the rule; when a candidate does not compile either, the whole analysis is Unknown.
+        const readable = [], unread = [];
+        if (!scope) for (const raw of node.selectors) { try { readable.push(compileSelector(raw)); } catch { unread.push(raw); } }
+        const candidates = scope ? null : unread.map(candidateSelector);
+        if (!candidates || candidates.some(c => !c)) { problem('U_LAYOUT_SELECTOR', error.message, node.source.start.line); continue; }
+        rules.push(markRule(candidates, error.message, node, contexts, layer, filename, preferences));
+        if (!readable.length) continue;
+        selectors = readable;
       }
       // Checklist F20: in a :visited rule browsers apply only color properties (CSS Selectors 4 §8.2, privacy): every other
       // declaration is ignored — reported, and dropped as the browser does.
@@ -1013,6 +1053,12 @@ export function parseLayoutCSS(sheets, diagnostic) {
       // whose start position moves is a layout shift (Chromium counts it: hover is not an excusing input; measured).
       const hoverLayout = !stateGeometry && !checkedMark && selectors.every(selector => selector.state === 'hover' && !selector.pseudoElement);
       const stateLayout = !stateGeometry && !checkedMark && (focusLayout || hoverLayout);
+      // A state rule that changes layout in a state the analysis does not lay out (:active, :checked, …): Unknown for the
+      // boxes it may match in that state (the rule never applies in the states that are laid out, so it is dropped).
+      if (!stateGeometry && !checkedMark && !stateLayout && selectors.some(selector => selector.state) && node.nodes.some(d => d.type === 'decl' && !d.prop.startsWith('--') && !statePaint.test(d.prop.toLowerCase()))) {
+        const candidates = selectors.map(selector => selector.state ? candidateSelector(selector.source) : selector);
+        if (candidates.every(Boolean)) { rules.push(markRule(candidates, `State selector rules may only change paint (color, background, outline, box-shadow, text-decoration); ${node.selector} changes layout`, node, contexts, layer, filename, preferences, 'layout')); continue; }
+      }
       if (!stateGeometry && !checkedMark && !stateLayout && selectors.some(selector => selector.state) && node.nodes.some(d => d.type === 'decl' && !d.prop.startsWith('--') && !statePaint.test(d.prop.toLowerCase()))) { problem('U_LAYOUT_SELECTOR', `State selector rules may only change paint (color, background, outline, box-shadow, text-decoration); ${node.selector} changes layout`, node.source.start.line); continue; }
       const declarations = []; let unmodeled;
       const authored=node.nodes.filter(declaration=>declaration.type==='decl');
@@ -1338,8 +1384,10 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0' };
   const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
   const priorities = new Map(), sources = {},custom=new Map(),dormant={},overridden={}, candidates = {};
-  // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions).
+  // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions), and
+  // whether a rule the analysis cannot read may repaint the box.
   const unmodeled = [];
+  let paintUnmodeled = false;
   const conditions = rule => rule.contexts.length ? {conditions: rule.contexts.map(c => ({kind: c.kind, ...(c.name ? {name: c.name} : {}), params: c.params, css: c.css}))} : {};
   // A preference rule holds when the state names its value, or the value is the default.
   const preferred = rule => (rule.preferences ?? []).every(({ feature, value }) => ([...(state ?? [])].find(s => s.startsWith(`${feature}:`))?.slice(feature.length + 1) ?? preferenceValues[feature][0]) === value);
@@ -1355,6 +1403,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
       for (const declaration of rule.declarations) {
         // Not modeled: the declaration is dropped from the style, and the layout of this box is Unknown (the style checks
         // still read the rest).
+        if (declaration.paintUnmodeled) { paintUnmodeled = true; continue; }
         if (declaration.unmodeled) { if (!unmodeled.some(u => u.line === declaration.line && u.message === declaration.unmodeled)) unmodeled.push({ message: declaration.unmodeled, code: declaration.code, file: declaration.file, line: declaration.line }); continue; }
         const layer = rule.layer === null ? (declaration.important ? -Infinity : Infinity) : declaration.important ? -rule.layer : rule.layer;
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
@@ -1675,5 +1724,6 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // A logical side was taken as ltr; in an rtl box cascade again with the sides flipped.
   if (!rtl && flipped && values.direction === 'rtl') return computeStyle(rules, box, active, inherited, {spend, state, rtl: true});
   if (unmodeled.length) values.$unmodeled = unmodeled;
+  if (paintUnmodeled) values.$paintUnmodeled = true;
   return values;
 }
