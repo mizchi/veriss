@@ -314,3 +314,16 @@ test('styled(Component): every state has the structure styled-components renders
     assert.equal(shape(html), shape(s.html), JSON.stringify(s.choices));
   }
 });
+
+test('styled-components: CSS is emitted only for the variants some state renders', () => {
+  // $tone has two values, but the element's other condition fixes which one survives in each state
+  const source = `import styled from 'styled-components';
+const A = styled.span\`
+  color: \${({ $on }) => ($on ? 'red' : 'blue')};
+\`;
+export default function C({ on }) { return on ? <A $on={on} /> : <i />; }`;
+  const {states, css} = expandReact(source);
+  const used = new Set(states.flatMap(s => [...s.html.matchAll(/class="([^"]+)"/g)].flatMap(m => m[1].split(' '))));
+  for (const [, cls] of css.matchAll(/\.(sc-[\w-]+)\{/g)) assert.ok(used.has(cls), `${cls} is in the CSS but in no state`);
+  assert.doesNotMatch(css, /color:blue/);
+});

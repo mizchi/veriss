@@ -418,7 +418,10 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // pinned (E_SCOPE_REACHES); :global(…) reaches past the component (E_SCOPE_ESCAPE) and is unwrapped for the analysis.
   const linariaCSS = cssText.join('\n');
   // a component rendered by a styled wrapper leaves its blocks to the wrapper's expansion, which lowers them all once
-  const lowered = scBlocks.size && !inject ? lowerNested([...scBlocks.values()]) : null;
+  // only the variants some state renders (a variant whose choices no state keeps would be dead CSS of the analysis)
+  const rendered = new Set(states.flatMap(st => [...st.html.matchAll(/ class="([^"]*)"/g)].flatMap(m => m[1].split(' '))));
+  const live = [...scBlocks.entries()].filter(([cls]) => rendered.has(cls)).map(([, b]) => b);
+  const lowered = live.length && !inject ? lowerNested(live) : null;
   const owned = [...linaria.values(), ...[...styled.values()].map(v => v.className)];
   const scope = owned.length ? { mode: 'global', owned, escapes: scopeEscapes(linariaCSS, ['global']) } : undefined;
   return { states, css: [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : [])].join('\n'), unknowns, assumptions: [...assumptions], ...(scope ? { scope } : {}), ...(lowered ? { styleMap: lowered.map, styleCSS: lowered.css } : {}) };
