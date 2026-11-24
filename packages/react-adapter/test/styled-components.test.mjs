@@ -1032,3 +1032,17 @@ export default function C() { return <W disabled />; }`;
   assert.equal(shape(html), '<i>x</i>');
   assert.deepEqual(states.map(s => shape(s.html)), ['<i>x</i>']);
 });
+
+test('styled(Component): conditions of the children the caller passes stay the caller\'s (not renamed Base:key)', async () => {
+  const {renderStyled} = await import('./ssr.mjs');
+  const source = `import styled from 'styled-components';
+function Base({ className, children }) { return <div className={className}>{children}</div>; }
+const W = styled(Base)\`
+  color: red;
+\`;
+export default function C({ open }) { return <section><W>{open ? <i /> : <b />}</W>{open && <u />}</section>; }`;
+  const {states} = expandReact(source);
+  const shape = html => html.replace(/ class="[^"]*"/g, '');
+  assert.deepEqual(states.map(s => Object.keys(s.choices)), [['open'], ['open']]);
+  for (const s of states) assert.equal(shape(s.html), shape((await renderStyled(source, s.choices)).html), JSON.stringify(s.choices));
+});

@@ -28,6 +28,9 @@ const cssValue = (prop, v) => typeof v === 'number' ? (v === 0 || unitless.has(p
 // preserveAspectRatio keep their case.
 const svgAttr = name => /^(?:stroke|fill|clip|font|text|stop|flood|lighting|marker|color|dominant|alignment|baseline|glyph|horiz|vert|underline|overline|strikethrough|word|letter|shape|image|pointer|paint|vector|enable)[A-Z]/.test(name) ? name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`) : name === 'xlinkHref' ? 'xlink:href' : null;
 const attrName = name => svgAttr(name) ?? ({ className: 'class', htmlFor: 'for', tabIndex: 'tabindex', autoFocus: 'autofocus', readOnly: 'readonly', maxLength: 'maxlength', colSpan: 'colspan', rowSpan: 'rowspan', srcSet: 'srcset', autoComplete: 'autocomplete', autoPlay: 'autoplay', playsInline: 'playsinline', crossOrigin: 'crossorigin', dateTime: 'datetime', encType: 'enctype', inputMode: 'inputmode' })[name] ?? name;
+// the choices of children a styled wrapper's caller passes into styled(Base) are marked with this prefix while Base is
+// expanded, so they stay apart from Base's own conditions and keep their name afterwards
+const CALLER = '\0caller:';
 const hash = text => { let h = 5381; for (const c of text) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
 
 // A static literal value (StyleX objects, style props): strings, numbers, null, nested objects, negative numbers.
@@ -282,7 +285,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     delete chain[0].baseComponent;
     if (!base) return { tag: chain[0].tag, baseClasses: chain.map(stableClass), scLists: lists };
     // styled(Component): that component rendered with these classes as its className, these children and props
-    const inner = children(node.children);
+    const inner = children(node.children).map(c => ({ html: c.html, choices: Object.fromEntries(Object.entries(c.choices).map(([k, v]) => [`${CALLER}${k}`, v])) }));
     const html = lists.flatMap(l => {
       const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, dynamicValues, dynamics, ignoredDynamics, keyframes, maxStates, eachCounts, sourceLines,
         inject: { classes: [...chain.map(stableClass).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, baseCSS, prefix: `${chain[0].base}` } });
@@ -492,6 +495,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // A condition read as props.x (the parameter not destructured) is on the prop x.
   const propOf = key => propsName && key.startsWith(`${propsName}.`) && /^[\w$]+$/.test(key.slice(propsName.length + 1)) ? key.slice(propsName.length + 1) : key;
   if (inject) states = states.flatMap(st => Object.entries(st.choices).reduce((acc, [key, held]) => acc.flatMap(a => {
+    if (key.startsWith(CALLER)) { const choices = merge(a.choices, choose(key.slice(CALLER.length), held)); return choices ? [{ ...a, choices }] : []; }
     const given = inject.props.get(propOf(key));
     if (!given) { const choices = merge(a.choices, choose(`${inject.prefix}:${key}`, held)); return choices ? [{ ...a, choices }] : []; }
     return given.flatMap(g => {
