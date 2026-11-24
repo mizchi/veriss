@@ -40,7 +40,7 @@ export async function render(code, props) {
 
 // styled-components' own runtime: the component rendered inside a ThemeProvider, its CSS collected by ServerStyleSheet.
 export async function renderStyled(source, props, theme = {}) {
-  const {code: js} = await transform(source, {loader: 'jsx', jsx: 'automatic', format: 'esm'});
+  const {code: js} = await transform(source, {loader: 'tsx', jsx: 'automatic', format: 'esm'});
   const file = join(dir, `s${n++}.mjs`);
   // the ESM build (the package's "module"): its default export is styled
   const sc = pathToFileURL(join(require.resolve('styled-components'), '..', 'styled-components.esm.js')).href;

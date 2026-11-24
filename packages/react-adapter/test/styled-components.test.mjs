@@ -530,3 +530,59 @@ export default function C({ position = 'top', layout = 'overlay', label }: Props
   assert.deepEqual(unknowns, []);
   assert.deepEqual([...new Set(states.map(s => s.choices.position))].sort(), ['bottom', 'top']);
 });
+
+// Differential check against styled-components itself: every state's own declarations (the rule on the element's
+// classes) are the ones styled-components writes for the same props.
+test('styled-components evaluation agrees with styled-components itself, state by state', async () => {
+  const {renderStyled} = await import('./ssr.mjs');
+  const postcss = (await import('postcss')).default;
+  const own = (css, html) => {
+    const classes = (/class="([^"]*)"/.exec(html)?.[1] ?? '').split(' ');
+    const decls = [];
+    postcss.parse(css).walkRules(r => { if (r.parent.type === 'root' && r.selectors.some(sel => classes.some(c => sel.trim() === `.${c}`))) r.walkDecls(d => { if (d.parent === r) decls.push(`${d.prop}:${d.value.replace(/\s+/g, ' ').trim()}`); }); });
+    return decls;
+  };
+  const corpus = [
+    // statements: if / else, switch with fall-through, block-scoped const
+    `import styled, { css } from 'styled-components';
+const Box = styled.div\`
+  color: \${({ $tone }) => { if ($tone === 'danger') return 'red'; else if ($tone === 'warn') { return 'orange'; } return 'black'; }};
+  \${({ $tone }) => { switch ($tone) { case 'danger': return css\`border: 1px solid red;\`; case 'warn': case 'info': { const w = 2; return css\`border: \${w}px solid blue;\`; } default: break; } }}
+\`;
+type P = { tone: 'danger' | 'warn' | 'info' | 'none' };
+export default function C({ tone }: P) { return <Box $tone={tone} />; }`,
+    // module functions: interpolated, called with positional / destructured / defaulted arguments
+    `import styled from 'styled-components';
+const px = (n) => \`\${n * 4}px\`;
+const step = ({ $size }) => ($size === 'small' ? 1 : 2);
+function edge(width, style = 'solid') { const w = px(width); return \`\${w} \${style}\`; }
+const spacing = (p) => \`margin: \${p.$size === 'small' ? 0 : 8}px;\`;
+const Box = styled.div\`
+  \${spacing}
+  padding: \${(props) => px(step(props))};
+  border: \${({ $size }) => edge($size === 'small' ? 1 : 3)};
+\`;
+type P = { size: 'small' | 'large' };
+export default function C({ size }: P) { return <Box $size={size} />; }`,
+    // objects with props and theme values, includes
+    `import styled, { css } from 'styled-components';
+const scroll = ({ height = 'auto', maxHeight = 'none' }) => css\`height: \${height}; max-height: \${maxHeight};\`;
+const config = (theme) => ({ light: { fg: theme.colors.text }, dark: { fg: '#fff' } });
+const Box = styled.div\`
+  \${({ $variant }) => scroll({ maxHeight: $variant === 'dark' ? '40px' : undefined })}
+  color: \${({ $variant, theme }) => config(theme)[$variant].fg};
+  top: \${({ $variant }) => (['dark', 'dim'].includes($variant) ? '0' : 'auto')};
+\`;
+type P = { variant: 'light' | 'dark' };
+export default function C({ variant }: P) { return <Box $variant={variant} />; }`,
+  ];
+  for (const source of corpus) {
+    const {states, css, unknowns} = expandReact(source, {theme});
+    assert.deepEqual(unknowns, []);
+    for (const s of states) {
+      const real = await renderStyled(source, s.choices, theme);
+      assert.ok(own(css, s.html).length > 0, `no declarations for ${JSON.stringify(s.choices)}`);
+      assert.deepEqual(own(css, s.html), own(real.css, real.html), `${JSON.stringify(s.choices)}\n${source.split('\n')[2]}`);
+    }
+  }
+});
