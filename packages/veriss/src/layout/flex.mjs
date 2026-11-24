@@ -88,7 +88,8 @@ export function flexItem(style, { empty = false, axis = 'inline', contentSizes }
   // same: the engine evaluates it against the container's content width (linearBasis); min() / max() / clamp() piecewise.
   const linear = v => /^(?:(?:calc|min|max|clamp)\([^()]*(?:\([^()]*\)[^()]*)*\)|-?(?:\d+(?:\.\d+)?|\.\d+)(?:vw|vh))$/.test(String(v)) && !/\b(?:var|env)\(/.test(String(v));
   const shareLike = v => /^\d+(?:\.\d+)?%$/.test(String(v)) || linear(v);
-  const percentSize = style['flex-basis'] === 'auto' && axis === 'inline' && shareLike(style[n.size]) && (cmp(shrink, q(0)) === 0 || style[n.min] !== 'auto');
+  // (Whatever its shrink and minimum: the percentage branch below decides the minimum.)
+  const percentSize = style['flex-basis'] === 'auto' && axis === 'inline' && shareLike(style[n.size]);
   const basis = percentSize ? style[n.size] : style['flex-basis'];
   if (percentSize) style = { ...style, [n.size]: 'auto' };
   const contentBox = style['box-sizing'] === 'content-box', own = edges(style, n.sides);
@@ -114,11 +115,15 @@ export function flexItem(style, { empty = false, axis = 'inline', contentSizes }
   // the container's content width, an affine size the engine supplies (percentBasis); its minimum is checked there
   // (it never goes below the base). A shrinking one (flex: 1 1 P%) shrinks to an explicit min-width (0 or px), or with
   // min-width auto to its automatic minimum, the min-content width the engine measured (contentSizes).
-  else if (shareLike(basis) && axis === 'inline' && (cmp(shrink, q(0)) === 0 || style[n.min] !== 'auto' || contentSizes) && style[n.size] === 'auto' && style['max-inline-size'] === 'none') {
+  // A percentage width (percentSize) with min-width auto: the automatic minimum is min(the content's min-content width,
+  // the specified width) (§4.5), at most the base: safe while it never shrinks (automaticBelowBase). A flex-basis
+  // percentage with an auto width has no specified size to cap it, so it needs the measured content (contentSizes).
+  else if (shareLike(basis) && axis === 'inline' && (cmp(shrink, q(0)) === 0 || style[n.min] !== 'auto' || contentSizes || (percentSize && automatic)) && style[n.size] === 'auto' && style['max-inline-size'] === 'none') {
     const item = { grow, shrink, edges: own, autoStart, autoEnd, automaticBelowBase: false, base: q(0), percentBasis: linear(basis) ? q(0) : div(q(String(basis).slice(0, -1)), q(100)), ...(linear(basis) ? { linearBasis: String(basis) } : {}), contentBox };
     if (style[n.min] !== 'auto') item.minimum = outer(px(style[n.min]), own, contentBox);
     else if (!automatic) item.minimum = own;
     else if (contentSizes) item.minimum = cmp(contentSizes.min, own) < 0 ? own : contentSizes.min;
+    else if (percentSize) { item.minimum = own; item.automaticBelowBase = true; }
     else unknown(`The automatic minimum size of a flex item depends on its content; set ${n.minLabel}, or make it a scroll container`);
     return item;
   }

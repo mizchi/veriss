@@ -399,3 +399,21 @@ test('absolute and fixed children of a flex container: placed against their cont
     expect([at('.i'), at('.a')], css).toEqual(browser);
   }
 });
+
+test('percentage-width items with the default shrink and min-width: decided while the line fits, where the browser puts them', async ({page}) => {
+  const base = '*{margin:0;box-sizing:border-box}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.row{display:flex;height:40px}.m{height:20px}.s{width:60px;height:20px;flex-shrink:0}';
+  for (const [css, html] of [['.m{width:100%;padding-left:24px}', '<div class="row"><div class="m"><div class="x"></div></div></div>'], ['.m{width:50%}', '<div class="row"><div class="m"><div class="x"></div></div><div class="m"><div class="x"></div></div></div>'],
+    ['.m{width:30%}', '<div class="row"><div class="s"></div><div class="m"><div class="x"></div></div></div>'], ['.m{flex-basis:100%}', '<div class="row"><div class="s"></div><div class="m"><div class="x"></div></div></div>']]) {
+    const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: base + css, viewport: {min: 320, max: 800, height: {min: 400, max: 800}}, block: true});
+    expect(report.status, `${css}: ${JSON.stringify(report.diagnostics)}`).toBe('verified');
+    for (const width of [400, 700]) {
+      await page.setViewportSize({width, height: 600});
+      await page.setContent(`<!doctype html><html lang="en"><head><style>${base}${css}</style></head><body>${html}</body></html>`);
+      const browser = await page.evaluate(() => [...document.querySelectorAll('.m')].map(n => { const r = n.getBoundingClientRect(); return [r.x, r.width]; }));
+      const num = v => { const [n, d = '1'] = String(v).split('/'); return Number(n) / Number(d); };
+      const at = (a, w) => num(a.constant) + w * num(a.coefficient);
+      const statics = report.sizes.filter(x => x.box === '.m' && x.rect).map(x => [at(x.rect.inlineStart, width), at(x.rect.inlineSize, width)]);
+      expect(statics, `${css} at ${width}`).toEqual(browser);
+    }
+  }
+});

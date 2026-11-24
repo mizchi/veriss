@@ -1127,6 +1127,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const unfrozen = items.map((_, index) => index).filter(index => !state.frozen.has(index));
           const used = items.map((item, index) => state.frozen.get(index) ?? item.base);
           const free = diff(available, sum(total(used), scalar(gap)));
+          // Shrink mode where the free space is exactly 0 (the line fits as it is): nothing shrinks, every item keeps its
+          // size (§9.7 distributes no space), whatever its shrink weight or minimum.
+          // (Not with a maximum or a base below the minimum among the unfrozen items: those are clamped first.)
+          if (mode === 'shrink' && unfrozen.every(index => !items[index].maximum && !items[index].baseBelowMinimum && !items[index].content) && !clip(state.region, times(free, minusOne), true)) { results.push({ region: state.region, values: used, free, mode }); continue; }
           const factors = unfrozen.map(index => mode === 'grow' ? items[index].grow : items[index].shrink);
           const factorSum = factors.reduce(add, zero);
           // §9.7 step 4b scales by the initial free space when factors sum below 1; only the first round without freezing is modeled.
