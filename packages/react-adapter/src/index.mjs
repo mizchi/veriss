@@ -241,7 +241,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       lists = lists.flatMap(l => variants.map(v => {
         const choices = merge(l.choices, v.choices); if (!choices) return null;
         const cls = styledClass(d.name, v.text);
-        if (!scBlocks.has(cls)) scBlocks.set(cls, { selector: `.${cls}`, text: v.text, origin: { file: d.mod.file, line: d.line, name: d.name } });
+        if (!scBlocks.has(cls)) scBlocks.set(cls, { selector: `.${cls}`, text: v.text, origin: { file: d.mod.file, line: d.line, lines: v.lines, name: d.name } });
         return { classes: [...l.classes, cls], choices };
       }).filter(Boolean));
     }

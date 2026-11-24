@@ -4,7 +4,7 @@
 // the parent); the selector-usage check (W_CSS_SELECTOR_RELATION) runs on the flat CSS and relocateSelectorWarnings
 // reports it at the template line with that edge, so the same check serves any nested source.
 //
-//   block: {selector: '.sc-Card', text: <template body>, origin: {file, line: <line of the body's first line>, name}}
+//   block: {selector: '.sc-Card', text: <template body>, origin: {file, line: <line of the body's first line>, lines?, name}}
 //   lowerNested(blocks) -> {css, map: [{cssLine, selector, origin: {file, line, name}, path, relation}]}
 //   relation: {parent, combinator: '>' | ' ' | '+' | '~', child} | null (a rule on the element itself, or & compounds)
 //
@@ -35,7 +35,10 @@ export function lowerNested(blocks) {
   const emit = (selector, decls, media, origin, path, relation, nodeLine) => {
     const rule = `${selector}{${decls.map(decl).join(';')}}`;
     lines.push(media ? `@media ${media}{${rule}}` : rule);
-    map.push({ cssLine: lines.length, selector, origin: { ...origin, line: origin.line + nodeLine - 1 }, path, relation });
+    // origin.lines (optional): the template line of each text line, when the text is not line-for-line the template
+    // (an interpolation written over several lines collapsed into its value)
+    const { lines: lineMap, ...rest } = origin;
+    map.push({ cssLine: lines.length, selector, origin: { ...rest, line: lineMap?.[nodeLine - 1] ?? origin.line + nodeLine - 1 }, path, relation });
   };
   for (const block of blocks) {
     const root = postcss.parse(`${block.selector}{${block.text}}`);

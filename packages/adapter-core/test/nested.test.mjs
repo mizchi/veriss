@@ -64,3 +64,9 @@ test('lowerNested: comments do not split a run of declarations', () => {
   const {css} = lowerNested([{selector: '.a', text: 'color: red; /* note */ margin: 0;', origin: {file: 'f', line: 1, name: 'A'}}]);
   assert.equal(css, '.a{color:red;margin:0}');
 });
+
+test('lowerNested: origin.lines maps each text line to its template line (interpolations that spanned lines)', () => {
+  // text line 1-4 came from template lines 10, 11, 13, 14 (line 12 was inside an interpolation)
+  const {map} = lowerNested([{selector: '.a', text: '\n  padding: 8px;\n  & > .b {\n    color: red; }', origin: {file: 'f', line: 10, lines: [10, 11, 13, 14], name: 'A'}}]);
+  assert.deepEqual(map.map(m => [m.selector, m.origin.line]), [['.a', 11], ['.a > .b', 13]]);
+});

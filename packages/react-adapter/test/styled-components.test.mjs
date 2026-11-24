@@ -217,3 +217,38 @@ export default function C() { return <A />; }`;
   assert.ok(!unknowns.some(u => u.code === 'U_STYLED_CSS'), JSON.stringify(unknowns));
   assert.match(css, /position:relative;color:red/);
 });
+
+test('styled-components: a multi-line interpolation followed by a unit keeps the value whole (8px, not 8 px)', () => {
+  const source = `import styled from 'styled-components';
+const A = styled.div\`
+  margin-bottom: \${({ theme }) =>
+    theme.space}px;
+  color: red;
+\`;
+export default function C() { return <A />; }`;
+  const {css} = expandReact(source, {theme: {space: 8}});
+  assert.match(css, /\{margin-bottom:8px;color:red\}/);
+});
+
+test('styled-components: a declaration left empty by its interpolation is dropped, as stylis does', () => {
+  const source = `import styled from 'styled-components';
+const A = styled.div\`
+  height: \${({ $h }) => $h};
+  color: red;
+\`;
+export default function C() { return <A />; }`;
+  const {css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.match(css, /\{color:red\}/);
+  assert.doesNotMatch(css, /height/);
+});
+
+test('styled-components: a JS template string renders undefined as "undefined", as JavaScript does', () => {
+  const source = `import styled from 'styled-components';
+const A = styled.div\`
+  width: \${({ size }) => \`\${size}px\`};
+\`;
+export default function C() { return <A />; }`;
+  const {css} = expandReact(source);
+  assert.match(css, /width:undefinedpx/);
+});
