@@ -1917,6 +1917,11 @@ test('caret-hidden: a text field whose caret is transparent or its own backgroun
   assert.equal(warned(''), false);
   assert.equal(warned('.p{caret-color:transparent}'), true); // inherited
   assert.equal(warned('.f{caret-color:transparent}', 'type="checkbox"'), false);
+  // A field that is not seen (opacity 0 on it or an ancestor, or visually hidden): its caret is not what shows where
+  // typing goes (a select widget's hidden input that only takes key presses hides it too).
+  assert.equal(warned('.f{caret-color:transparent;opacity:0}'), false);
+  assert.equal(warned('.p{opacity:0}.f{caret-color:transparent}'), false);
+  assert.equal(warned('.f{caret-color:transparent;position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}'), false);
 });
 
 test('label-pointer: a field label with pointer-events: none', () => {

@@ -68,7 +68,10 @@ export function createContrast({ report: { report, findings, warnings, unknowns 
   // show where typing goes (the caret is the focus indicator inside a field).
   function caretHidden(rows) {
     const textEntry = box => box.tag === 'textarea' || (box.tag === 'input' && ['text', 'email', 'search', 'password', 'tel', 'url', 'number', undefined].includes(box.inputType));
-    for (const row of rows.filter(row => textEntry(row.box) && visible(row) && row.chain?.at(-1)?.caretColor && row.chain.at(-1).caretColor !== 'auto')) {
+    // A field that is not seen (opacity 0 on it or an ancestor, or visually hidden) shows no caret anyway: a select
+    // widget's hidden input that only takes key presses hides its caret on purpose.
+    const unseen = row => row.paint?.hiddenVisually || (row.chain ?? []).some(layer => /^(?:0|0?\.0+|0%)$/.test(String(layer?.opacity ?? '1').trim()));
+    for (const row of rows.filter(row => textEntry(row.box) && visible(row) && !unseen(row) && row.chain?.at(-1)?.caretColor && row.chain.at(-1).caretColor !== 'auto')) {
       const layer = row.chain.at(-1), caret = parseColor(String(layer.caretColor).toLowerCase() === 'currentcolor' ? layer.color : layer.caretColor), bg = parseColor(layer.backgroundColor);
       if (!caret) continue;
       const same = bg && bg.a >= 1 && caret.a >= 1 && caret.r === bg.r && caret.g === bg.g && caret.b === bg.b;
