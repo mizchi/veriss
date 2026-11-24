@@ -2173,6 +2173,26 @@ test('an absolute menu inside an overflow: hidden card is cut off exactly when C
   }
 });
 
+// The same inside scroll containers and an overflow: hidden ancestor above the containing block: those clip the card as
+// they clip any content, and the menu is cut off at the card exactly when Chromium clips it.
+test('an absolute menu in an overflow: hidden card inside scrolling ancestors is cut off exactly when Chromium clips it', async ({page}) => {
+  const html = '<main class="page"><div class="outer"><div class="row"><div class="card"><div class="menu"></div></div></div></div></main>';
+  const base = `${reset}.page{display:grid;grid-template-columns:minmax(0,1fr);padding:8px}.outer{overflow:hidden;height:300px}.row{overflow-x:auto;height:200px}.card{position:relative;display:grid;grid-template-columns:minmax(0,1fr);height:60px;background:#fff}.menu{position:absolute;top:20px;left:10px;width:120px;background:#333}`;
+  for (const [extra, name] of [['.card{overflow:hidden}.menu{height:100px}', 'cut below'], ['.card{overflow:hidden}.menu{height:30px}', 'fits'], ['.card{overflow:hidden}.menu{height:30px;left:auto;right:-40px}', 'cut at the side']]) {
+    const css = base + extra;
+    const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 320, max: 1280, height: {min: 600, max: 1000}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
+    expect(report.status === 'unknown', `${name}: ${JSON.stringify(report.diagnostics)}`).toBe(false);
+    const flagged = report.diagnostics.some(d => d.code === 'E_LAYOUT_ABSOLUTE_CLIPPED');
+    let cut = false;
+    for (const width of [320, 800]) {
+      await page.setViewportSize({width, height: 700});
+      await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
+      cut ||= await page.evaluate(() => { const m = document.querySelector('.menu').getBoundingClientRect(), r = document.querySelector('.card').getBoundingClientRect(); return m.bottom > r.bottom + 0.01 || m.right > r.right + 0.01 || m.left < r.left - 0.01 || m.top < r.top - 0.01; });
+    }
+    expect(flagged, name).toBe(cut);
+  }
+});
+
 test('scroll-end-covered: scrolled to the bottom, Chromium still hides the last item under the bar exactly where the static check reports it', async ({page}) => {
   const html = '<html lang="en"><body><main class="m"><section class="w"><ul class="list"><li class="i">One</li><li class="i">Two</li><li class="i">Three</li><li class="i">Four</li><li class="i">Five</li><li class="i last">Last item</li></ul><div class="bar">Actions</div></section></main></body></html>';
   const base = '*{margin:0;padding:0;box-sizing:border-box}html,body,.m{display:grid;grid-template-columns:minmax(0,1fr);background:#fff}.w{position:relative;display:grid;grid-template-columns:minmax(0,1fr)}.list{display:grid;grid-template-columns:minmax(0,1fr);overflow-y:auto;height:200px;list-style:none}.i{height:40px;font-size:16px;line-height:24px;color:#000}.bar{position:absolute;left:0;right:0;bottom:0;height:48px;background:#333;color:#fff;font-size:16px;line-height:24px}';

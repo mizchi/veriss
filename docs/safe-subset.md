@@ -26,6 +26,8 @@ veriss が判定できる形で書くための規約である。エンジンが�
     - block の container の中。
     - flex の container の中で、container が始点に揃えるとき。ltr で、`justify-content`・`align-content`・item の `align-self`(stretch は flex-start 扱い)が始点のもので、始点の margin がないとき。
   - flex で中央揃えなどにしていると、その軸は Unknown になる。
+  - absolute の箱の containing block(`position: relative` の箱)は、スクロールする祖先や `overflow: hidden` の祖先の中にあってよい。
+    箱と containing block の間に clip する祖先を挟まない(その祖先は箱を clip しないので、判定が難しくなる)。
 - flex の item には、主軸の大きさを書く(px か % の `width` / `flex-basis`、または `flex: 1` のように basis 0 で伸ばす)。
   - % の `width` の item は、既定の `flex-shrink: 1` と `min-width: auto` のままでよい。ただし、veriss が判定できるのは、行が縮まない(item の合計が container に収まる)ときだけ。縮む行では、中身で決まる最小幅が要るので Unknown になる。縮ませたい item には `min-width: 0` を書く。
   - % の `width` / `flex-basis` に px の `max-width` を組み合わせた item(中央寄せの最大幅の容器 `width: 100%; max-width: 1280px; margin: 0 auto`)は判定できる。`max-width` を % にすると Unknown になる。
