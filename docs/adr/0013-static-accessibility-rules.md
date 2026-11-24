@@ -25,6 +25,7 @@ box tree の DOM 事実だけを入力にし、違反は viewport の区間(領�
 | accessible-name | button / `a[href]` に、描画される可視のテキストも `aria-label`・`title`・解決できる `aria-labelledby` もない。`display:none`・`visibility:hidden` のテキストは名前にならない。`visibility:hidden` と `aria-hidden` の内側は対象外 | E_A11Y_NAME |
 | text-contrast | 継承した `color` と、祖先の背景を内側から合成した色。WCAG 2.2 SC 1.4.3(AA)/1.4.6(AAA)、大きな文字は 24px か 56/3 px 以上の bold | E_A11Y_CONTRAST |
 | occluded-target | 後から描かれる positioned box(`pointer-events` が none でなく可視)が操作対象の一部を覆う | E_A11Y_OCCLUDED |
+| invisible-blocker | 後から描かれ当たり判定を受ける箱が何も描かない(自身か祖先が opacity 0、または背景・枠・影・文字・生成テキスト・置換内容がない)で、操作対象の上にほかに描く箱がない区間。利用者には対象が見えているのに、クリックは見えない箱に届く(透明な全面の click-catcher、opacity 0 の iframe)。その組と区間では E_A11Y_OCCLUDED の代わりに報告する(同じ組を二重に報告しない)。覆う箱が操作部品かその一部(リンクの `::after`)ならクリックは部品に届くので E_A11Y_OCCLUDED のまま。最も上の覆いを `cover` に示す | E_A11Y_INVISIBLE_BLOCKER |
 | target-overlap | 2つの操作対象の border box が重なる | E_A11Y_TARGET_OVERLAP |
 | visual-order | 後の兄弟が前の兄弟の上、または同じ行の左に置かれる(SC 1.3.2) | W_A11Y_ORDER(警告) |
 | hidden-focusable | `aria-hidden` の内側で、描画され可視のフォーカス可能な要素 | E_A11Y_HIDDEN_FOCUSABLE |

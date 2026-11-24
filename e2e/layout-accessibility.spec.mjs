@@ -17,6 +17,9 @@ const up64 = v => Math.ceil(v * 64 - 1e-9) / 64;
 const chromiumOnly = page => { test.skip(test.info().project.name !== 'chromium', 'uses the Chrome DevTools Protocol (Chromium only)'); return page.context().newCDPSession(page); };
 
 
+// A control that does not take the click: covered by a box that paints (E_A11Y_OCCLUDED) or by one that paints nothing
+// (E_A11Y_INVISIBLE_BLOCKER, which replaces the former for that pair).
+const blocks = d => d.code === 'E_A11Y_OCCLUDED' || d.code === 'E_A11Y_INVISIBLE_BLOCKER';
 const results = new URL('../evals/results/layout-accessibility/', import.meta.url);
 const widths = [1280, 768, 375], height = 800;
 const reset = '*{box-sizing:border-box;margin:0;padding:0}html,body{margin:0}';
@@ -1037,7 +1040,9 @@ for (const sample of cases) {
     const css = reset + sample.css;
     const report = analyzeHTML(sample.html, {name: 'Page', css, viewport: {min: sample.min ?? 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: sample.accessibility ?? true, ...(sample.boxes ? {boxes: sample.boxes} : {})});
     expect(report.status === 'unknown', JSON.stringify(report.diagnostics)).toBe(false);
-    const rows = [...report.diagnostics, ...report.accessibility.warnings].filter(row => rules.includes(row.rule) && !row.preference);
+    // The hit-test oracle does not tell what covers a control: an invisible blocker (a cover that paints nothing) is an
+    // occluded target to it.
+    const rows = [...report.diagnostics, ...report.accessibility.warnings].map(row => row.rule === 'invisible-blocker' ? {...row, rule: 'occluded-target'} : row).filter(row => rules.includes(row.rule) && !row.preference);
     const darkRows = report.diagnostics.filter(row => row.rule === 'text-contrast' && (row.preference === 'prefers-color-scheme: dark' || row.alsoUnder?.includes('prefers-color-scheme: dark')));
     const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>${css}</style></head><body>${sample.html}</body></html>`;
     const row = {name: sample.name, static: {}, runtime: {}};
@@ -1117,7 +1122,7 @@ test('generated ::after overlays occlude like Chromium hit testing', async ({pag
     const css = `${reset}.page{display:grid;grid-template-columns:200px;grid-auto-rows:40px;position:relative;background:#fff}.card{display:grid;grid-template-columns:minmax(0,1fr)}.b1,.b2{${button}}.card::after{content:"";position:absolute;left:0;top:0;${cover}}`;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', JSON.stringify(report.diagnostics)).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.path))].sort();
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.path))].sort();
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const browser = await page.evaluate(() => [...document.querySelectorAll('button')].filter(b => { const r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }).map(b => `Page/${[...b.parentElement.children].indexOf(b)}`));
@@ -1134,7 +1139,7 @@ test('z-index and opacity stacking decide occlusion like Chromium', async ({page
     const css = base + extra;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics)}`).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.path))].sort();
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.path))].sort();
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const browser = await page.evaluate(() => [...document.querySelectorAll('button')].filter(b => { const r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }).map(b => `Page/${[...b.parentElement.children].indexOf(b)}`));
@@ -1150,7 +1155,7 @@ test('z-index and opacity stacking decide occlusion like Chromium', async ({page
     const css = nestedBase + extra;
     const report = analyzeHTML(nestedHtml, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics)}`).toBe(false);
-    const statics = report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED');
+    const statics = report.diagnostics.some(d => blocks(d));
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${nestedHtml}</body></html>`);
     const browser = await page.evaluate(() => { const b = document.querySelector('.b'), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; });
     expect(statics, extra).toBe(browser);
@@ -1169,7 +1174,7 @@ test('what covers a dialog close button decides occlusion as hit testing does', 
     const css = base + extra;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))];
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.box))];
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const blocked = await page.evaluate(() => ['.open', '.x'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
@@ -1188,7 +1193,7 @@ test('filter traps a z-index and keeps the hit area, as hit testing does', async
     const css = `${base}.a{filter:${filter}}`;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${filter}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))].sort();
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.box))].sort();
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const blocked = await page.evaluate(() => ['.b', '.c'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
@@ -1208,7 +1213,7 @@ test('inert layers and controls match hit testing; an inert control on top is re
   for (const [layerInert, pageInert, occluded, shown] of [[false, false, ['.under'], []], [true, false, [], ['.x']], [false, true, [], []], [true, true, [], ['.x']]]) {
     const report = analyzeHTML(html(layerInert, pageInert), {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))).toBe(false);
-    const statics = {occluded: [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))], shown: [...new Set(report.accessibility.warnings.filter(d => d.code === 'W_A11Y_INERT_SHOWN').map(d => d.box))]};
+    const statics = {occluded: [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.box))], shown: [...new Set(report.accessibility.warnings.filter(d => d.code === 'W_A11Y_INERT_SHOWN').map(d => d.box))]};
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html(layerInert, pageInert)}</body></html>`);
     // Which buttons take a click at their centre (the browser's verdict).
@@ -1738,7 +1743,7 @@ test('stretched link: Chromium hits the link\'s ::after at the button exactly wh
   for (const [fix, covered] of [['', true], ['.l::after{pointer-events:none}', false]]) {
     const css = base + fix;
     const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 480, max: 900}}, accessibility: true});
-    expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.b'), fix || 'bare').toBe(covered);
+    expect(report.diagnostics.some(d => blocks(d) && d.box === '.b'), fix || 'bare').toBe(covered);
     await page.setViewportSize({width: 400, height: 300});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const hit = await page.evaluate(() => { const b = document.querySelector('.b').getBoundingClientRect(); return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.className; });
@@ -2393,3 +2398,4 @@ test('text-contrast where the layout is Unknown (ADR-0016 M7): a warning exactly
   expect(warned).toEqual(low.sort());
   expect(low).toEqual(['.b', '.c']);
 });
+

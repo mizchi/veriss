@@ -7,6 +7,7 @@
 //   accessible-name  → E_A11Y_NAME              button/link with no rendered text and no name attribute
 //   text-contrast    → E_A11Y_CONTRAST          WCAG 2.2 SC 1.4.3 (AA) or 1.4.6 (AAA)
 //   occluded-target  → E_A11Y_OCCLUDED          a box painted later, hit-testable, covers part of a target
+//   invisible-blocker → E_A11Y_INVISIBLE_BLOCKER a box that paints nothing is the top hit-test target over a control that shows (replaces E_A11Y_OCCLUDED for the pair)
 //   target-overlap   → E_A11Y_TARGET_OVERLAP    two interactive targets intersect
 //   visual-order     → W_A11Y_ORDER             a later sibling is placed visually before an earlier one (SC 1.3.2)
 //   hidden-focusable → E_A11Y_HIDDEN_FOCUSABLE  a rendered focusable element inside aria-hidden
@@ -117,13 +118,13 @@ export const accessibilityRules = ['accessible-name', 'text-contrast', 'occluded
   'role-parent', 'role-children', 'role-attr', 'aria-attr', 'aria-value', 'presentation-conflict', 'empty-th', 'redundant-alt', 'title-only', 'input-button-name', 'autocomplete', 'scope',
   'html-lang', 'lang-valid', 'meta-viewport', 'touch-zoom', 'forced-colors', 'page-h1', 'region', 'bypass', 'landmark-top-level', 'duplicate-landmark', 'p-as-heading', 'orientation', 'focus-visible', 'text-spacing', 'state-contrast', 'frame-title', 'video-caption', 'autoplay-audio', 'hover-only',
   'clickable-look', 'list-style-semantics', 'motion', 'blink', 'definition-list', 'accesskeys', 'server-side-image-map', 'aria-hidden-body',
-  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable'];
+  'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable', 'invisible-blocker'];
 
 // Usefulness tiers (docs/accessibility-rule-evaluation.md). core: depends on the CSS result and is proved over the
 // viewport region and states; dom: decided by the DOM alone (lint overlaps); heuristic: a Technique or a guess that
 // legitimate designs can trip; legacy: rare or obsolete markup. profile 'core' keeps core and dom only.
 const tierLists = {
-  core: ['inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
+  core: ['invisible-blocker', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'page-start-unreachable', 'behind-background', 'scroll-start-unreachable', 'scroll-end-covered', 'bar-transparent', 'bar-covered', 'live-hidden', 'select-indicator', 'hidden-control', 'focus-ring-clipped', 'focus-appearance', 'text-obscured', 'flash', 'fragment-under-bar', 'focus-clipped-away', 'checked-indicator', 'placeholder-contrast', 'field-boundary', 'focus-contrast', 'visual-presentation', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'focus-scrolled-under', 'focus-offscreen', 'text-contrast', 'state-contrast', 'link-in-text-block', 'target-size', 'target-overlap', 'occluded-target', 'reflow', 'focus-obscured', 'focus-clipped', 'focus-transparent', 'focus-visible', 'focus-area', 'hidden-focusable', 'hover-only', 'pointer-disabled', 'scrollable-region-focusable', 'text-spacing', 'accessible-name', 'form-label', 'label-in-name', 'empty-heading', 'empty-th', 'icon-font-name', 'generated-name', 'hidden-overridden', 'state-mismatch', 'modal-background', 'fragment-target', 'orientation', 'multiple-main', 'heading-order'],
   heuristic: ['color-only-state', 'visual-order', 'p-as-heading', 'link-text', 'link-purpose', 'new-window', 'redundant-alt', 'title-only', 'form-submit', 'clickable-look', 'list-style-semantics', 'small-text', 'region', 'bypass', 'page-h1', 'page-main', 'landmark-name', 'landmark-top-level', 'duplicate-landmark', 'radio-group', 'fieldset-name', 'motion', 'autoplay-audio'],
   legacy: ['blink', 'server-side-image-map', 'accesskeys', 'aria-hidden-body'],
 };
@@ -250,7 +251,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // `region` keeps the exact constraints: a 2-D region (e.g. width > height) is not the product of its two ranges.
   const push = (list, code, severity, message, row, region, extra) => list.push({ code, severity, message, box: row.box.label, path: row.path, source: row.box.source, ...ranges(region), ...(block ? { regionConstraints: serialize(region).constraints } : {}), witness: witness(region), ...extra });
   // Covered, hidden behind or under a bar: outside an open aria-modal dialog that is the intent (see `modals`).
-  const coverCodes = new Set(['E_A11Y_OCCLUDED', 'E_A11Y_FOCUS_OBSCURED', 'E_A11Y_FOCUS_SCROLLED_UNDER', 'E_A11Y_FIXED_HIDES', 'E_A11Y_FIXED_HIDES_PART']);
+  const coverCodes = new Set(['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_FOCUS_OBSCURED', 'E_A11Y_FOCUS_SCROLLED_UNDER', 'E_A11Y_FIXED_HIDES', 'E_A11Y_FIXED_HIDES_PART']);
   const report = (list, code, severity, message, row, region, extra) => { for (const piece of coverCodes.has(code) && row.path ? outsideModals(row, region) : [region]) push(list, code, severity, message, row, piece, extra); };
   const visible = row => row.paint.visibility === 'visible';
   // Interactive: buttons, links with href (or a dynamic one), and form fields (not type=hidden or disabled-hidden).
@@ -409,6 +410,24 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     }
     for (const piece of rest) report(warnings, 'W_A11Y_INERT_SHOWN', 'warning', `${target.box.label} is inert but shown with nothing over it: it looks clickable, yet takes no click or focus (the click reaches what is under it). Remove inert while it is shown, or hide it`, target, piece, { rule: 'inert-shown' });
   }
+  // invisible-blocker: a box that paints nothing (opacity 0, or no background, border, text or replaced content) is the
+  // top hit-test target over a control that nothing painted covers: the user sees the control, the click lands on
+  // the invisible box. It replaces E_A11Y_OCCLUDED for that pair and region (a control, or a part of one, that covers
+  // another stays E_A11Y_OCCLUDED: the click does reach a control).
+  const replacedTags = new Set(['img', 'svg', 'iframe', 'video', 'canvas', 'object', 'embed', 'input', 'select', 'textarea', 'audio', 'picture', 'meter', 'progress']);
+  // Why a box paints nothing of its own, or null when it paints something (a background, border, shadow, text,
+  // generated text or replaced content). Its descendants are rows of their own.
+  const paintsNothing = row => {
+    if (!visible(row)) return 'visibility: hidden';
+    if (invisible(row)) return 'opacity 0';
+    if (row.paint.hiddenVisually) return 'it is clipped to nothing';
+    if (row.painted || row.box.text || generatedText(row.box) || replacedTags.has(row.box.tag) || (row.box.tag === 'audio' && row.box.controls) || ((row.paint.boxShadow ?? 'none') !== 'none' && row.paint.boxShadow !== undefined)) return null;
+    return 'no text, background, border or image';
+  };
+  const inControl = row => { for (let p = row.box.pseudo ? parentPath(row.path) : row.path; p; p = parentPath(p)) { const b = treeBoxes.get(p); if (b && interactive({ box: b })) return true; } return false; };
+  // The topmost of boxes that all cover one target (paint order, as hit testing goes).
+  const topmost = rows => rows.reduce((a, b) => paintsAbove(b, layer(b), a, layer(a)) ? b : a);
+  const blockerMessage = (target, cover) => `${target.box.label} shows, but ${cover.box.label} ${invisible(cover) ? 'is invisible (opacity 0)' : 'paints nothing'} and lies over it, painted later: clicks land on ${cover.box.label}, which the user cannot see. Give ${cover.box.label} pointer-events: none, or display: none while it is not shown`;
   for (const target of targets) {
     const own = layer(target);
     // Every cover counts where it covers: one cover's region is not another's (the first found used to end the
@@ -418,14 +437,30 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
     const covers = placed.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
       .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
+    // Where something that paints covers the target, it is not seen as it is: the covers are occlusions there.
+    const seenOver = covers.filter(c => !paintsNothing(c.cover)).map(c => c.region);
+    const targetShows = !invisible(target);
     for (const { cover, region } of covers) {
       let fresh = [region];
       for (const done of reported) fresh = fresh.flatMap(piece => subtract(piece, done));
-      for (const piece of fresh) {
-        // The other boxes over the target in the same viewport range: removing this cover alone does not free it.
-        const others = covers.filter(c => c.cover !== cover && intersect(c.region, piece)).map(c => c.cover);
-        const also = others.length ? `; ${others.map(c => c.box.label).join(', ')} ${others.length > 1 ? 'are' : 'is'} over it there too` : '';
-        report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover) + also, target, piece, { rule: 'occluded-target', cover: cover.path, ...(others.length ? { alsoCoveredBy: others.map(c => c.path) } : {}) });
+      for (const whole of fresh) {
+        // The part where only boxes that paint nothing are over the target, and the rest.
+        let ghost = targetShows ? [whole] : [];
+        for (const r of seenOver) ghost = ghost.flatMap(piece => subtract(piece, r));
+        let occluded = [whole];
+        for (const g of ghost) occluded = occluded.flatMap(piece => subtract(piece, g));
+        for (const piece of ghost) {
+          const over = covers.filter(c => intersect(c.region, piece)).map(c => c.cover);
+          const top = topmost(over);
+          if (!inControl(top)) { report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', blockerMessage(target, top), target, piece, { rule: 'invisible-blocker', cover: top.path, why: paintsNothing(top) }); continue; }
+          occluded.push(piece);
+        }
+        for (const piece of occluded) {
+          // The other boxes over the target in the same viewport range: removing this cover alone does not free it.
+          const others = covers.filter(c => c.cover !== cover && intersect(c.region, piece)).map(c => c.cover);
+          const also = others.length ? `; ${others.map(c => c.box.label).join(', ')} ${others.length > 1 ? 'are' : 'is'} over it there too` : '';
+          report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover) + also, target, piece, { rule: 'occluded-target', cover: cover.path, ...(others.length ? { alsoCoveredBy: others.map(c => c.path) } : {}) });
+        }
       }
       reported.push(region);
     }
@@ -557,12 +592,20 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // inner bounds are always covered. Covering the inner box occludes; touching only the outer is Unknown.
   for (const target of geometry.filter(row => row.inlineFlow && row.bounds && interactive(row) && visible(row) && !hiddenFrom(row.path)).flatMap(row => row.bounds.filter(piece => piece.outer).map(piece => ({ ...row, region: piece.region, bounds: piece })))) {
     const own = layer(target), inner = target.bounds.inner && { ...target, ...target.bounds.inner }, outer = { ...target, ...target.bounds.outer };
+    // Where a box that paints is over the link, it is not seen as it is (an occlusion); elsewhere a cover that paints
+    // nothing is an invisible blocker (see invisible-blocker above).
+    const seenOver = placed.filter(c => !related(c.path, target.path) && c.path !== target.parentText && visible(c) && c.paint.pointerEvents !== 'none' && !paintsNothing(c) && paintsAbove(c, layer(c), target, own)).map(c => overlap(outer, c)).filter(Boolean);
     for (const cover of placed) {
       if (related(cover.path, target.path) || cover.path === target.parentText || !visible(cover)) continue;
       if (!paintsAbove(cover, layer(cover), target, own)) continue;
       if (cover.paint.pointerEvents !== 'none') {
         const sure = inner && overlap(inner, cover);
-        if (sure) report(findings, 'E_A11Y_OCCLUDED', 'error', `${target.box.label} (inline) is covered by ${cover.box.label}, which is painted later and receives the pointer`, target, sure, { rule: 'occluded-target', cover: cover.path });
+        let ghost = sure && paintsNothing(cover) && !inControl(cover) && !invisible(target) ? [sure] : [];
+        for (const r of seenOver) ghost = ghost.flatMap(piece => subtract(piece, r));
+        let seenPart = sure ? [sure] : [];
+        for (const g of ghost) seenPart = seenPart.flatMap(piece => subtract(piece, g));
+        for (const piece of ghost) report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', blockerMessage(target, cover), target, piece, { rule: 'invisible-blocker', cover: cover.path, why: paintsNothing(cover) });
+        for (const piece of seenPart) report(findings, 'E_A11Y_OCCLUDED', 'error', `${target.box.label} (inline) is covered by ${cover.box.label}, which is painted later and receives the pointer`, target, piece, { rule: 'occluded-target', cover: cover.path });
         let maybe = overlap(outer, cover);
         if (maybe && sure) maybe = subtract(maybe, sure);
         for (const region of [maybe].flat().filter(Boolean)) report(unknowns, 'U_A11Y_OCCLUDED', 'unknown', `${target.box.label} (inline) may be covered by ${cover.box.label}: its measured text bounds touch the cover`, target, region, { rule: 'occluded-target', cover: cover.path });

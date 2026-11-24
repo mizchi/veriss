@@ -151,6 +151,7 @@ export const recommended = {
   E_A11Y_NAME: ['error', 'give the control a name (text, aria-label or aria-labelledby)'],
   E_A11Y_CONTRAST: ['error', 'raise the contrast of the text against its background'],
   E_A11Y_OCCLUDED: ['error', 'keep the control uncovered, or give the cover pointer-events: none'],
+  E_A11Y_INVISIBLE_BLOCKER: ['error', 'give the box that paints nothing pointer-events: none, or display: none while it shows nothing'],
   E_A11Y_LABEL: ['error', 'label the field'],
   E_A11Y_CONTROL_HIDDEN: ['error', 'hide the field visually (opacity: 0 or a clip), not with display: none'],
   E_A11Y_FOCUS_VISIBLE: ['error', 'keep a visible focus indicator'],
