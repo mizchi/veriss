@@ -141,3 +141,30 @@ test('styled-components across modules: every state has the structure styled-com
     assert.equal(shape(html), shape(s.html), JSON.stringify(s.choices));
   }
 });
+
+test('styled-components: an Unknown mixin in statement position is left out without breaking the declarations after it', () => {
+  const source = `import styled from 'styled-components';
+import { spacing } from './elsewhere';
+const Rule = styled.hr\`
+  \${spacing}
+  width: \${({ vertical }) => (vertical ? '1px' : 'auto')};
+  border: none;
+\`;
+export default function D({ v }) { return <Rule vertical={v} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.equal(states.length, 2);
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_INTERPOLATION' && /spacing/.test(u.message)), JSON.stringify(unknowns));
+  assert.match(css, /\{width:1px;border:none\}/);
+  assert.match(css, /\{width:auto;border:none\}/);
+});
+
+test('styled-components: a template CSS cannot read is Unknown, never an exception', () => {
+  const source = `import styled from 'styled-components';
+const Odd = styled.div\`
+  color: red
+  & { width: 10px
+\`;
+export default function O() { return <Odd />; }`;
+  const {unknowns} = expandReact(source);
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_CSS'), JSON.stringify(unknowns));
+});

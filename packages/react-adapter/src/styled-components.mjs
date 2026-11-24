@@ -271,7 +271,13 @@ export function evaluateStyled(def, props, ctx) {
     return combine(parts, vs => one(quasi.quasis.map((q, i) => {
       if (i >= vs.length) return q.value.cooked;
       const v = vs[i];
-      if (isUnknown(v)) { const mark = `\u0001${slot++}\u0001`; marks.set(mark, v[UNK]); return q.value.cooked + mark; }
+      // An Unknown in statement position (a mixin: only whitespace since the last ; { or }) becomes a comment, so the
+      // declarations after it still parse; inside a declaration value it stays a bare mark (the declaration is dropped).
+      if (isUnknown(v)) {
+        const mark = `\u0001${slot++}\u0001`; marks.set(mark, v[UNK]);
+        const before = quasi.quasis.slice(0, i + 1).map(x => x.value.cooked).join('\u0002');
+        return q.value.cooked + (/(^|[;{}])[\s\u0002]*$/.test(before) ? `/*${mark}*/` : mark);
+      }
       const x = unwrap(v);
       return q.value.cooked + (x === false || x === null || x === undefined ? '' : typeof x === 'object' ? (() => { const mark = `\u0001${slot++}\u0001`; marks.set(mark, { code: 'U_STYLED_INTERPOLATION', message: 'an interpolation evaluates to an object' }); return mark; })() : String(x).replace(/\n/g, ' '));
     }).join('')));
@@ -281,10 +287,15 @@ export function evaluateStyled(def, props, ctx) {
     // Declarations and rules holding an Unknown value are left out and reported. They are blanked in place (their
     // newlines kept), so every remaining line is still the template's line.
     const unknowns = [];
-    if (!/\u0001\d+\u0001/.test(text)) return { text, choices, unknowns };
+    if (!/\u0001\d+\u0001/.test(text)) {
+      try { postcss.parse(`x{${text}}`); } catch (e) { return { text: '', choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message})` }] }; }
+      return { text, choices, unknowns };
+    }
     const report = (where, mark) => { const u = marks.get(mark); unknowns.push({ code: u.code, message: `${def.name}${where}: ${u.message}` }); };
     const spans = [];
-    postcss.parse(`x{${text}}`).walk(n => {
+    let parsed;
+    try { parsed = postcss.parse(`x{${text}}`); } catch (e) { return { text: '', choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message})` }] }; }
+    parsed.walk(n => {
       const own = n.type === 'decl' ? `${n.prop}${n.value}` : n.type === 'rule' ? n.selector : '';
       const mark = own.match(/\u0001\d+\u0001/)?.[0];
       if (!mark || n.parent?.type === 'root') return;
@@ -294,7 +305,7 @@ export function evaluateStyled(def, props, ctx) {
     let out = text;
     for (const [a, b] of spans.sort((x, y) => y[0] - x[0])) out = out.slice(0, a) + out.slice(a, b).replace(/[^\n]/g, ' ') + out.slice(b).replace(/^;/, ' ');
     // a bare Unknown interpolation (a mixin whose text is not known) is dropped
-    out = out.replace(/\u0001\d+\u0001/g, m => { report('', m); return ''; });
+    out = out.replace(/\/\*(\u0001\d+\u0001)\*\/|\u0001\d+\u0001/g, (m, inner) => { report('', inner ?? m); return ''; });
     return { text: out, choices, unknowns };
   });
 }
