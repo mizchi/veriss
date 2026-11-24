@@ -530,10 +530,11 @@ export function evaluateStyled(def, props, ctx) {
     parsed.walk(n => {
       if (n.parent?.type === 'root') return;
       const own = n.type === 'decl' ? `${n.prop}${n.value}` : n.type === 'rule' ? n.selector : '';
-      const mark = own.match(/\u0001\d+\u0001/)?.[0];
+      // every Unknown in it: a dynamic value only when all of them are dynamic
+      const all = own.match(/\u0001\d+\u0001/g) ?? [], mark = all[0];
       if (!mark && !(n.type === 'decl' && n.value.trim() === '')) return;
       const [a, b] = [n.source.start.offset - 2, n.source.end.offset - 2 + 1];
-      if (mark && marks.get(mark)?.dynamic && n.type === 'decl' && !/\u0001/.test(n.prop) && !n.prop.startsWith('--')) {
+      if (mark && all.every(m => marks.get(m)?.dynamic) && n.type === 'decl' && !/\u0001/.test(n.prop) && !n.prop.startsWith('--')) {
         const property = n.prop.toLowerCase(), key = `${def.name}.${property}`, declared = declaredValues(ctx.dynamicValues, key);
         // only the value is replaced (the declaration's ;, !important and line breaks stay where they are)
         const va = a + n.prop.length + (n.raws.between ?? ':').length, vb = va + (n.raws.value?.raw ?? n.value).length;
@@ -547,7 +548,9 @@ export function evaluateStyled(def, props, ctx) {
           edits.push([va, vb, [{ text: `-veriss-dynamic(${id})${newlines}`, choices: {} }]]); return;
         }
       }
-      if (mark) report(n.type === 'decl' ? ` ${n.prop}` : ' selector', mark);
+      // left out: each Unknown that is not a dynamic value is reported (or the first, when all are)
+      const reported = all.filter(m => !marks.get(m)?.dynamic);
+      for (const m of reported.length ? reported : all.slice(0, 1)) report(n.type === 'decl' ? ` ${n.prop}` : ' selector', m);
       edits.push([a, b, blank(a, b)]);
     });
     // each edit's options, applied from the end so the offsets hold; a blanked declaration's ; is blanked too

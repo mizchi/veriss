@@ -946,3 +946,17 @@ export default function C({ on }) { return <Box $on={on} />; }`;
   const rule = new RegExp(`\\.${classOf(off.html, 'div')[1]}\\{([^}]*)\\}`).exec(css)?.[1] ?? '';
   assert.ok(rule === 'color:blue' || rule === '', rule);
 });
+
+test('styled-components: a declaration with a dynamic value and a missing theme value is left out and reported', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  width: calc(\${p => p.$w} + \${p => p.theme.missing});
+  height: 10px;
+\`;
+export default function C({ w }) { return <Box $w={w} />; }`;
+  const {css, unknowns, dynamics} = expandReact(source, {theme: {}});
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_THEME' && /missing/.test(u.message)), JSON.stringify(unknowns));
+  assert.doesNotMatch(css, /width/);
+  assert.match(css, /\{height:10px\}/);
+  assert.deepEqual(dynamics, []);
+});
