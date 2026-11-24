@@ -38,17 +38,17 @@ test('styled-components: a theme value that is not given is Unknown, and its dec
   assert.doesNotMatch(css, /color:/);
 });
 
-test('styled-components: a prop value that is not a literal is Unknown, and its declaration is left out', () => {
+test('styled-components: a prop value that is not a literal is a dynamic value (a placeholder), not an Unknown', () => {
   const source = `import styled from 'styled-components';
 const Box = styled.div\`
   height: \${({ height }) => height};
   width: 10px;
 \`;
 export default function B({ h }) { return <Box height={h} />; }`;
-  const {css, unknowns} = expandReact(source);
-  assert.ok(unknowns.some(u => u.code === 'U_STYLED_VALUE' && /height/.test(u.message)), JSON.stringify(unknowns));
-  assert.match(css, /\{width:10px\}/);
-  assert.doesNotMatch(css, /height/);
+  const {css, unknowns, dynamics} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.match(css, /\{height:-veriss-dynamic\(0\);width:10px\}/);
+  assert.equal(dynamics[0].key, 'Box.height');
 });
 
 test('styled-components: a nested selector that disagrees with the markup is reported at its template line', () => {
@@ -726,4 +726,55 @@ export default function C() { return <Box />; }`;
   assert.deepEqual(unknowns, []);
   const [, cls] = classOf(states[0].html, 'div');
   assert.match(css, new RegExp(`\\.${cls}\\{animation:sc-keyframes-\\w+ 1s linear infinite;display:block\\}`));
+});
+
+const dynamicSource = `import styled from 'styled-components';
+const Box = styled.div\`
+  display: block;
+  width: \${({ $w }) => $w};
+\`;
+export default function C({ w }: { w: string }) { return <Box $w={w} />; }`;
+
+test('dynamic values: an undeclared one is kept as a placeholder the cascade ranks, not dropped as Unknown', () => {
+  const {css, unknowns, dynamics} = expandReact(dynamicSource);
+  assert.deepEqual(unknowns, []);
+  assert.match(css, /\{display:block;width:-veriss-dynamic\(0\)\}/);
+  assert.equal(dynamics.length, 1);
+  assert.equal(dynamics[0].key, 'Box.width');
+  assert.match(dynamics[0].message, /the value of \$w/);
+});
+
+test('dynamic values: declared ones (options.dynamicValues) are each a state', () => {
+  const {states, css, unknowns} = expandReact(dynamicSource, {dynamicValues: {'Box.width': ['100px', 'auto']}});
+  assert.deepEqual(unknowns, []);
+  assert.deepEqual(states.map(s => s.choices['dynamic:Box.width']).sort(), ['100px', 'auto']);
+  assert.match(css, /\{display:block;width:100px\}/);
+  assert.match(css, /\{display:block;width:auto\}/);
+});
+
+test('dynamic values: one that wins the cascade is an error asking for its declaration; one beaten by a higher rule is not', () => {
+  const wins = analyzeReact(dynamicSource, {pageCSS, viewport});
+  const f = wins.findings.find(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE');
+  assert.ok(f, JSON.stringify(wins.findings));
+  assert.equal(wins.status, 'violated');
+  assert.match(f.message, /dynamicValues\['Box\.width'\]/);
+  assert.equal(f.css?.line, 4);
+  const beaten = analyzeReact(dynamicSource, {pageCSS: `${pageCSS}div{width:100px!important}`, viewport});
+  assert.ok(!beaten.findings.some(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE'), JSON.stringify(beaten.findings));
+  assert.notEqual(beaten.status, 'violated');
+  const declared = analyzeReact(dynamicSource, {pageCSS, viewport, dynamicValues: {'Box.width': ['100px', 'auto']}});
+  assert.ok(!declared.findings.some(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE'));
+});
+
+test('dynamic values: only those in the CSS the states render are listed (not those of an evaluation that was dropped)', () => {
+  const keys = Array.from({length: 8}, (_, i) => `k${i}`);
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  ${keys.map(k => `\${({ ${k} }) => (${k} ? 'outline: 1px solid;' : '')}`).join('\n  ')}
+  width: \${({ w }) => w};
+\`;
+export default function C({ label, ...rest }) { return <Box {...rest}>{label}</Box>; }`;
+  const {css, dynamics} = expandReact(source, {maxStates: 16});
+  assert.equal(dynamics.length, (css.match(/-veriss-dynamic\(/g) ?? []).length);
+  for (const d of dynamics) assert.ok(css.includes(`-veriss-dynamic(${d.id})`));
 });

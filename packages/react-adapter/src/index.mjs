@@ -74,7 +74,7 @@ function linariaRules(className, text) {
  */
 // inject (internal, styled(Component)): the component rendered by a styled wrapper, with the wrapper's classes as its
 // className, the wrapper's children, and the props the wrapper was given ({v, choices} variants; v a literal or a symbol).
-export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component', resolveModule, inject } = {}) {
+export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component', resolveModule, dynamicValues, dynamics = [], inject } = {}) {
   const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   // styled-components (imported from 'styled-components'): evaluated per element from the props it passes.
   // Imported styled modules are read through options.resolveModule(specifier, importerFile).
@@ -254,7 +254,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       }
     }
     // a key read but not given as an attribute comes through the spread: the component's prop of that name
-    const evaluated = props => chain.map(d => evaluateStyled(d, props, { theme, literalProps }));
+    const evaluated = props => chain.map(d => evaluateStyled(d, props, { theme, literalProps, dynamicValues, dynamics }));
     let perDef = null;
     if (forwarded) {
       const given = props, excluded = forwarded, through = new Map(given);
@@ -282,7 +282,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     // styled(Component): that component rendered with these classes as its className, these children and props
     const inner = children(node.children);
     const html = lists.flatMap(l => {
-      const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, maxStates, eachCounts, sourceLines,
+      const rendered = expandReact(base.mod.source, { component: base.name, file: base.mod.file, theme, resolveModule, dynamicValues, dynamics, maxStates, eachCounts, sourceLines,
         inject: { classes: [...chain.map(d => `sc-${d.name}`).flatMap((c, i) => [c, l.classes[i]])], children: inner, props, blocks: scBlocks, prefix: `${chain[0].base}` } });
       for (const u of rendered.unknowns) unknown(u.code, `${chain[0].base}: ${u.message}`);
       for (const a of rendered.assumptions) assumptions.add(a);
@@ -419,7 +419,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   }
   let target = component ? functions.find(f => f.name === component) : functions.find(f => f.name === 'default');
   if (target?.ref) target = functions.find(f => f.name === target.ref);
-  if (!target) { unknown('U_REACT_COMPONENT_NOT_FOUND', `no component ${component ?? 'default export'} in the module`); return { states: [], css: '', unknowns, assumptions: [] }; }
+  if (!target) { unknown('U_REACT_COMPONENT_NOT_FOUND', `no component ${component ?? 'default export'} in the module`); return { states: [], css: '', unknowns, assumptions: [], dynamics }; }
   // The props' type: an inline type literal or a local type alias / interface.
   const param = target.fn.params?.[0];
   // Destructured without renaming ({ status }) or read as props.status.
@@ -483,7 +483,10 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const lowered = live.length && !inject ? lowerNested(live) : null;
   const owned = [...linaria.values(), ...[...styled.values()].map(v => v.className)];
   const scope = owned.length ? { mode: 'global', owned, escapes: scopeEscapes(linariaCSS, ['global']) } : undefined;
-  return { states, css: [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : [])].join('\n'), unknowns, assumptions: [...assumptions], ...(scope ? { scope } : {}), ...(lowered ? { styleMap: lowered.map, styleCSS: lowered.css } : {}) };
+  const css = [linariaCSS.replace(/:global\(([^()]*)\)/g, '$1'), ...stylexRules.values(), ...(lowered ? [lowered.css] : [])].join('\n');
+  // the dynamic values the rendered CSS has (an evaluation dropped for too many variants registered its own too)
+  const used = new Set([...css.matchAll(/-veriss-dynamic\((\d+)\)/g)].map(m => Number(m[1])));
+  return { states, css, unknowns, assumptions: [...assumptions], dynamics: dynamics.filter(d => used.has(d.id)), ...(scope ? { scope } : {}), ...(lowered ? { styleMap: lowered.map, styleCSS: lowered.css } : {}) };
 }
 
 /**
@@ -492,8 +495,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
  * @param {object} options veriss options plus pageCSS, page, css (an external stylesheet for plain classNames),
  *   component, maxStates, eachCounts
  */
-export function analyzeReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule, css = '', ...options } = {}) {
-  const expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule });
+export function analyzeReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule, dynamicValues, css = '', ...options } = {}) {
+  const expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule, dynamicValues });
   // An external stylesheet is the page's, not the component's: with a component scope it goes before the component CSS.
   const scoped = Boolean(expanded.scope && css);
   const pageCSS = scoped ? `${options.pageCSS ?? ''}\n${css}` : options.pageCSS ?? '';
@@ -505,5 +508,14 @@ export function analyzeReact(source, { component, maxStates, eachCounts, sourceL
     const offset = all.slice(0, all.lastIndexOf(expanded.styleCSS)).split('\n').length - 1;
     report.selectors = { ...report.selectors, warnings: relocateSelectorWarnings(report.selectors.warnings, expanded.styleMap, { offset }) };
   }
+  // A dynamic value that wins the cascade: said in terms of the template (where, what its value depends on) and of the
+  // option that declares it.
+  const byId = new Map(expanded.dynamics.map(d => [d.id, d]));
+  report.findings = report.findings.map(f => {
+    const id = f.code === 'E_LAYOUT_DYNAMIC_VALUE' && /-veriss-dynamic\((\d+)\)/.exec(f.message)?.[1];
+    const d = id !== undefined && id !== false && byId.get(Number(id));
+    return d ? { ...f, component: d.component, css: { file: d.file, line: d.line }, message: `${d.message}; it wins the cascade on ${f.box}, so the layout depends on it: declare its values as dynamicValues['${d.key}']` } : f;
+  });
+  if (expanded.dynamics.length) report.coverage = { ...report.coverage, assumptions: [...(report.coverage?.assumptions ?? []), `${expanded.dynamics.length} dynamic value(s) undeclared: checked only where a higher-ranked declaration beats them`] };
   return report;
 }

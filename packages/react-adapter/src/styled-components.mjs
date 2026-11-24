@@ -222,7 +222,8 @@ export function evaluateStyled(def, props, ctx) {
     if (!isSym(v)) return one(v);
     const values = ctx.literalProps?.get(v[SYM].key);
     if (values) return values.map(x => ({ v: x, choices: choose(v[SYM].key, x) }));
-    return one(unknownValue('U_STYLED_VALUE', `the value of ${v[SYM].prop} (${v[SYM].key}) is not a literal`));
+    // a value known only at run time (a dynamic value: the author may declare its values)
+    return one({ [UNK]: { code: 'U_STYLED_VALUE', message: `the value of ${v[SYM].prop} (${v[SYM].key}) is not a literal`, dynamic: true } });
   };
 
   // a missing theme path is reported with the whole expression that reads it (theme.colors.text, not theme.colors)
@@ -484,27 +485,52 @@ export function evaluateStyled(def, props, ctx) {
   }
   const lines = templateLines(def.quasi);
   const unreadable = (text, e, choices) => ({ text: '', lines, choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message}${e.line ? ` at template line ${lines[e.line - 1] ?? def.line}: ${JSON.stringify(`x{${text}}`.split('\n')[e.line - 1]?.trim().replace(/[\u0001-\u0003]/g, '·'))}` : ''})` }] });
-  return template(def.quasi).map(({ v: text, choices }) => {
+  return template(def.quasi).flatMap(({ v: text, choices }) => {
     // Declarations and rules holding an Unknown value are left out and reported; declarations left empty (an
     // interpolation that wrote nothing) are left out as stylis does. Both are blanked in place, newlines kept.
+    // A declaration whose value is Unknown is a dynamic value: each of its declared values (ctx.dynamicValues, by
+    // 'Component.property') is a variant; undeclared, it is the placeholder -veriss-dynamic(id) the cascade ranks
+    // (registered in ctx.dynamics), not an Unknown.
     const unknowns = [];
     const report = (where, mark) => { const u = marks.get(mark); unknowns.push({ code: u.code, message: `${def.name}${where}: ${u.message}` }); };
     let parsed;
-    try { parsed = postcss.parse(`x{${text}}`); } catch (e) { return unreadable(text, e, choices); }
-    const spans = [];
+    try { parsed = postcss.parse(`x{${text}}`); } catch (e) { return [unreadable(text, e, choices)]; }
+    const edits = [];
+    const blank = (a, b) => [{ text: text.slice(a, b).replace(/[^\n]/g, ' '), choices: {} }];
     parsed.walk(n => {
       if (n.parent?.type === 'root') return;
       const own = n.type === 'decl' ? `${n.prop}${n.value}` : n.type === 'rule' ? n.selector : '';
       const mark = own.match(/\u0001\d+\u0001/)?.[0];
+      if (!mark && !(n.type === 'decl' && n.value.trim() === '')) return;
+      const [a, b] = [n.source.start.offset - 2, n.source.end.offset - 2 + 1];
+      if (mark && marks.get(mark)?.dynamic && n.type === 'decl' && !/\u0001/.test(n.prop) && !n.prop.startsWith('--')) {
+        const property = n.prop.toLowerCase(), key = `${def.name}.${property}`, declared = ctx.dynamicValues?.[key];
+        // only the value is replaced (the declaration's ;, !important and line breaks stay where they are)
+        const va = a + n.prop.length + (n.raws.between ?? ':').length, vb = va + (n.raws.value?.raw ?? n.value).length;
+        const newlines = '\n'.repeat((text.slice(va, vb).match(/\n/g) ?? []).length);
+        if (declared?.length) { edits.push([va, vb, declared.map(value => ({ text: `${value}${newlines}`, choices: choose(`dynamic:${key}`, value) }))]); return; }
+        if (ctx.dynamics) {
+          const u = marks.get(mark), id = ctx.dynamics.length;
+          ctx.dynamics.push({ id, key, component: def.name, property, message: `${def.name} ${property}: ${u.message}`, file: def.mod.file, line: lines[n.source.start.line - 1] ?? def.line });
+          edits.push([va, vb, [{ text: `-veriss-dynamic(${id})${newlines}`, choices: {} }]]); return;
+        }
+      }
       if (mark) report(n.type === 'decl' ? ` ${n.prop}` : ' selector', mark);
-      else if (!(n.type === 'decl' && n.value.trim() === '')) return;
-      spans.push([n.source.start.offset - 2, n.source.end.offset - 2 + 1]);
+      edits.push([a, b, blank(a, b)]);
     });
-    let out = text;
-    for (const [a, b] of spans.sort((x, y) => y[0] - x[0])) out = out.slice(0, a) + out.slice(a, b).replace(/[^\n]/g, ' ') + out.slice(b).replace(/^;/, ' ');
-    // a bare Unknown interpolation (a mixin whose text is not known) is dropped
-    out = out.replace(/\/\*(\u0001\d+\u0001)\*\/|\u0001\d+\u0001/g, (m, inner) => { report('', inner ?? m); return ''; });
-    return { text: out, lines, choices, unknowns };
+    // each edit's options, applied from the end so the offsets hold; a blanked declaration's ; is blanked too
+    let outs = [{ out: text, choices }];
+    for (const [a, b, options] of edits.sort((x, y) => y[0] - x[0])) outs = outs.flatMap(o => options.map(opt => {
+      const c = merge(o.choices, opt.choices); if (!c) return null;
+      const rest = o.out.slice(b);
+      return { out: o.out.slice(0, a) + opt.text + (opt.text.trim() ? rest : rest.replace(/^;/, ' ')), choices: c };
+    }).filter(Boolean));
+    return outs.map(({ out, choices }) => {
+      // a bare Unknown interpolation (a mixin whose text is not known) is dropped
+      const own = [...unknowns];
+      out = out.replace(/\/\*(\u0001\d+\u0001)\*\/|\u0001\d+\u0001/g, (m, inner) => { const u = marks.get(inner ?? m); own.push({ code: u.code, message: `${def.name}: ${u.message}` }); return ''; });
+      return { text: out, lines, choices, unknowns: own };
+    });
   });
 }
 
