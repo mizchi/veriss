@@ -7,6 +7,9 @@
   "exports": {
     ".": {
       "import": "./src/index.mjs"
+    },
+    "./resolve-node": {
+      "import": "./src/resolve-node.mjs"
     }
   },
   "dependencies": {
