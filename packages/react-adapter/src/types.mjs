@@ -38,6 +38,8 @@ export function resolveTypeName(mod, name, seen = new Set()) {
 
 // the union of member types from several declarations (each read in its own module)
 const MERGED = 'VerissMergedTypes';
+// the intersection of member types from the parts of an intersection type (each read in its own module)
+const INTERSECTED = 'VerissIntersectedTypes';
 
 // a type reference to a plain name (Foo, not ns.Foo) resolved in `mod`
 const reference = (type, mod) => type?.type === 'TSTypeReference' && type.typeName.type === 'Identifier' ? resolveTypeName(mod, type.typeName.name) : null;
@@ -47,7 +49,22 @@ export function typeMembers(type, mod, depth = 0) {
   if (!type || depth > 16) return [];
   if (type.type === 'TSParenthesizedType') return typeMembers(type.typeAnnotation, mod, depth + 1);
   if (type.type === 'TSTypeLiteral') return type.members.map(member => ({ member, mod }));
-  if (type.type === 'TSIntersectionType') return type.types.flatMap(t => typeMembers(t, mod, depth + 1));
+  // An intersection: a name declared by several parts is one member whose type is the intersection of theirs, and
+  // which is optional only when every part has it optional.
+  if (type.type === 'TSIntersectionType') {
+    const all = type.types.flatMap(t => typeMembers(t, mod, depth + 1));
+    const named = ({ member: m }) => m.type === 'TSPropertySignature' && m.key?.type === 'Identifier';
+    const byName = new Map();
+    for (const e of all.filter(named)) byName.set(e.member.key.name, [...(byName.get(e.member.key.name) ?? []), e]);
+    return all.flatMap(e => {
+      if (!named(e)) return [e];
+      const parts = byName.get(e.member.key.name);
+      if (parts.length === 1) return [e];
+      if (parts[0] !== e) return [];
+      const intersected = { type: INTERSECTED, parts: parts.map(({ member, mod }) => ({ type: member.typeAnnotation?.typeAnnotation, mod })) };
+      return [{ member: { type: 'TSPropertySignature', key: e.member.key, optional: parts.every(({ member }) => member.optional), typeAnnotation: { typeAnnotation: intersected } }, mod: e.mod }];
+    });
+  }
   // A union of object types (props as a discriminated union): one member per name, whose type is the union of the
   // branches' types and which is optional when a branch lacks it or has it optional. The branches are merged
   // independently (which values go together is not kept), so this may admit combinations no branch allows.
@@ -85,6 +102,11 @@ export function literalValues(type, mod, depth = 0) {
     const parts = type.parts.map(p => p.type ? literalValues(p.type, p.mod, depth + 1) : null);
     return parts.every(Boolean) ? [...new Set(parts.flat())] : null;
   }
+  // an intersection: the values every literal part allows (a part that is not a literal union, string, does not narrow)
+  if (type.type === INTERSECTED) {
+    const parts = type.parts.map(p => p.type ? literalValues(p.type, p.mod, depth + 1) : null).filter(Boolean);
+    return parts.length ? parts.reduce((a, b) => a.filter(x => b.includes(x))) : null;
+  }
   if (type.type === 'TSUnionType') {
     const parts = type.types.map(t => literalValues(t, mod, depth + 1));
     return parts.every(Boolean) ? [...new Set(parts.flat())] : null;
@@ -98,6 +120,7 @@ export function isTextType(type, mod, depth = 0) {
   if (!type || depth > 16) return false;
   if (['TSStringKeyword', 'TSNumberKeyword', 'TSLiteralType', 'TSNeverKeyword'].includes(type.type)) return true;
   if (type.type === MERGED) return type.parts.every(p => isTextType(p.type, p.mod, depth + 1));
+  if (type.type === INTERSECTED) return type.parts.some(p => isTextType(p.type, p.mod, depth + 1));
   if (type.type === 'TSParenthesizedType') return isTextType(type.typeAnnotation, mod, depth + 1);
   if (type.type === 'TSUnionType') return type.types.every(t => ['TSUndefinedKeyword', 'TSNullKeyword'].includes(t.type) || isTextType(t, mod, depth + 1));
   const found = reference(type, mod);

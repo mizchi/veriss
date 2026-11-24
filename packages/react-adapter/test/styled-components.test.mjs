@@ -920,3 +920,12 @@ export default function C({ active }) { return <Box $active={active} />; }`;
   assert.doesNotMatch(css, /color:blue|width:2px/);
   for (const s of states) assert.match(css, new RegExp(`\\.${classOf(s.html, 'div')[1]}\\{color:red;width:1px\\}`));
 });
+
+test('props types: an intersection that constrains a member twice keeps only the values both allow', () => {
+  const source = `type A = { size: 'small' | 'medium' };
+export default function C({ size }: A & { size: 'medium' | 'large' }) { return <p>{size}</p>; }`;
+  assert.deepEqual(expandReact(source).states.map(s => s.html), ['<p>medium</p>']);
+  // a member typed string in one part and a literal union in the other is that union
+  const text = `export default function C({ size }: { size: string } & { size: 'a' | 'b' }) { return <p>{size}</p>; }`;
+  assert.deepEqual(expandReact(text).states.map(s => s.html).sort(), ['<p>a</p>', '<p>b</p>']);
+});
