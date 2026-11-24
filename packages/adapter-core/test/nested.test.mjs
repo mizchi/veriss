@@ -70,3 +70,19 @@ test('lowerNested: origin.lines maps each text line to its template line (interp
   const {map} = lowerNested([{selector: '.a', text: '\n  padding: 8px;\n  & > .b {\n    color: red; }', origin: {file: 'f', line: 10, lines: [10, 11, 13, 14], name: 'A'}}]);
   assert.deepEqual(map.map(m => [m.selector, m.origin.line]), [['.a', 11], ['.a > .b', 13]]);
 });
+
+test('relocateSelectorWarnings: warnings of several variants of one template line are reported once', () => {
+  const map = [
+    {cssLine: 1, selector: '.sc-A-1:disabled', origin: {file: 'a.ts', line: 7, name: 'A'}, path: ['.sc-A-1', '&:disabled'], relation: null},
+    {cssLine: 2, selector: '.sc-A-2:disabled', origin: {file: 'a.ts', line: 7, name: 'A'}, path: ['.sc-A-2', '&:disabled'], relation: null},
+  ];
+  const warnings = [
+    {code: 'W_CSS_SELECTOR_UNMATCHED', selector: '.sc-A-2:disabled', line: 2, message: '.sc-A-2:disabled matches no element of the template (no element has class .sc-A-2)'},
+    {code: 'W_CSS_SELECTOR_UNMATCHED', selector: '.sc-A-1:disabled', line: 1, message: '.sc-A-1:disabled matches no element of the template'},
+  ];
+  const out = relocateSelectorWarnings(warnings, map);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].line, 7);
+  assert.equal(out[0].variants, 2);
+  assert.doesNotMatch(out[0].message, /no element has class/);
+});

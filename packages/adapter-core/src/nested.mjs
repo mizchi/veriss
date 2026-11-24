@@ -71,10 +71,22 @@ export function lowerNested(blocks) {
  * A warning is matched by its flat selector; when several rules share it, by line (offset: lines before the lowered CSS).
  */
 export function relocateSelectorWarnings(warnings, map, { offset = 0 } = {}) {
-  return warnings.map(w => {
+  const moved = warnings.map(w => {
     const same = map.filter(m => m.selector === w.selector);
     const m = same.length === 1 ? same[0] : same.find(x => x.cssLine + offset === w.line);
     if (!m) return w;
     return { ...w, cssLine: w.line, file: m.origin.file, line: m.origin.line, component: m.origin.name, nesting: { path: m.path, relation: m.relation } };
   });
+  // One template line evaluated into several variants (one class each) is one finding: reported once, with the
+  // number of variants, and a message from a variant whose class the markup has.
+  const out = [], byKey = new Map();
+  for (const w of moved) {
+    if (!w.nesting) { out.push(w); continue; }
+    const key = `${w.code}\u0000${w.file}\u0000${w.line}\u0000${w.nesting.path.slice(1).join('\u0000')}`;
+    const seen = byKey.get(key);
+    if (!seen) { const first = { ...w, variants: 1 }; byKey.set(key, first); out.push(first); continue; }
+    seen.variants++;
+    if (/no element has class/.test(seen.message) && !/no element has class/.test(w.message)) Object.assign(seen, { ...w, variants: seen.variants });
+  }
+  return out;
 }
