@@ -55,3 +55,10 @@ test('the inert-declaration checks live in rules/inert-declarations.mjs (M6): th
   for (const code of ['W_LAYOUT_SCROLL_NEVER', 'W_LAYOUT_CONTENT_VISIBILITY_SIZE', 'W_LAYOUT_SVG_UNSIZED', 'W_LAYOUT_EMBED_NO_RATIO', 'W_LAYOUT_CONTAINER_COLLAPSE'])
     assert.ok(!new RegExp(`code: '${code}'`).test(engine), code);
 });
+
+test('the style checks run in one walk (M6): the layout does not call them, and no second walk runs where it is Unknown', () => {
+  const engine = readFileSync(join(src, 'layout/engine.mjs'), 'utf8');
+  assert.ok(!/\bwalkStyles\b/.test(engine));
+  for (const name of ['cssMistakes', 'pseudoWithoutContent', 'inlineStateTransforms', 'inlineTextAlignment', 'inlineAutoMargin', 'inlineOverflow', 'decorationNone'])
+    assert.equal(engine.match(new RegExp(`\\b${name}\\(`, 'g'))?.length, 1, name);
+});

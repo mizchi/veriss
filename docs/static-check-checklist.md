@@ -129,9 +129,9 @@
   状態のない素の HTML でも、スタイルシートが名指すクラスの切り替え(`.panel` の要素に `.panel.open` の規則)は、そのクラスを
   足した計算値と比べる(その要素がすでに持つクラスを含む規則に限る)。
 - [x] **F9. content のない `::before`・`::after`**(`W_CSS_PSEUDO_NO_CONTENT`): ほかのプロパティを書いても、content がなければ
-  作られない。
+  作られない。grid や flex の container(body を含む)の擬似要素も同じ(M6 まで、配置が検証できたときは葉と inline の擬似要素だけを見ていた。3 ブラウザーで、content のない body::before は作られず、.a の位置が変わらないことを測った: `e2e/layout-css-mistakes.spec.mjs`)。
 - [x] **F11. 配置が Unknown でも報告する**: 配置の前に Unknown になる入力(配置を変える `:focus` の規則など)では、box ごとの警告(F2〜F4・
-  F7・F8)が出なかった。配置が最後まで走らなかったときは、style だけを計算して木をたどり、同じ検査をする(F9 の擬似要素も)。
+  F7・F8)が出なかった。style の検査は配置とは別の 1 本の walk(全 box・全 state)で行うので、配置が Unknown でも検証できても同じ警告が出る(ADR-0016 M6)。
 - [x] **F12. 長さのない transition**(`W_CSS_TRANSITION_NO_DURATION`): `transition: opacity` は 0s で、変化は一度に起きる。
   一括指定の各項目に時間がない場合と、`transition-property` だけで長さがない場合。明示した `0s` は意図とみなして報告しない。
 - [x] **F13. 決まりすぎた絶対配置**(`W_LAYOUT_DECLARATION_INERT`): 両側の inset と大きさを全部書いた absolute・fixed の箱は、

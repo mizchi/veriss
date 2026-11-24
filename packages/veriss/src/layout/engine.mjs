@@ -727,7 +727,6 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         message: `${box.label}: display: ${style.$hiddenInputDisplay} has no effect on an input type=hidden (the browser's display: none !important always wins). Use another input type to show a field` });
       // F129 (emitted with or without emit, as F30: a closed dialog is display: none and never laid out).
       if (box.tag === 'dialog') dialogMarginReset(box, style);
-      if (emit) cssMistakes(box, style, ancestors, inherited, gridItem, r, state);
       if (emit) for (const entry of style.$invalid) invalidSubstitutions.push({ box: box.label, path: box.path, property: entry.property, longhands: entry.longhands, css: { file: entry.file, line: entry.line }, reason: entry.code === 'U_LAYOUT_VARIABLE_CYCLE' ? 'cycle' : 'guaranteed-invalid', message: entry.message, resolution: 'unset', ...ranges(r) });
       if (emit) for (const [condition, compiled] of contexts) if (condition.kind === 'container') {
         queries.push({ box: box.label, path: box.path, name: condition.name, target: compiled.target, targetPath: compiled.path, matched: activeContext(compiled), ...ranges(r) });
@@ -1509,7 +1508,6 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       const pbox = { ...box, path: `${box.path}/${kind === 'before' ? -1 : (box.children ?? []).length}`, label: `${box.label}::${kind}`, children: [], pseudo: kind };
       for (const c of styles(pbox, region, parents, inheritedStyle, false, false, new Set([`::${kind}`]))) {
         const content = c.style.content ?? 'none';
-        pseudoWithoutContent(pbox, c.style);
         if (content === 'none' || c.style.display === 'none') continue;
         const text = content.startsWith('text:') ? content.slice(5) : null;
         const fixed = !(box.children ?? []).length && !box.inline?.length && ['inline-size', 'block-size'].every(key => /^\d+(?:\.\d+)?px$/.test(inheritedStyle[key])) && c.style.position === 'static';
@@ -1656,13 +1654,6 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // Sizes, vertical margins and aspect-ratio do not apply to a non-replaced inline box (CSS 2.2 §10.3.1, §10.6.1;
       // measured: width, height, min/max-width, margin-top and aspect-ratio on a span change no pixel), nor do
       // transforms (CSS Transforms 1 §1: only block-level and atomic inline boxes are transformable; measured too).
-      inlineStateTransforms(child, style);
-      inlineTextAlignment(child, style);
-      inlineAutoMargin(child, style);
-      preserve3dInert(child, style);
-      inlineOverflow(child, style);
-      decorationNone(child, style, parents);
-      firstPseudoInert(child, style);
       if (!['img', 'video', 'canvas', 'iframe', 'svg', 'input', 'button', 'select', 'textarea'].includes(child.tag) && !layoutWarnings.some(w => w.code === 'W_LAYOUT_DECLARATION_INERT' && w.path === child.path)) {
         const initial = { 'inline-size': ['auto'], 'block-size': ['auto'], 'min-inline-size': ['auto', '0', '0px'], 'min-block-size': ['auto', '0', '0px'], 'max-inline-size': ['none'], 'max-block-size': ['none'], 'margin-top': ['0', '0px', 'auto'], 'margin-bottom': ['0', '0px', 'auto'], 'aspect-ratio': ['auto'], transform: ['none'], translate: ['none'], rotate: ['none'], scale: ['none'] };
         const written = Object.keys(initial).filter(key => style.$sources?.[key] && !initial[key].includes(String(style[key])));
@@ -3708,9 +3699,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     }
     return results;
   }
-  if (!diagnostics.length) {
+  // The environments of the root: the region and inherited style each state of options.ancestors gives it.
+  let environments = [{ region: initial, style: undefined, paint: [] }];
+  const laidOut = !diagnostics.length;
+  if (laidOut) {
     try {
-      let environments = [{ region: initial, style: undefined, paint: [] }];
       for (let i = 0; i < (options.ancestors ?? []).length; i++) {
         const ancestor = options.ancestors[i];
         const host = { ...ancestor, classes: ancestor.classes ?? [], documentRoot: i === 0 && ancestor.tag === 'html', label: `ancestor:${ancestor.tag}`, path: `ancestor/${i}` };
@@ -3723,36 +3716,45 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       for (const environment of environments) (ancestorPaint = environment.paint ?? [], solve(root, { root: true,origin:{inline:scalar(0),block:scalar(0)}, inline: diff(width, scalar(options.hostInset ?? 0)), block: block && options.viewport.height ? diff(height, scalar(options.hostBlockInset ?? 0)) : null }, environment.region, [], environment.style));
     } catch (error) { unknown(error.code?.startsWith('U_LAYOUT_') ? error.code : 'U_LAYOUT_ANCESTOR', error.message,error.css?.line,undefined,error.css?.file); }
   }
-  // Checklist F where the layout did not run to the end: a style walk over every box (no layout), so the mistakes in
-  // the CSS are reported whatever is Unknown. (Each warning is reported once per box.)
-  if (diagnostics.some(d => d.severity === 'unknown') && hovered === undefined && !options.$animationFrame && !options.$slideVariant && !untransformed) {
-    const walkStyles = (box, ancestors, inherited) => {
+  // The style stage's checks (checklist F): one walk over every box and every state of its style, with no layout, so
+  // the mistakes in the CSS are reported whatever the layout makes of them (and wherever it is Unknown). Each warning
+  // is reported once per box. Re-layouts of the same page (hover, animation frames, slides, untransformed) skip it.
+  // It runs where the layout ran or something is Unknown (not on input the layout refused with an error).
+  if ((laidOut || diagnostics.some(d => d.severity === 'unknown')) && hovered === undefined && !options.$animationFrame && !options.$slideVariant && !untransformed) {
+    const styleChecks = (box, region, ancestors, inherited) => {
       // An open dialog's style is not computed (the UA places it); its declarations still tell a margin reset (F129).
-      let state; try { [state] = styles(box, initial, ancestors, inherited, false); } catch (error) { if (box.tag === 'dialog' && error?.$sources) try { dialogMarginReset(box, { $sources: error.$sources }); } catch { /* best effort */ } return; }
-      if (!state) return;
-      try { cssMistakes(box, state.style, ancestors, inherited, true, state.region, undefined); } catch { /* the rest still runs */ }
-      for (const kind of ['before', 'after']) try {
-        const pbox = { ...box, path: `${box.path}/${kind === 'before' ? -1 : (box.children ?? []).length}`, label: `${box.label}::${kind}`, children: [], pseudo: kind };
-        for (const c of styles(pbox, initial, ancestors, state.style, false, false, new Set([`::${kind}`]))) pseudoWithoutContent(pbox, c.style);
-      } catch { /* the rest still runs */ }
-      if (state.style.display === 'none') return;
-      for (const child of box.children ?? []) walkStyles(child, [...ancestors, { box, style: state.style, names: [] }], state.style);
-      // The inline elements of a text leaf (links, spans): the checks that hold for an inline box (F36).
-      const walkInline = (child, chain, parentStyle) => {
-        let c; try { [c] = styles(child, initial, chain, parentStyle, false, false); } catch { return; }
-        if (!c || c.style.display === 'none') return;
-        try { inlineStateTransforms(child, c.style); } catch { /* the rest still runs */ }
-        try { inlineTextAlignment(child, c.style); } catch { /* the rest still runs */ }
-        try { inlineAutoMargin(child, c.style); } catch { /* the rest still runs */ }
-        try { preserve3dInert(child, c.style); } catch { /* the rest still runs */ }
-        try { inlineOverflow(child, c.style); } catch { /* the rest still runs */ }
-        try { decorationNone(child, c.style, chain); } catch { /* the rest still runs */ }
-        try { firstPseudoInert(child, c.style); } catch { /* the rest still runs */ }
-        for (const grand of child.inline ?? child.children ?? []) walkInline(grand, [...chain, { box: child, style: c.style, names: [] }], c.style);
-      };
-      for (const child of box.inline ?? []) walkInline(child, [...ancestors, { box, style: state.style, names: [] }], state.style);
+      let states; try { states = styles(box, region, ancestors, inherited, false); } catch (error) { if (box.tag === 'dialog' && error?.$sources) try { dialogMarginReset(box, { $sources: error.$sources }); } catch { /* best effort */ } return; }
+      for (const state of states) {
+        try { cssMistakes(box, state.style, ancestors, inherited, true, state.region, undefined); } catch { /* the rest still runs */ }
+        for (const kind of ['before', 'after']) try {
+          const pbox = { ...box, path: `${box.path}/${kind === 'before' ? -1 : (box.children ?? []).length}`, label: `${box.label}::${kind}`, children: [], pseudo: kind };
+          for (const c of styles(pbox, state.region, ancestors, state.style, false, false, new Set([`::${kind}`]))) pseudoWithoutContent(pbox, c.style);
+        } catch { /* the rest still runs */ }
+        if (state.style.display === 'none') continue;
+        for (const child of box.children ?? []) styleChecks(child, state.region, [...ancestors, { box, style: state.style, names: [] }], state.style);
+        // The inline elements of a text leaf (links, spans): the checks that hold for an inline box (F36).
+        const inlineChecks = (child, chain, parentStyle, at) => {
+          let inlineStates; try { inlineStates = styles(child, at, chain, parentStyle, false, false); } catch { return; }
+          for (const c of inlineStates) {
+            if (c.style.display === 'none') continue;
+            try { inlineStateTransforms(child, c.style); } catch { /* the rest still runs */ }
+            try { inlineTextAlignment(child, c.style); } catch { /* the rest still runs */ }
+            try { inlineAutoMargin(child, c.style); } catch { /* the rest still runs */ }
+            try { preserve3dInert(child, c.style); } catch { /* the rest still runs */ }
+            try { inlineOverflow(child, c.style); } catch { /* the rest still runs */ }
+            try { decorationNone(child, c.style, chain); } catch { /* the rest still runs */ }
+            try { firstPseudoInert(child, c.style); } catch { /* the rest still runs */ }
+            for (const grand of child.inline ?? child.children ?? []) inlineChecks(grand, [...chain, { box: child, style: c.style, names: [] }], c.style, c.region);
+          }
+        };
+        for (const child of box.inline ?? []) inlineChecks(child, [...ancestors, { box, style: state.style, names: [] }], state.style, state.region);
+      }
     };
-    try { walkStyles(root, [], undefined); } catch { /* best effort */ }
+    // Bounded by this analysis's own work limit; the budget shared with other analyses (the variants of one page) is
+    // given back, so these warnings never turn another analysis Unknown.
+    const shared = budget?.remaining;
+    for (const environment of environments) try { styleChecks(root, environment.region, [], environment.style); } catch { /* best effort */ }
+    if (budget) budget.remaining = shared;
   }
   // F37: a ::first-letter / ::first-line that may apply (a block container it selects, not shown to have none) restyles
   // text in a way that is not modeled.
