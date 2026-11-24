@@ -27,13 +27,17 @@ export function selectorUsage(rules, boxes) {
   // as it or an ancestor of it (descendant); siblings (+, ~) of unseen content are unknown.
   const holders = elements.filter(box => box.boundaries?.length);
   const holdsFrom = (selector, box, i) => i >= (selector.chain ?? []).length || neighbors(box, selector.chain[i].combinator).some(n => compoundMatches(selector.chain[i].compound, n) && holdsFrom(selector, n, i + 1));
+  // The subject and any of the compounds next to it (chain[0..k-1]) may be unseen; the first seen compound chain[k]
+  // is the holder (>) or it or an ancestor (descendant), and the rest holds from there. The leftmost compound is
+  // always a seen element.
   const behindBoundary = selector => holders.some(holder => {
     const chain = selector.chain ?? [];
     if (!chain.length) return true;
-    const { compound, combinator } = chain[0];
-    if (combinator === '+' || combinator === '~') return true;
-    const anchors = combinator === '>' ? [holder] : [holder, ...neighbors(holder, ' ')];
-    return anchors.some(a => compoundMatches(compound, a) && holdsFrom(selector, a, 1));
+    return chain.some(({ compound, combinator }, k) => {
+      if (combinator === '+' || combinator === '~') return true;
+      const anchors = combinator === '>' ? [holder] : [holder, ...neighbors(holder, ' ')];
+      return anchors.some(a => compoundMatches(compound, a) && holdsFrom(selector, a, k + 1));
+    });
   });
   const classes = new Set(elements.flatMap(box => box.classes));
   const rows = [], warnings = [];

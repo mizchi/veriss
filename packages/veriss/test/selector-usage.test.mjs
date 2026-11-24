@@ -53,3 +53,10 @@ test('selectors that may style content behind a boundary (children, a child comp
   // .plain has no boundary; .other is not an element of the template at all
   assert.deepEqual(reported, ['.other > input', '.plain > span']);
 });
+
+test('a selector whose inner compounds may all be unseen content still needs its outer compounds to hold', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><button class="btn">…<!--isle-boundary:children--></button><div class="plain"></div></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const reported = brun('.btn > span:only-child > svg{width:1px}.plain > span > svg{width:1px}.page > .btn > span > svg{width:1px}.nav > .btn > span{width:1px}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, ['.nav > .btn > span', '.plain > span > svg']);
+});
