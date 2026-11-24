@@ -3907,6 +3907,25 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (scrolledCovers.some(u => d.path.startsWith(`${u.path}/`) && u.cover === d.cover) && !diagnostics.some(x => x.code === d.code && x.path === d.path && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
           diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${scrolledCovers.find(u => d.path.startsWith(`${u.path}/`)).box}; other scroll offsets are not checked)` });
     }
+    // Hit testing inside overflow: hidden boxes (ad slots and overlays clip their frame and close control): those boxes
+    // are scroll containers, so their content has no position in this pass, and a transparent wrapper looks like an
+    // invisible blocker, or a layer like a trap without a way out. Nobody can scroll an overflow: hidden box, so the
+    // page laid out at scroll offset 0 gives where that content hit-tests: the occlusion, blocker and trap findings of
+    // the covered controls and the layers are taken from there.
+    const hitCodes = new Set(['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP']);
+    const hiddenBox = geometry.some(row => row.overflow === 'clip' && row.overflowValue === 'hidden' && !row.box.documentRoot && row.path !== root.path);
+    if (pristine && hiddenBox && diagnostics.some(d => ['E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP'].includes(d.code))) {
+      let zero = null;
+      try { zero = analyzeBoxTree(pristine, { ...options, integrity: undefined }, scrollbarProfile, budget, inlineSheets, [], ['scroll-zero']); } catch { zero = null; }
+      // (Unknown accessibility findings there are fine; a layout that is not decided at offset 0 is not used.)
+      if (zero && !zero.diagnostics.some(d => d.severity === 'unknown' && !d.rule)) {
+        const targetsHit = new Set(diagnostics.filter(d => ['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code)).map(d => d.path));
+        const keep = d => !hitCodes.has(d.code) || (['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code) && !targetsHit.has(d.path));
+        const taken = zero.diagnostics.filter(d => hitCodes.has(d.code) && (['E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP'].includes(d.code) || targetsHit.has(d.path)));
+        for (let i = diagnostics.length - 1; i >= 0; i--) if (!keep(diagnostics[i])) diagnostics.splice(i, 1);
+        diagnostics.push(...taken.map(d => ({ ...d, scrollOffset: 0 })));
+      }
+    }
     // Focus rules that change layout: each focusable box they can reach is laid out again focused, and the geometric
     // focus findings for that box come from that layout instead of the unfocused one.
     if (pristine && rules.some(rule => rule.stateLayout)) {

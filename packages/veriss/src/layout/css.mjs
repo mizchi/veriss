@@ -1164,7 +1164,10 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           if (!prop.startsWith('--') && ['background-image', 'background'].includes(prop)) {
             const problem = prop === 'background-image' ? imageProblem(raw) : (t => t && { token: t })(shorthandImageToken(raw));
             if (problem) { const token = prop === 'background' ? problem.token : postcss.list.comma(value).find(l => imageProblem(l)) ?? value;
-              note('W_CSS_IMAGE_INVALID', { property: prop, value, token: token.replaceAll(STRAY_COLON, ':'), url: imageURL(token), selector: node.selector, file: filename, line }); continue; }
+              note('W_CSS_IMAGE_INVALID', { property: prop, value, token: token.replaceAll(STRAY_COLON, ':'), url: imageURL(token), selector: node.selector, file: filename, line });
+              // Kept as a marker on the boxes the rule matches: why such a box may paint nothing (the accessibility rules say so).
+              declarations.push({ property: '$droppedImage', droppedImage: { property: prop, value }, file: filename, line });
+              continue; }
           }
           if (!prop.startsWith('--') && raw.includes(STRAY_COLON)) { note('W_CSS_STRAY_COLON', { property: prop, value: value.replace(/\s+/g, ' '), selector: node.selector, file: filename, line }); continue; } }
         // F86: a "!word" other than !important at the end of a value makes the declaration invalid: the browser drops it
@@ -1451,6 +1454,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions), and
   // whether a rule the analysis cannot read may repaint the box.
   const unmodeled = [];
+  const droppedImages = [];
   let paintUnmodeled = false;
   const conditions = rule => rule.contexts.length ? {conditions: rule.contexts.map(c => ({kind: c.kind, ...(c.name ? {name: c.name} : {}), params: c.params, css: c.css}))} : {};
   // A preference rule holds when the state names its value, or the value is the default.
@@ -1468,6 +1472,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
         // Not modeled: the declaration is dropped from the style, and the layout of this box is Unknown (the style checks
         // still read the rest).
         if (declaration.paintUnmodeled) { paintUnmodeled = true; continue; }
+        if (declaration.droppedImage) { droppedImages.push({ ...declaration.droppedImage, selector: selector.source, file: declaration.file, line: declaration.line }); continue; }
         if (declaration.unmodeled) { if (!unmodeled.some(u => u.line === declaration.line && u.message === declaration.unmodeled)) unmodeled.push({ message: declaration.unmodeled, code: declaration.code, file: declaration.file, line: declaration.line }); continue; }
         const layer = rule.layer === null ? (declaration.important ? -Infinity : Infinity) : declaration.important ? -rule.layer : rule.layer;
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
@@ -1795,6 +1800,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // A logical side was taken as ltr; in an rtl box cascade again with the sides flipped.
   if (!rtl && flipped && values.direction === 'rtl') return computeStyle(rules, box, active, inherited, {spend, state, rtl: true});
   if (unmodeled.length) values.$unmodeled = unmodeled;
+  if (droppedImages.length) values.$droppedImage = droppedImages;
   if (paintUnmodeled) values.$paintUnmodeled = true;
   return values;
 }

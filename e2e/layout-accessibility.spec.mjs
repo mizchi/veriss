@@ -2409,12 +2409,17 @@ test('click traps and invisible blockers match hit testing and what the browser 
   const host = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>';
   const overlay = '.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#000}';
   const frame = '<iframe class="f" title="Advertisement" srcdoc="<p>ad</p>"></iframe>';
+  const slot = frameCSS => `.w{width:300px;height:250px;position:absolute;display:block;z-index:2147483647;overflow:hidden;top:0;left:10px}.f{display:block;width:300px;height:250px;position:relative;top:0;left:0;overflow:hidden;border:0;${frameCSS}}.x{width:42px;height:42px;position:absolute;overflow:hidden;cursor:pointer;top:0;right:0}`;
   const cases = [
     {name: 'invisible close control', layer: '<div class="ov"><div class="x"></div></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-image:https://example.com/close.png}', trap: true},
     {name: 'visible close button', layer: '<div class="ov"><button class="x" aria-label="Close">x</button></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff;color:#000}', boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}, trap: false, exit: '.x'},
     {name: 'opacity-0 frame', layer: `<div class="ov">${frame}</div>`, css: overlay + '.f{display:block;position:absolute;top:100px;left:10px;width:300px;height:250px;border:0;opacity:0}', trap: true},
     {name: 'stuck transparent box', layer: `<div class="box">${frame}</div>`, css: '.box{position:fixed;top:0;left:0;width:300px;height:250px;z-index:2147483647}.f{display:block;width:300px;height:250px;border:0;opacity:0}', trap: false, blocker: true},
     {name: 'click-catcher', layer: '<div class="catch"></div>', css: '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}', trap: false, blocker: true},
+    // overflow: hidden layers: their content hit-tests where it sits at scroll offset 0.
+    {name: 'clipping slot, painting frame', layer: '<div class="w"><iframe class="f" title="Advertisement" width="300" height="250" srcdoc="<p>ad</p>"></iframe><div class="x"></div></div>', css: slot(''), trap: false, occluded: true},
+    {name: 'clipping slot, opacity-0 frame', layer: '<div class="w"><iframe class="f" title="Advertisement" width="300" height="250" srcdoc="<p>ad</p>"></iframe><div class="x"></div></div>', css: slot('opacity:0'), trap: false, blocker: true},
+    {name: 'clipping overlay, invisible close control', layer: `<div class="ov">${frame}<div class="x"></div></div>`, css: overlay.replace('}', ';overflow:hidden}') + '.f{display:block;width:300px;height:250px;border:0;opacity:0}.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-size:42px 42px;background-image:https://example.com/close.png}', trap: true},
   ];
   await page.setViewportSize({width: 800, height: 800});
   for (const c of cases) {
@@ -2429,7 +2434,7 @@ test('click traps and invisible blockers match hit testing and what the browser 
       const paints = e => { const s = getComputedStyle(e); return opacity(e) > 0 && s.visibility === 'visible' && (s.backgroundImage !== 'none' || !/^(?:transparent|rgba\(0, 0, 0, 0\))$/.test(s.backgroundColor) || ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(s[`border${side}Width`]) > 0) || e.textContent.trim() !== '' || ['IFRAME', 'IMG', 'VIDEO', 'CANVAS'].includes(e.tagName)); };
       const at = sel => { const e = document.querySelector(sel), r = e.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); };
       const label = e => e ? `.${e.className}` : null;
-      const layer = document.querySelector('.ov, .box, .catch');
+      const layer = document.querySelector('.ov, .box, .catch, .w');
       const candidates = [...layer.querySelectorAll('*')].map(e => ({box: label(e), paints: paints(e), focusable: e.tabIndex >= 0, role: e.getAttribute('role'), takesClick: (() => { const r = e.getBoundingClientRect(); return r.width > 0 && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === e; })()}));
       return {hit: {'.l': label(at('.l')), '.m': label(at('.m'))}, candidates, blockerPaints: Object.fromEntries(['.l', '.m'].map(sel => [sel, at(sel) && at(sel) !== document.querySelector(sel) ? paints(at(sel)) : null]))};
     });
@@ -2437,6 +2442,11 @@ test('click traps and invisible blockers match hit testing and what the browser 
       expect(facts.hit[covered], `${c.name}: ${covered} does not take the click`).not.toBe(covered);
       // No candidate in the layer both shows and can take focus (or a role).
       expect(facts.candidates.filter(e => e.paints && (e.focusable || e.role)), c.name).toEqual([]);
+    }
+    if (c.occluded) {
+      expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.l'), c.name).toBe(true);
+      expect(facts.hit['.l'], `${c.name}: .l does not take the click`).not.toBe('.l');
+      expect(facts.blockerPaints['.l'], `${c.name}: what takes .l's click (${facts.hit['.l']}) paints`).toBe(true);
     }
     if (c.exit) expect(facts.candidates.find(e => e.box === c.exit), c.name).toMatchObject({paints: true, focusable: true, takesClick: true});
     for (const b of blockers) {

@@ -160,3 +160,54 @@ test('a link inside a line of text under a transparent box: an invisible blocker
   assert.deepEqual([...new Set(codes(''))], ['E_A11Y_INVISIBLE_BLOCKER']);
   assert.deepEqual([...new Set(codes('background:#eee'))], ['E_A11Y_OCCLUDED']);
 });
+
+// Boxes inside an overflow: hidden layer (an ad slot clips its frame and close control) hit-test where they sit at the
+// initial scroll position: a transparent wrapper is invisible only where none of its descendants paint.
+const slot = frameCSS => page('<div class="w"><iframe class="f" title="Advertisement" width="300" height="250"></iframe><div class="x"></div></div>',
+  `.w{width:300px;height:250px;position:absolute;display:block;z-index:2147483647;overflow:hidden;top:0;left:10px}.f{display:block;width:300px;height:250px;position:relative;top:0;left:0;overflow:hidden;border:0;${frameCSS}}.x{width:42px;height:42px;position:absolute;overflow:hidden;cursor:pointer;top:0;right:0}`);
+
+test('a transparent clipping wrapper filled by a painting frame covers visibly: an occlusion, not an invisible blocker', () => {
+  const r = slot('');
+  assert.equal(find(r, 'E_A11Y_INVISIBLE_BLOCKER').length, 0, JSON.stringify(find(r, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.message)));
+  const occluded = find(r, 'E_A11Y_OCCLUDED').filter(d => d.box === '.l');
+  assert.ok(occluded.length > 0, JSON.stringify(r.diagnostics.map(d => d.code)));
+  // The frame at opacity 0: nothing paints there, so the wrapper (or the frame) blocks invisibly.
+  const ghost = slot('opacity:0');
+  assert.deepEqual([...new Set(find(ghost, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.box))], ['.l', '.m']);
+  assert.equal(find(ghost, 'E_A11Y_OCCLUDED').filter(d => ['.l', '.m'].includes(d.box)).length, 0);
+});
+
+// A full-viewport overlay that clips its content (overflow: hidden): its close control must still be judged.
+const clipped = frameCSS => page('<div class="ov"><iframe class="f" title="Advertisement"></iframe><div class="x"></div></div>',
+  `.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#000;overflow:hidden}.f{display:block;width:300px;height:250px;border:0;${frameCSS}}.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-size:42px 42px;background-image:https://example.com/close.png}`);
+
+test('the close control of a clipping overlay is a way-out candidate, and why it fails is said', () => {
+  const r = clipped('opacity:0');
+  const [trap] = find(r, 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap, JSON.stringify(r.diagnostics.map(d => d.code)));
+  const x = trap.exits.find(e => e.box === '.x');
+  assert.ok(x, JSON.stringify(trap.exits));
+  assert.match(x.why, /paints nothing.*background-image .*dropped.*W_CSS_IMAGE_INVALID/);
+  assert.match(x.why, /cannot take focus and has no role/);
+  assert.doesNotMatch(trap.message, /it has no control/);
+  assert.match(trap.message, /\.x paints nothing/);
+  // A frame that paints may hold the way out: Unknown, still naming the failing close control.
+  const shown = clipped('');
+  assert.equal(find(shown, 'E_A11Y_CLICK_TRAP').length, 0);
+  const [unknown] = find(shown, 'U_A11Y_CLICK_TRAP');
+  assert.ok(unknown, JSON.stringify(shown.diagnostics.map(d => d.code)));
+  assert.ok(unknown.exits.some(e => e.box === '.x'));
+});
+
+test('a candidate whose position is not known (in a scroll container) makes the trap Unknown, not an error', () => {
+  const r = page('<div class="ov"><div class="s"><button class="x" aria-label="Close">x</button></div></div>',
+    overlay + '.s{position:absolute;top:0;right:0;width:60px;height:60px;overflow:auto}.x{width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
+  assert.equal(find(r, 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(r, 'E_A11Y_CLICK_TRAP').map(d => d.message)));
+});
+
+test('a transparent wrapper that scrolls (overflow: auto) around a painting frame is not known to be invisible', () => {
+  const r = page('<div class="w"><iframe class="f" title="Advertisement" width="300" height="250"></iframe></div>',
+    '.w{width:300px;height:250px;position:absolute;display:block;z-index:2147483647;overflow:auto;top:0;left:10px}.f{display:block;width:300px;height:250px;border:0}');
+  assert.equal(find(r, 'E_A11Y_INVISIBLE_BLOCKER').length, 0, JSON.stringify(find(r, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.message)));
+  assert.ok(find(r, 'E_A11Y_OCCLUDED').some(d => d.box === '.l'));
+});
