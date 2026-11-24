@@ -489,8 +489,10 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   let states = body ? expression(body.type === 'ParenthesizedExpression' ? body.expression : body).filter(v => consistent(v.choices)).map(v => ({ html: v.html.trim(), choices: v.choices })) : [];
   // Rendered by a styled wrapper: a condition on a prop the wrapper passed agrees with what it passed (a literal decides
   // it; an expression is the wrapper's own condition); other conditions are this component's, named apart.
+  // A condition read as props.x (the parameter not destructured) is on the prop x.
+  const propOf = key => propsName && key.startsWith(`${propsName}.`) && /^[\w$]+$/.test(key.slice(propsName.length + 1)) ? key.slice(propsName.length + 1) : key;
   if (inject) states = states.flatMap(st => Object.entries(st.choices).reduce((acc, [key, held]) => acc.flatMap(a => {
-    const given = inject.props.get(key);
+    const given = inject.props.get(propOf(key));
     if (!given) { const choices = merge(a.choices, choose(`${inject.prefix}:${key}`, held)); return choices ? [{ ...a, choices }] : []; }
     return given.flatMap(g => {
       const sym = symbolInfo(g.v);

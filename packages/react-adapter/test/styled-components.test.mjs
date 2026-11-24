@@ -1017,3 +1017,18 @@ export default function C() { return <W />; }`;
   assert.equal(html, '<div>x</div>');
   assert.equal(states[0].html, '<div>x</div>');
 });
+
+test('styled(Component): a condition on props.x agrees with the prop x the wrapper passes', async () => {
+  const {renderStyled} = await import('./ssr.mjs');
+  const source = `import styled from 'styled-components';
+function Base(props) { return props.disabled ? <i className={props.className}>x</i> : <b className={props.className}>x</b>; }
+const W = styled(Base)\`
+  color: red;
+\`;
+export default function C() { return <W disabled />; }`;
+  const {states} = expandReact(source);
+  const shape = html => html.replace(/ class="[^"]*"/g, '');
+  const {html} = await renderStyled(source, {});
+  assert.equal(shape(html), '<i>x</i>');
+  assert.deepEqual(states.map(s => shape(s.html)), ['<i>x</i>']);
+});
