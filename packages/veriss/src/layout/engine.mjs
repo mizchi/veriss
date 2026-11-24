@@ -536,6 +536,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // A declaration the analysis does not model applies to this box: what is laid out from this style is Unknown. The
       // style checks (readingStyles: the style stage's walk) still read the rest.
       if (style.$unmodeled?.length && !readingStyles) { const u = style.$unmodeled[0]; throw Object.assign(new Error(u.message), { code: u.code, css: { file: u.file, line: u.line }, box }); }
+      // A dynamic value wins here: what is laid out depends on a value nobody declared (an error, not an Unknown: the
+      // author is asked to declare its values).
+      if (style.$dynamic?.length && !readingStyles) { const d = style.$dynamic[0]; throw Object.assign(new Error(`${box.label}: ${d.property} is the dynamic value ${d.dynamic.written} (${d.selector}, ${d.file}:${d.line}), which wins the cascade here; declare the values it may take`), { code: 'E_LAYOUT_DYNAMIC_VALUE', dynamic: { ...d.dynamic, property: d.property, file: d.file, line: d.line, selector: d.selector }, box }); }
       // reportTextFonts: the computed font of each text leaf (for a caller that measures it with a font file and
       // analyses again with a font contract); 'varied' where it differs across the domain.
       // (A text field's placeholder too: its text and the field's font.)

@@ -1103,6 +1103,15 @@ export function parseLayoutCSS(sheets, diagnostic) {
       for (const declaration of node.nodes) {
         if (declaration.type === 'comment') continue;
         if (declaration.type !== 'decl') { problem('U_LAYOUT_CSS', 'Nested CSS rules are outside the subset', declaration.source.start.line); continue; }
+        // A dynamic value (an adapter's placeholder -veriss-dynamic(id): known only at run time) takes part in the cascade
+        // for each longhand it sets; computeStyle reports where it wins (values.$dynamic).
+        { const dynamic = /^\s*-veriss-dynamic\((\d+)\)\s*$/i.exec(declaration.value);
+          if (dynamic) {
+            const property = declaration.prop.toLowerCase();
+            let names; try { names = expand(property, 'initial').map(([name]) => name); } catch { names = [property]; }
+            for (const name of names) declarations.push({ property: name, value: 'initial', dynamic: { id: Number(dynamic[1]), written: `${declaration.prop}: ${declaration.value.trim()}` }, important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename });
+            continue;
+          } }
         // F86: a "!word" other than !important at the end of a value makes the declaration invalid: the browser drops it
         // (measured in Chromium, Firefox and WebKit). PostCSS keeps it in the value; it is dropped here and reported.
         { const bang = !declaration.prop.startsWith('--') && !declaration.important && /!\s*([a-z][\w-]*)\s*$/i.exec(declaration.value);
@@ -1409,7 +1418,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
         // Scope proximity (Cascade 6 §6.6): after specificity, the nearer scope root wins; unscoped is farthest.
         const rank = [declaration.important, rule.attached ? 1 : 0, layer, ...selector.specificity, selector.scope ? -scopeProximity(selector, box, state) : -Infinity];
-        const origin = { file: declaration.file, line: declaration.line, selector: selector.source, layer: rule.layerName, specified: declaration.specified ?? declaration.value, ...(declaration.wrapShorthand ? { wrapShorthand: declaration.wrapShorthand } : {}), ...conditions(rule), ...(declaration.flip ? { logical: true } : {}) };
+        const origin = { file: declaration.file, line: declaration.line, selector: selector.source, layer: rule.layerName, specified: declaration.specified ?? declaration.value, ...(declaration.dynamic ? { dynamic: declaration.dynamic } : {}), ...(declaration.wrapShorthand ? { wrapShorthand: declaration.wrapShorthand } : {}), ...conditions(rule), ...(declaration.flip ? { logical: true } : {}) };
         // A logical side resolves by the box's direction (an rtl pass when the first one finds rtl; CSS Logical 1).
         if (declaration.flip) flipped = true;
         const property = rtl && declaration.flip ? declaration.flip : declaration.property;
@@ -1621,6 +1630,9 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     }
   }
   values.$sources = sources;
+  // the properties whose winning declaration is a dynamic value
+  const dynamic = Object.entries(sources).filter(([, o]) => o?.dynamic).map(([property, o]) => ({ property, ...o }));
+  if (dynamic.length) values.$dynamic = dynamic;
   if (openDialog) throw Object.assign(openDialog, { $sources: { ...sources } });
   if (layerShadowed.length) values.$layerShadowed = layerShadowed;
   values.$dormant = dormant;
