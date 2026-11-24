@@ -2355,3 +2355,30 @@ test('inert: covers nothing, and an inert control shown on top is reported', () 
   const behind = page([{tag: 'div', classes: ['bg'], inert: true, children: [btn('o')]}, {tag: 'div', classes: ['modal'], children: [btn('m')]}]);
   assert.equal(warn(run(behind, css('.bg { display: grid; grid-template-columns: 40px; }')), 'W_A11Y_INERT_SHOWN').length, 0);
 });
+
+// An rtl container mirrors its children, and with them an absolute descendant whose containing block moves: its
+// focused position (a :focus rule changing its insets) moves too. A skip link at left:-60px in a 50px relative box at
+// the right edge of an rtl page is focused at x=290 in Chromium, Firefox and WebKit (on screen); in ltr at x=-60.
+test('rtl mirroring moves focused positions with the box', () => {
+  const g = 'display:grid;grid-template-columns:minmax(0,1fr)';
+  const body = '<main class="page"><div class="row"><div class="c"><a class="l" href="/x" aria-label="skip"></a></div></div></main>';
+  const css = `*{margin:0;box-sizing:border-box}html,body,.page{${g}}.page{background:#fff;padding-top:60px}.row{display:grid;grid-template-columns:50px;grid-auto-rows:30px}.c{position:relative}.l{position:absolute;left:-60px;top:-40px;width:40px;height:20px;background:#246}.l:focus{top:0}`;
+  const offscreen = dir => analyzeHTML(`<html lang="en" dir="${dir}"><body>${body}</body></html>`, {name: 'P', css, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}, accessibility: true}).diagnostics.some(d => d.code === 'E_A11Y_FOCUS_OFFSCREEN');
+  assert.equal(offscreen('rtl'), false);
+  assert.equal(offscreen('ltr'), true);
+});
+
+// A scaled ancestor maps its descendants' focused positions too (measured in Chromium, Firefox and WebKit: a skip link
+// at left:-60px in a 100px box with scale(0.5) is focused at x=-5..15, partly on screen; with none at -60..-20 and with
+// scale(2) at -170..-90, off screen). An arbitrary rotation leaves the focused position unknown, as the box's own.
+test('a scale maps focused positions; a rotation leaves them unknown', () => {
+  const g = 'display:grid;grid-template-columns:minmax(0,1fr)';
+  const body = '<main class="page"><div class="row"><div class="c"><a class="l" href="/x" aria-label="skip"></a></div></div></main>';
+  const run = t => analyzeHTML(`<html lang="en"><body>${body}</body></html>`, {name: 'P', css: `*{margin:0;box-sizing:border-box}html,body,.page{${g}}.page{background:#fff;padding-top:60px}.row{display:grid;grid-template-columns:100px;grid-auto-rows:30px}.c{position:relative;transform:${t}}.l{position:absolute;left:-60px;top:-40px;width:40px;height:20px;background:#246}.l:focus{top:0}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}, accessibility: true});
+  const offscreen = t => run(t).diagnostics.some(d => d.code === 'E_A11Y_FOCUS_OFFSCREEN');
+  assert.equal(offscreen('scale(0.5)'), false);
+  assert.equal(offscreen('none'), true);
+  assert.equal(offscreen('scale(2)'), true);
+  // Rotated by an arbitrary angle: no focused position to judge, so no verdict from the stale one.
+  assert.equal(offscreen('rotate(30deg)'), false);
+});

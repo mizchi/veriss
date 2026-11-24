@@ -494,6 +494,10 @@
   (フォーカスしても見えないときは `focus-offscreen`)。Chromium・Firefox・WebKit で 9 通り × 2 つの高さを、部品の矩形と viewport で照合
   (e2e `layout-devices`)。部品か祖先がブレークポイントの片側だけ fixed のときは、fixed の幅だけで報告する(4 通り × 2 つの幅を、
   スクロールの先頭と末尾の両方で外にあるかで 3 ブラウザーと照合)
+- [x] **H20. フォーカス時の位置を、箱を動かす処理と一緒に動かす**: `:focus` で inset を変える絶対配置の箱(スキップリンク)のフォーカス時の位置は、
+  rtl のコンテナの鏡映(包含ブロックが一緒に動くとき)と、祖先の拡大縮小でも同じだけ動かす。任意の角度の回転では、箱の位置と同じく不明にする。
+  今までは動かしておらず、rtl で右端に置いた箱の中のスキップリンク(3 ブラウザーで x = 290、画面内)や、`scale(0.5)` の中のもの(x = −5〜15)を、
+  フォーカスしても画面外(`E_A11Y_FOCUS_OFFSCREEN`)と誤って報告していた。e2e `focused positions follow rtl mirroring and scales` で 5 通り
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
