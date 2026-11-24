@@ -26,12 +26,13 @@ const hash = text => { let h = 5381; for (const c of text) h = ((h * 33) ^ c.cha
 
 /** The names styled-components binds in the module: its default (styled) and css. */
 export function styledImports(ast) {
-  const names = { styled: null, css: null };
+  const names = { styled: null, css: null, keyframes: null };
   for (const stmt of ast.program.body) {
     if (stmt.type !== 'ImportDeclaration' || stmt.source.value !== 'styled-components') continue;
     for (const s of stmt.specifiers) {
       if (s.type === 'ImportDefaultSpecifier') names.styled = s.local.name;
       else if (s.type === 'ImportSpecifier' && (s.imported.name ?? s.imported.value) === 'css') names.css = s.local.name;
+      else if (s.type === 'ImportSpecifier' && (s.imported.name ?? s.imported.value) === 'keyframes') names.keyframes = s.local.name;
     }
   }
   return names;
@@ -292,6 +293,8 @@ export function evaluateStyled(def, props, ctx) {
       }
       case 'TaggedTemplateExpression':
         if (node.tag.type === 'Identifier' && node.tag.name === cur().names.css) return template(node.quasi);
+        // keyframes``: the animation's generated name (the @keyframes rule itself is not emitted: it does not lay out)
+        if (node.tag.type === 'Identifier' && node.tag.name === cur().names.keyframes) return template(node.quasi).map(r => ({ v: `sc-keyframes-${hash(r.v)}`, choices: r.choices }));
         break;
       case 'ArrowFunctionExpression': case 'FunctionExpression': return one({ [FN]: node, mod: cur(), env: scopes.slice() });
       case 'CallExpression': return callExpression(node);

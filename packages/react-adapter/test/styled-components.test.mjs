@@ -711,3 +711,19 @@ export default function C({ label, ...rest }) { return <Box {...rest}>{label}</B
   assert.equal(states.length, 1);
   assert.ok(unknowns.some(u => u.code === 'U_STYLED_PROPS' && /more than 16/.test(u.message)), JSON.stringify(unknowns));
 });
+
+test('styled-components: keyframes`` is its generated name (a module const or inline); the declaration using it is kept', () => {
+  const source = `import styled, { keyframes } from 'styled-components';
+const spin = keyframes\`
+  100% { transform: rotate(360deg); }
+\`;
+const Box = styled.div\`
+  animation: \${spin} 1s linear infinite;
+  display: block;
+\`;
+export default function C() { return <Box />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  const [, cls] = classOf(states[0].html, 'div');
+  assert.match(css, new RegExp(`\\.${cls}\\{animation:sc-keyframes-\\w+ 1s linear infinite;display:block\\}`));
+});
