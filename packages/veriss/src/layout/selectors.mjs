@@ -80,8 +80,9 @@ function compileCompound(source, depth = 0) {
     // A trailing user-action state (paint-only rules; see parseLayoutCSS).
     // (:visited: never set by the analysis — links are taken as unvisited — so its rules only repaint a state not checked.)
     // (:target likewise: the analysis takes the URL to have no fragment.)
-    const action = rest.match(/^:(hover|active|focus|focus-visible|focus-within|checked|visited|target)$/i);
-    if (action) { state = action[1].toLowerCase(); specificity[1]++; rest = ''; continue; }
+    // It may stand anywhere in the compound (.btn:hover:not([disabled])); one state per compound.
+    const action = rest.match(/^:(hover|active|focus|focus-visible|focus-within|checked|visited|target)(?![\w(-])/i);
+    if (action && !state && !/^::?(?:before|after)$/i.test(rest.slice(action[0].length)) && !(action[1].toLowerCase() === 'checked' && /^::?(?:before|after)$/i.test(rest.slice(action[0].length)))) { state = action[1].toLowerCase(); specificity[1]++; rest = rest.slice(action[0].length); continue; }
     // :checked::before / :checked::after: the generated check mark of a custom checkbox.
     const checkedMark = rest.match(/^:checked::?(before|after)$/i);
     if (checkedMark) { state = 'checked'; pseudoElement = checkedMark[1].toLowerCase(); specificity[1]++; specificity[2]++; rest = ''; continue; }

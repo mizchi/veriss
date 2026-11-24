@@ -37,3 +37,8 @@ test('a hover shift carries an upper bound of its Layout Instability score', () 
   // Without a viewport height there is no viewport area: no bound.
   assert.equal(shifts(analyzeHTML(html, {name: 'Page', viewport: {min: 320, max: 960}, css: base + '.card:hover{height:120px}'}))[0]?.scoreBound, undefined);
 });
+
+test('a :hover rule with the state before :not() shifts where :not() lets it apply', () => {
+  assert.deepEqual(shifts(run('.card:hover:not([data-static]){height:120px}')).map(d => d.box), ['.below']);
+  assert.equal(run('.card:hover:not(.card){height:120px}').status, 'verified');
+});

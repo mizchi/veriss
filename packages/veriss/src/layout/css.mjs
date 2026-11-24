@@ -165,8 +165,8 @@ const linearAny = (maps, value) => {
 function expand(property, value) {
   property = aliases[property] ?? property;
   property = insets[property] ?? property;
-  // Area names are case-sensitive identifiers.
-  if (!['container', 'container-name', 'content', 'grid-template-areas', 'grid-area'].includes(property) && !(['grid-row', 'grid-column'].includes(property) && /^-?[A-Za-z_][\w-]*$/.test(value.trim()))) value = value.toLowerCase();
+  // Area names and keyframes names are case-sensitive identifiers (their keywords are lowercased where they are read).
+  if (!['container', 'container-name', 'content', 'grid-template-areas', 'grid-area', 'animation', 'animation-name'].includes(property) && !(['grid-row', 'grid-column'].includes(property) && /^-?[A-Za-z_][\w-]*$/.test(value.trim()))) value = value.toLowerCase();
   if (property === 'container-name' && value.toLowerCase() === 'none') value = 'none';
   // white-space also writes text-wrap-mode (CSS Text 4); its mark says white-space itself decides after substitution.
   if (property === 'white-space') return [['white-space', value], ['text-wrap-mode', 'white-space']];
@@ -280,17 +280,30 @@ function expand(property, value) {
     const values = property === 'margin' ? [parts[0], parts[1] ?? parts[0], parts[2] ?? parts[0], parts[3] ?? parts[1] ?? parts[0]] : sides.length === 2 ? [parts[0], parts[1] ?? parts[0]] : [parts[0]];
     return sides.map((side, i) => [`margin-${side}`, margin(values[i])]);
   }
-  if (property === 'border' || property === 'border-inline' || property === 'border-block') {
-    const sides = property === 'border' ? ['left', 'right', 'top', 'bottom'] : property === 'border-inline' ? ['left', 'right'] : ['top', 'bottom'];
-    // The color is kept as paint (border-<side>-color) for the non-text contrast rules.
+  // The border shorthands: border, border-inline, border-block and each side's (border-top, …). Any order of [width]
+  // [style] [color], each optional (CSS Backgrounds 3 §4.4): an omitted width is medium, an omitted style none (kept
+  // apart from a written none: 'none-implied'), an omitted color currentcolor. Each side keeps its width ($bw-side) and
+  // style ($bs-side); computeStyle derives the used width from the pair after the cascade. The color is kept as paint
+  // (border-<side>-color) for the non-text contrast rules.
+  const borderSides = { border: ['left', 'right', 'top', 'bottom'], 'border-inline': ['left', 'right'], 'border-block': ['top', 'bottom'], 'border-top': ['top'], 'border-right': ['right'], 'border-bottom': ['bottom'], 'border-left': ['left'] };
+  if (property in borderSides) {
+    const sides = borderSides[property];
     if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value]]);
-    const p = postcss.list.space(value);
-    // A width alone (0, 5px, medium) leaves the style at its initial none, so the used width is 0: no border, as 0 is
-    // (measured in Chromium, Firefox and WebKit). A percentage or a negative length is not a width (dropped).
-    if (p.length === 1 && (['0', 'none', 'thin', 'medium', 'thick'].includes(value) || /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/.test(value))) return sides.flatMap(side => [[`border-${side}`, '0'], [`border-${side}-color`, 'currentcolor'], [`$bw-${side}`, '0'], [`$bs-${side}`, 'none']]);
-    if (p.length !== 3 || p[1] !== 'solid') throw new Error('Use a pixel solid border with a color');
-    if (!/^(?:black|white|red|green|blue|transparent|currentcolor|#[\da-f]{3}|#[\da-f]{4}|#[\da-f]{6}|#[\da-f]{8})$/.test(p[2])) throw new Error('Use a supported literal border color');
-    px(p[0]); return sides.flatMap(side => [[`border-${side}`, p[0]], [`border-${side}-color`, p[2]], [`$bw-${side}`, p[0]], [`$bs-${side}`, 'solid']]);
+    const styles = new Set(['none', 'hidden', 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
+    const lengthLike = /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/;
+    let width, style, color;
+    for (const part of postcss.list.space(value)) {
+      if (style === undefined && styles.has(part)) style = part;
+      else if (width === undefined && (['0', 'thin', 'medium', 'thick'].includes(part) || lengthLike.test(part))) width = part;
+      // (A percentage, a negative length or another number is not a color: the declaration is dropped.)
+      else if (color === undefined && !styles.has(part) && !/^[-+]?(?:\d|\.\d)/.test(part)) color = part;
+      else throw new Error(`Unsupported ${property}: ${value}`);
+    }
+    // With no style the border draws nothing whatever the width (measured in Chromium, Firefox and WebKit), so any
+    // length is taken; a drawn border needs a px width (or a keyword).
+    const drawn = style !== undefined && !['none', 'hidden'].includes(style);
+    const w = width === undefined ? '3px' : /^0(?:\.0+)?(?:[a-z]+)?$/.test(width) ? '0' : width === 'thin' ? '1px' : width === 'medium' ? '3px' : width === 'thick' ? '5px' : drawn ? (px(width), width) : width;
+    return sides.flatMap(side => [[`border-${side}`, drawn ? w : '0'], [`border-${side}-color`, color ?? 'currentcolor'], [`$bw-${side}`, w], [`$bs-${side}`, style ?? 'none-implied']]);
   }
   // border-width / border-style and their side longhands (StyleX writes borders this way): kept as each side's width
   // ($bw-side) and style ($bs-side); computeStyle derives the side's used width from the pair after the cascade (none or
@@ -390,18 +403,22 @@ function expand(property, value) {
   // The delay before an animation starts, and what it shows before and after it runs (CSS Animations 1 §3).
   if (property === 'animation-delay' || property === 'animation-fill-mode') return [[property, wide.has(value) ? value : postcss.list.comma(value).join(', ')]];
   if (property === 'animation-timing-function') return [[property, wide.has(value) ? value : postcss.list.comma(value).join(', ')]];
+  // animation-name: a keyframes name keeps its case; none and the CSS-wide keywords are keywords in any case.
+  if (property === 'animation-name') return [[property, postcss.list.comma(value).map(name => wide.has(name.toLowerCase()) || name.toLowerCase() === 'none' ? name.toLowerCase() : name).join(', ')]];
   if (property === 'animation') {
     const keys = ['animation-name', 'animation-duration', 'animation-iteration-count', 'animation-play-state', 'animation-direction', 'animation-timing-function', 'animation-delay', 'animation-fill-mode', 'animation-timeline'];
-    if (wide.has(value)) return keys.map(key => [key, value]);
+    if (wide.has(value.trim().toLowerCase())) return keys.map(key => [key, value.trim().toLowerCase()]);
     // A list of animations: each item sets one entry of every longhand list (CSS Animations 1 §4).
     const items = postcss.list.comma(value).map(item => one(item));
     return keys.map((key, i) => [key, items.map(item => item[i][1]).join(', ')]);
   }
-  function one(value) {
+  function one(item) {
+    // Every part but the keyframes name is a keyword or a number: matched lowercased; the name keeps its case.
+    const original = postcss.list.space(item), value = item.toLowerCase();
     const parts = postcss.list.space(value), times = parts.filter(p => /^-?(?:\d+(?:\.\d+)?|\.\d+)m?s$/.test(p));
     const count = parts.find(p => p === 'infinite' || /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(p)), state = parts.find(p => ['running', 'paused'].includes(p));
     const keyword = /^(?:infinite|running|paused|normal|reverse|alternate|alternate-reverse|none|forwards|backwards|both|linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|(?:cubic-bezier|steps|linear)\(.*)$/;
-    const name = parts.find(p => !times.includes(p) && p !== count && !keyword.test(p)) ?? (parts.includes('none') ? 'none' : 'none');
+    const at = parts.findIndex(p => !times.includes(p) && p !== count && !keyword.test(p)), name = at >= 0 ? original[at] : 'none';
     const direction = parts.find(p => ['normal', 'reverse', 'alternate', 'alternate-reverse'].includes(p)) ?? 'normal';
     const easing = parts.find(p => /^(?:linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|(?:cubic-bezier|steps|linear)\(.*\))$/.test(p)) ?? 'ease';
     return [['animation-name', name], ['animation-duration', times[0] ?? '0s'], ['animation-iteration-count', count ?? '1'], ['animation-play-state', state ?? 'running'], ['animation-direction', direction], ['animation-timing-function', easing], ['animation-delay', times[1] ?? '0s'], ['animation-fill-mode', parts.find(p => ['none', 'forwards', 'backwards', 'both'].includes(p) && p !== name) ?? 'none'], ['animation-timeline', 'auto']]; // the shorthand resets the timeline
@@ -1098,7 +1115,9 @@ export function parseLayoutCSS(sheets, diagnostic) {
             declarations.push({ property:name, value, ...(flip ? {flip} : {}), ...(custom ? {expression} : {}), ...(pending ? {pending,specified:declaration.value} : {}), ...(declaration.prop.toLowerCase() === 'text-wrap' ? { wrapShorthand: declaration.value.trim() } : {}), important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename });
           }
         } catch (error) {
-          problem(error.code ?? 'U_LAYOUT_CSS', error.message, declaration.source.start.line);
+          // Not modeled: Unknown where the rule applies (computeStyle), not for the whole page — a site-wide stylesheet
+          // has rules for elements this page does not have, and they style nothing here.
+          declarations.push({ property: '$unmodeled', unmodeled: error.message, code: error.code ?? 'U_LAYOUT_CSS', file: filename, line: declaration.source.start.line });
           // Kept for the checks that read the written value (F133: a container query unit the layout does not model).
           if (/\d(?:cqw|cqi|cqh|cqb)\b/i.test(declaration.value)) (unmodeled ??= []).push({ property: declaration.prop.toLowerCase(), specified: declaration.value.trim(), file: filename, line: declaration.source.start.line, selector: node.selector });
         }
@@ -1319,6 +1338,8 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0' };
   const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
   const priorities = new Map(), sources = {},custom=new Map(),dormant={},overridden={}, candidates = {};
+  // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions).
+  const unmodeled = [];
   const conditions = rule => rule.contexts.length ? {conditions: rule.contexts.map(c => ({kind: c.kind, ...(c.name ? {name: c.name} : {}), params: c.params, css: c.css}))} : {};
   // A preference rule holds when the state names its value, or the value is the default.
   const preferred = rule => (rule.preferences ?? []).every(({ feature, value }) => ([...(state ?? [])].find(s => s.startsWith(`${feature}:`))?.slice(feature.length + 1) ?? preferenceValues[feature][0]) === value);
@@ -1332,6 +1353,9 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     for (const selector of rule.selectors) {
       if (!matches(selector, box, state)) continue;
       for (const declaration of rule.declarations) {
+        // Not modeled: the declaration is dropped from the style, and the layout of this box is Unknown (the style checks
+        // still read the rest).
+        if (declaration.unmodeled) { if (!unmodeled.some(u => u.line === declaration.line && u.message === declaration.unmodeled)) unmodeled.push({ message: declaration.unmodeled, code: declaration.code, file: declaration.file, line: declaration.line }); continue; }
         const layer = rule.layer === null ? (declaration.important ? -Infinity : Infinity) : declaration.important ? -rule.layer : rule.layer;
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
         // Scope proximity (Cascade 6 §6.6): after specificity, the nearer scope root wins; unscoped is farthest.
@@ -1499,7 +1523,11 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     const uaStyled = values[`border-${side}`] === 'ua' || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
     const style = sources[bs] ? values[bs] : (uaStyled ? 'ua' : 'none');
     const width = sources[bw] ? values[bw] : (uaStyled ? values[`border-${side}`] : '3px');
-    values[`border-${side}`] = ['none', 'hidden'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
+    values[`border-${side}`] = ['none', 'hidden', 'none-implied'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
+    // For the border rule (F14): a non-zero width the author wrote, and a style written none or hidden (no border on
+    // purpose; a shorthand that leaves the style out does not say so).
+    if (sources[bw] && !['0', 'none-implied'].includes(String(values[bw])) && !wide.has(String(values[bw]))) (values.$borderWidthSet ??= []).push(side);
+    if (sources[bs] && ['none', 'hidden'].includes(style)) (values.$borderNone ??= []).push(side);
     const later = [sources[bw], sources[bs]].filter(Boolean).at(-1);
     sources[`border-${side}`] = later;
     delete values[bw]; delete values[bs];
@@ -1646,5 +1674,6 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     for (const key of ['overflow-x', 'overflow-y']) { if (sources[key] || sources.overflow) (values.$tableOverflow ??= {})[key] = values[key]; values[key] = 'visible'; }
   // A logical side was taken as ltr; in an rtl box cascade again with the sides flipped.
   if (!rtl && flipped && values.direction === 'rtl') return computeStyle(rules, box, active, inherited, {spend, state, rtl: true});
+  if (unmodeled.length) values.$unmodeled = unmodeled;
   return values;
 }

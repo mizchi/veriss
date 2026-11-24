@@ -14,6 +14,14 @@ test('F1: an animation whose name has no @keyframes does nothing', () => {
   // A typo in a list: only the missing one.
   assert.deepEqual(codes(run('.a{animation:fade 1s,spn 2s}@keyframes fade{to{opacity:.5}}'), 'W_CSS_KEYFRAMES_MISSING').map(w => w.keyframes), ['spn']);
   assert.equal(codes(run('.a{animation:none}'), 'W_CSS_KEYFRAMES_MISSING').length, 0);
+  // Keyframes names are case-sensitive (generated names such as a CSS-in-JS library's mix the cases): an animation
+  // naming @keyframes cqkDSr runs it, and one naming Spin does not run @keyframes spin.
+  for (const css of ['.a{animation:2s linear 0s infinite normal none running cqkDSr}', '.a{animation-name:cqkDSr;animation-duration:2s}', '.a{animation:cqkDSr 2s, fade 1s}@keyframes fade{to{opacity:.5}}'])
+    assert.equal(codes(run(`${css}@keyframes cqkDSr{to{opacity:.5}}`), 'W_CSS_KEYFRAMES_MISSING').length, 0, css);
+  assert.deepEqual(codes(run('.a{animation:Spin 1s}@keyframes spin{to{opacity:.5}}'), 'W_CSS_KEYFRAMES_MISSING').map(w => w.keyframes), ['Spin']);
+  // The CSS-wide keywords and none are not names, in any case.
+  assert.equal(codes(run('.a{animation:NONE}'), 'W_CSS_KEYFRAMES_MISSING').length, 0);
+  assert.equal(codes(run('.a{animation-name:None}'), 'W_CSS_KEYFRAMES_MISSING').length, 0);
 });
 
 test('F2: an animation with no duration runs for 0s', () => {
@@ -83,6 +91,12 @@ test('F9: a ::before or ::after with no content is never generated', () => {
   assert.equal(codes(run('.a::before{content:"";display:block;height:10px}'), 'W_CSS_PSEUDO_NO_CONTENT').length, 0);
   // Content from another rule counts.
   assert.equal(codes(run('.a::after{content:""}.a::after{display:block;height:4px}'), 'W_CSS_PSEUDO_NO_CONTENT').length, 0);
+  // A reset for every element (*, *::before, *::after { box-sizing: border-box }) styles no pseudo-element in
+  // particular: not a missing content, on any box.
+  for (const css of ['*,*::before,*::after{box-sizing:border-box;margin:0}', '::before,::after{box-sizing:inherit}', '*:before,*:after{margin:0}'])
+    assert.deepEqual(codes(run(css, '<div class="a"><div class="b"></div></div>'), 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), [], css);
+  // A rule for that element's pseudo-element still counts beside the reset.
+  assert.deepEqual(codes(run('*,*::before,*::after{box-sizing:border-box}.a::before{width:10px}'), 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), ['.a::before']);
 });
 
 test('F10: content on an element (not a pseudo-element) does nothing, unless it is an image', () => {
@@ -122,6 +136,20 @@ test('F14: a border width with no border style draws no border', () => {
   assert.deepEqual(codes(run('.a{border-width:0 2px}'), 'W_CSS_BORDER_NO_STYLE')[0]?.sides, ['right', 'left']);
   assert.equal(codes(run('.a{border-width:0 2px;border-style:solid}'), 'W_CSS_BORDER_NO_STYLE').length, 0);
   for (const css of ['.a{border-width:2px;border-style:solid}', '.a{border:2px solid red}', '.a{border-width:0}', '.a{border-style:solid;border-width:2px}']) assert.equal(codes(run(css), 'W_CSS_BORDER_NO_STYLE').length, 0, css);
+  // A side's own shorthand gives it a style: no warning for it, and the shorthand is read (not Unknown).
+  const unknown = r => r.diagnostics.filter(d => d.severity === 'unknown' && /border/.test(d.message));
+  for (const css of ['.a{border:none}.a{border-top:1px dashed rgb(179, 186, 193)}', '.a{border-right:1px solid rgb(226, 232, 234)}', '.a{border-bottom:2px dotted}', '.a{border:2px dashed #333}', '.a{border-left:solid 3px blue}']) {
+    const r = run(css);
+    assert.equal(codes(r, 'W_CSS_BORDER_NO_STYLE').length, 0, css);
+    assert.deepEqual(unknown(r), [], css);
+  }
+  assert.deepEqual(codes(run('.a{border-width:2px}.a{border-top:1px solid red}'), 'W_CSS_BORDER_NO_STYLE')[0]?.sides, ['right', 'bottom', 'left']);
+  // A width alone in a side's shorthand leaves its style none, as in border.
+  assert.deepEqual(codes(run('.a{border-top:2px}'), 'W_CSS_BORDER_NO_STYLE')[0]?.sides, ['top']);
+  // The style declared none (or hidden) beside the width says there is no border on purpose: the longhands a browser
+  // serializes border: none into (border-width: medium; border-style: none) are not a forgotten style.
+  for (const css of ['.a{border-width:medium;border-style:none;border-color:currentcolor}', '.a{border-right-width:medium;border-right-style:none}', '.a{border-width:2px;border-style:hidden}'])
+    assert.equal(codes(run(css), 'W_CSS_BORDER_NO_STYLE').length, 0, css);
 });
 
 test('F15, F16: background-size with no image, text-decoration-color with no line', () => {
@@ -273,6 +301,24 @@ test('F28: presentational attributes on elements they do not map to', () => {
   // Where they map (a table's width, a div's align) they still need an adapter: Unknown, no warning.
   assert.equal(codes(run('', '<div class="a" align="center"></div>'), 'W_HTML_ATTRIBUTE_INERT').length, 0);
   assert.equal(codes(run('', '<table width="300"><tr><td>x</td></tr></table>'), 'W_HTML_ATTRIBUTE_INERT').length, 0);
+  // size, color and align on an element that does not take them (a component library's props leaked to the DOM).
+  const leaked = run('.a{height:20px}', '<span class="a" size="18" color="red" align="center">x</span>');
+  assert.deepEqual(codes(leaked, 'W_HTML_ATTRIBUTE_INERT')[0]?.attributes, ['size', 'color', 'align']);
+  assert.deepEqual(leaked.diagnostics.filter(d => d.code === 'U_LAYOUT_HTML'), []);
+  // Where size maps (a text field's width in characters) it still needs an adapter.
+  assert.ok(run('', '<input class="a" size="5" aria-label="n">').diagnostics.some(d => d.code === 'U_LAYOUT_HTML' && /size/.test(d.message)));
+});
+
+test('a name that is not an HTML attribute (a framework prop leaked to the DOM) renders nothing; CSS still selects by it', () => {
+  const r = run('.a{height:20px}', '<div class="a" placement="top" position="relative" _size="small" hastoasts="true" variant="primary"></div>');
+  assert.deepEqual(r.diagnostics.filter(d => d.code === 'U_LAYOUT_HTML'), []);
+  assert.deepEqual(codes(r, 'W_HTML_ATTRIBUTE_INERT'), []);
+  const height = r2 => r2.sizes.find(x => x.box === '.a' && x.rect)?.rect;
+  const selected = run('.a{height:20px}.a[placement="top"]{height:30px}', '<div class="a" placement="top"></div>');
+  assert.equal(selected.diagnostics.filter(d => d.code === 'U_LAYOUT_HTML').length, 0);
+  assert.equal(JSON.stringify(height(selected)).includes('30'), true, JSON.stringify(height(selected)));
+  // An attribute that renders on some element is still an adapter's (contenteditable makes a box focusable and editable).
+  assert.ok(run('', '<div class="a" contenteditable="true"></div>').diagnostics.some(d => d.code === 'U_LAYOUT_HTML'));
 });
 
 test('F29: :empty does not match an element holding whitespace', () => {

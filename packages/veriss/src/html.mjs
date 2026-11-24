@@ -16,7 +16,16 @@ const presentationalTargets={
   height:new Set(['img','video','canvas','iframe','embed','object','input','table','td','th','tr','source','svg','image','applet','marquee']),
   bgcolor:new Set(['body','table','thead','tbody','tfoot','tr','td','th','marquee']),
   border:new Set(['img','object','table','input','embed','iframe']),
+  // A text field's or select's width in characters, a rule's thickness, a font's size (HTML §15.3, §15.5).
+  size:new Set(['input','select','hr','font','basefont']),
+  color:new Set(['font','basefont','hr']),
+  align:new Set(['caption','col','colgroup','div','h1','h2','h3','h4','h5','h6','hr','img','input','legend','object','embed','iframe','p','table','thead','tbody','tfoot','tr','td','th','applet','marquee']),
 };
+// The HTML attributes outside the modeled ones (the list below) that render on some element: presentational hints
+// (HTML §15), the form controls' sizes and ranges, editing and shadow trees. Where one maps, it needs an adapter
+// (Unknown). A name that is none of these and not modeled (a framework prop leaked to the DOM: placement, variant)
+// renders nothing; CSS attribute selectors still see it (the box keeps its attributes).
+const renderingAttributes=new Set([...Object.keys(presentationalTargets),'background','text','link','vlink','alink','cellpadding','cellspacing','frame','rules','valign','char','charoff','nowrap','hspace','vspace','noshade','clear','face','compact','frameborder','scrolling','marginwidth','marginheight','topmargin','leftmargin','rightmargin','bottommargin','cols','rows','wrap','span','start','reversed','multiple','min','max','low','high','optimum','step','open','contenteditable','is','slot','shadowrootmode','spellcheck','dirname']);
 const presentationalInert=(tag,name)=>Object.hasOwn(presentationalTargets,name) && !presentationalTargets[name].has(tag);
 const voidTags=new Set(['area','base','br','col','embed','hr','img','input','link','meta','source','track','wbr']);
 export function htmlBoxTree(html) {
@@ -87,7 +96,7 @@ export function htmlBoxTree(html) {
       // F66: readonly only stops editing text (a textarea or a text-like input); a checkbox, radio or select still changes
       // (measured in Chromium, Firefox and WebKit).
       if(!attr.namespace && attr.name==='readonly' && !(node.tagName==='textarea' || (node.tagName==='input' && /^(?:|text|search|url|tel|email|password|number|date|month|week|time|datetime-local)$/.test(String(attrs.type ?? '').trim().toLowerCase())))) (node.notAttributes ??= []).push('readonly');
-      if(attr.namespace || !/^(?:list|class|id|style|dir|target|title|role|lang|tabindex|href|disabled|alt|src|type|for|name|value|placeholder|required|readonly|checked|autocomplete|headers|scope|controls|autoplay|muted|loop|playsinline|poster|kind|srclang|label|accesskey|ismap|colspan|rowspan|hidden|inert|autofocus|popover|popovertarget|popovertargetaction|aria-[\w-]+|data-[\w-]+)$/.test(attr.name)) unknown(`HTML rendering attribute needs an adapter: ${attr.name}`);
+      if(attr.namespace || !/^(?:list|class|id|style|dir|target|title|role|lang|tabindex|href|disabled|alt|src|type|for|name|value|placeholder|required|readonly|checked|autocomplete|headers|scope|controls|autoplay|muted|loop|playsinline|poster|kind|srclang|label|accesskey|ismap|colspan|rowspan|hidden|inert|autofocus|popover|popovertarget|popovertargetaction|aria-[\w-]+|data-[\w-]+)$/.test(attr.name) && renderingAttributes.has(attr.name)) unknown(`HTML rendering attribute needs an adapter: ${attr.name}`);
     }
     // An inline svg is one replaced box: its content is SVG, not CSS boxes, so its children are not converted.
     const inlineSvg=node.tagName==='svg' && node.namespaceURI==='http://www.w3.org/2000/svg';

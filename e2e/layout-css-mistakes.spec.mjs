@@ -10,7 +10,10 @@ const load = async (page, css) => page.setContent(`<!doctype html><html lang="en
 
 test('F1, F2: an animation that never runs', async ({page}) => {
   for (const [css, code] of [['.a{animation:spin 1s infinite}', 'W_CSS_KEYFRAMES_MISSING'], ['.a{animation:spn 1s infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_KEYFRAMES_MISSING'], ['.a{animation:spin 1s infinite}@keyframes spin{to{opacity:.5}}', null],
-    ['.a{animation:spin infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_ANIMATION_NO_DURATION'], ['.a{animation:spin 0s forwards}@keyframes spin{to{opacity:.5}}', null]]) {
+    ['.a{animation:spin infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_ANIMATION_NO_DURATION'], ['.a{animation:spin 0s forwards}@keyframes spin{to{opacity:.5}}', null],
+    // Keyframes names are case-sensitive: a mixed-case name runs its own @keyframes, another case runs none.
+    ['.a{animation:2s linear 0s infinite normal none running cqkDSr}@keyframes cqkDSr{to{opacity:.5}}', null], ['.a{animation-name:cqkDSr;animation-duration:2s;animation-iteration-count:infinite}@keyframes cqkDSr{to{opacity:.5}}', null],
+    ['.a{animation:Spin 1s infinite}@keyframes spin{to{opacity:.5}}', 'W_CSS_KEYFRAMES_MISSING']]) {
     await load(page, css);
     // Running for some time: a missing @keyframes gives no animation; a 0s one never shows a frame between its ends.
     const running = await page.evaluate(() => document.getAnimations().some(a => a.effect.getComputedTiming().duration > 0));
@@ -147,6 +150,22 @@ test('F14: a border width with no border style draws no border', async ({page}) 
     const b = await page.evaluate(() => { const s = getComputedStyle(document.querySelector('.a')); return {top: s.borderTopWidth, right: s.borderRightWidth, width: document.querySelector('.a').getBoundingClientRect().width}; });
     expect(warns(`.a{box-sizing:content-box;width:50px}${css}`, 'W_CSS_BORDER_NO_STYLE'), css).toBe(none);
     expect(b.width === 50 && b.right === '0px', `${css}: ${JSON.stringify(b)}`).toBe(none);
+  }
+});
+
+test('F14: a side\'s own border shorthand draws that side; a style written none is no border on purpose', async ({page}) => {
+  // [css, warned, the sides drawn]: border-top / -right / -bottom / -left give their side a style (after border: none
+  // too), a width alone in one leaves its style none, and border: none as a browser serializes it (border-width: medium;
+  // border-style: none) draws nothing and is not a forgotten style.
+  for (const [css, warned, drawn] of [
+    ['.a{border:none}.a{border-top:1px dashed rgb(179, 186, 193)}', false, ['top']], ['.a{border-right:1px solid rgb(226, 232, 234)}', false, ['right']],
+    ['.a{border-left:solid 3px blue}', false, ['left']], ['.a{border:solid}', false, ['top', 'right', 'bottom', 'left']],
+    ['.a{border-width:2px}.a{border-top:1px solid red}', true, ['top']], ['.a{border-top:2px}', true, []],
+    ['.a{border-width:medium;border-style:none;border-color:currentcolor}', false, []], ['.a{border-width:2px;border-style:hidden}', false, []]]) {
+    await load(page, `.a{box-sizing:content-box;width:50px}${css}`);
+    const widths = await page.evaluate(() => { const s = getComputedStyle(document.querySelector('.a')); return {top: s.borderTopWidth, right: s.borderRightWidth, bottom: s.borderBottomWidth, left: s.borderLeftWidth}; });
+    expect(Object.entries(widths).filter(([, w]) => w !== '0px').map(([side]) => side), `${css}: ${JSON.stringify(widths)}`).toEqual(drawn);
+    expect(warns(`.a{box-sizing:content-box;width:50px}${css}`, 'W_CSS_BORDER_NO_STYLE'), css).toBe(warned);
   }
 });
 
@@ -309,6 +328,13 @@ test('F28: presentational attributes on elements they do not map to change nothi
   expect(await shot('<span class="a" width="100" bgcolor="red">x</span>')).toBe(await shot('<span class="a">x</span>'));
   // Where they map, they do something (the check is not vacuous).
   expect(await shot('<table class="a" width="300" bgcolor="red"><tr><td>x</td></tr></table>')).not.toBe(await shot('<table class="a"><tr><td>x</td></tr></table>'));
+  // size, color and align where they do not map (a component library's props leaked to the DOM), and names that are
+  // not HTML attributes at all, change nothing; where size, color and align map they do.
+  expect(await shot('<span class="a" size="18" color="red" align="center">x</span>')).toBe(await shot('<span class="a">x</span>'));
+  expect(await shot('<div class="a" placement="top" position="relative" _size="small" hastoasts="true" variant="primary">x</div>')).toBe(plain);
+  expect(await shot('<hr class="a" size="12" color="red">')).not.toBe(await shot('<hr class="a">'));
+  expect(await shot('<p class="a" align="center">x</p>')).not.toBe(await shot('<p class="a">x</p>'));
+  expect(await shot('<input class="a" size="3">')).not.toBe(await shot('<input class="a">'));
 });
 
 test('F29: :empty does not match an element holding whitespace', async ({page}) => {

@@ -482,6 +482,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   });
   const inertDeclarations = createInertDeclarations({ report: { warnings: layoutWarnings, ranges }, facts: { rules },
     tools: { matches, compileSelector, dynamicStates, positive: value => cmp(q(value), zero) > 0 } });
+  // True while the style stage's walk reads styles: a declaration that is not modeled does not stop it there.
+  let readingStyles = false;
   function styles(box, region, ancestors, inherited, emit, gridItem = true, state) {
     spend(rules.length + 1);
     if (preferences.length) state = new Set([...(state ?? []), ...preferences]);
@@ -528,6 +530,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       let style;
       try {style=computeStyle(relevant,box,active,inherited,{spend,state});}
       catch(error) {error.box ??= box;throw error;}
+      // A declaration the analysis does not model applies to this box: what is laid out from this style is Unknown. The
+      // style checks (readingStyles: the style stage's walk) still read the rest.
+      if (style.$unmodeled?.length && !readingStyles) { const u = style.$unmodeled[0]; throw Object.assign(new Error(u.message), { code: u.code, css: { file: u.file, line: u.line }, box }); }
       // reportTextFonts: the computed font of each text leaf (for a caller that measures it with a font file and
       // analyses again with a font contract); 'varied' where it differs across the domain.
       // (A text field's placeholder too: its text and the field's font.)
@@ -3761,7 +3766,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // Bounded by this analysis's own work limit; the budget shared with other analyses (the variants of one page) is
     // given back, so these warnings never turn another analysis Unknown.
     const shared = budget?.remaining;
-    for (const environment of environments) try { styleChecks(root, environment.region, [], environment.style, environment); } catch { /* best effort */ }
+    readingStyles = true;
+    try { for (const environment of environments) try { styleChecks(root, environment.region, [], environment.style, environment); } catch { /* best effort */ } } finally { readingStyles = false; }
     if (budget) budget.remaining = shared;
   }
   // F37: a ::first-letter / ::first-line that may apply (a block container it selects, not shown to have none) restyles

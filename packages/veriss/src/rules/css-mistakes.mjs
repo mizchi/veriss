@@ -103,10 +103,14 @@ export function createCssMistakes({ report, facts, tools }) {
       return;
     }
     if (contentRules.some(sels => sels.some(sel => sel.pseudoElement === pbox.pseudo && matches(sel, pbox, new Set([`::${pbox.pseudo}`]))))) return;
-    if ((pstyle.content ?? 'none') !== 'none' || pstyle.display === 'none' || !Object.keys(pstyle.$sources ?? {}).some(key => key !== 'content') || layoutWarnings.some(w => w.code === 'W_CSS_PSEUDO_NO_CONTENT' && w.path === pbox.path)) return;
-    const src = Object.values(pstyle.$sources).find(Boolean);
+    // A declaration from a reset for every element (*, *::before, *::after { box-sizing: border-box }) styles no
+    // pseudo-element in particular: it does not count as styling this one.
+    const universal = src => /^\*?::?(?:before|after)$/i.test(String(src?.selector ?? '').replace(/\s+/g, ''));
+    const styled = Object.entries(pstyle.$sources ?? {}).filter(([key, src]) => key !== 'content' && src && !universal(src));
+    if ((pstyle.content ?? 'none') !== 'none' || pstyle.display === 'none' || !styled.length || layoutWarnings.some(w => w.code === 'W_CSS_PSEUDO_NO_CONTENT' && w.path === pbox.path)) return;
+    const src = styled[0][1];
     layoutWarnings.push({ code: 'W_CSS_PSEUDO_NO_CONTENT', severity: 'warning', box: pbox.label, path: pbox.path, css: src ? [{ property: 'content', file: src.file, line: src.line, selector: src.selector }] : [],
-      message: `${pbox.label} is styled (${Object.keys(pstyle.$sources).filter(key => key !== 'content').slice(0, 3).join(', ')}) but has no content, so the browser never generates it. Add content: "" (or the text it should show)` });
+      message: `${pbox.label} is styled (${styled.map(([key]) => key).slice(0, 3).join(', ')}) but has no content, so the browser never generates it. Add content: "" (or the text it should show)` });
   }
   // F108: a table column (col, colgroup) is not an ancestor of the cells and has no box of its own to pad or size: only
   // width, background, visibility and (with border-collapse: collapse) border act on it (CSS 2.2 §17.3; measured in
@@ -541,8 +545,9 @@ export function createCssMistakes({ report, facts, tools }) {
         // analysis lays it out that way too).
         {
           // (Declared a non-zero width, yet the used width is 0: the style is none or hidden.)
-          const declaredWidth = side => { const t = String(style.$sources?.[`$bw-${side}`]?.specified ?? '').trim().split(/\s+/); if (t.length < 2) return t[0] ?? ''; return { top: t[0], right: t[1], bottom: t[2] ?? t[0], left: t[3] ?? t[1] }[side] ?? ''; };
-          const sides = ['top', 'right', 'bottom', 'left'].filter(side => style.$sources?.[`$bw-${side}`] && /[1-9]|thin|medium|thick/.test(declaredWidth(side)) && ['0', '0px'].includes(String(style[`border-${side}`])));
+          // (A style written none or hidden says there is no border on purpose: border: none, as a browser serializes it
+          // into border-width: medium; border-style: none, is not a forgotten style.)
+          const sides = ['top', 'right', 'bottom', 'left'].filter(side => style.$borderWidthSet?.includes(side) && !style.$borderNone?.includes(side) && ['0', '0px'].includes(String(style[`border-${side}`])));
           if (sides.length && !layoutWarnings.some(w => w.code === 'W_CSS_BORDER_NO_STYLE' && w.path === box.path))
             layoutWarnings.push({ code: 'W_CSS_BORDER_NO_STYLE', severity: 'warning', box: box.label, path: box.path, sides, css: at(`$bw-${sides[0]}`).map(c => ({ ...c, property: 'border-width' })),
               message: `${box.label} sets a border width (${sides.join(', ')}) but no border style, which is none by default: no border is drawn and its width is 0. Add border-style: solid (or use the border shorthand: border: 2px solid)` });

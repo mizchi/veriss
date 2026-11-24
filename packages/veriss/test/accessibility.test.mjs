@@ -1917,6 +1917,11 @@ test('caret-hidden: a text field whose caret is transparent or its own backgroun
   assert.equal(warned(''), false);
   assert.equal(warned('.p{caret-color:transparent}'), true); // inherited
   assert.equal(warned('.f{caret-color:transparent}', 'type="checkbox"'), false);
+  // A field that is not seen (opacity 0 on it or an ancestor, or visually hidden): its caret is not what shows where
+  // typing goes (a select widget's hidden input that only takes key presses hides it too).
+  assert.equal(warned('.f{caret-color:transparent;opacity:0}'), false);
+  assert.equal(warned('.p{opacity:0}.f{caret-color:transparent}'), false);
+  assert.equal(warned('.f{caret-color:transparent;position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}'), false);
 });
 
 test('label-pointer: a field label with pointer-events: none', () => {
@@ -2276,8 +2281,11 @@ test('a border shorthand with only a width (0, 0px, 5px, medium) leaves the styl
   const tree = page([{tag: 'button', classes: ['b'], named: true}]);
   const css = border => pageCSS(`.page { background: #fff; }\n.b { appearance: none; display: block; padding: 0; border: ${border}; min-width: 0; min-height: 0; }`);
   for (const border of ['0', '0px', '0em', '0.0px', '5px', '1.5rem', 'thin', 'medium', 'thick']) assert.equal(run(tree, css(border)).status, 'verified', border);
-  // Not a width: a percentage or a negative length drops the declaration (the UA border stays); a style alone draws one.
-  for (const border of ['0%', '-1px', 'solid']) assert.equal(run(tree, css(border)).status, 'unknown', border);
+  // Not a width: a percentage or a negative length drops the declaration (the UA border stays).
+  for (const border of ['0%', '-1px']) assert.equal(run(tree, css(border)).status, 'unknown', border);
+  // A style alone draws a medium (3px) border in currentcolor (measured in Chromium, Firefox and WebKit: border: solid
+  // lays out and paints as border: 3px solid).
+  assert.equal(run(tree, css('solid')).status, 'verified');
 });
 
 test('px lengths with more than six decimals are exact rationals (a script writes 80 / 3 + "px")', () => {
