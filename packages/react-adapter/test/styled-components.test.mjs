@@ -168,3 +168,52 @@ export default function O() { return <Odd />; }`;
   const {unknowns} = expandReact(source);
   assert.ok(unknowns.some(u => u.code === 'U_STYLED_CSS'), JSON.stringify(unknowns));
 });
+
+test('styled-components: // line comments are dropped as stylis does, but not inside url() or strings', () => {
+  const source = `import styled from 'styled-components';
+const A = styled.div\`
+  transition: all 0.3s; // a note
+  background: url(http://x.test/a.png);
+  content: "a // b";
+  color: red;
+\`;
+export default function C() { return <A />; }`;
+  const {css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.match(css, /\{transition:all 0\.3s;background:url\(http:\/\/x\.test\/a\.png\);content:"a \/\/ b";color:red\}/);
+});
+
+test('styled-components: an interpolation written over several lines keeps the template lines after it', () => {
+  const source = `import styled from 'styled-components';
+const Label = styled.span\`
+  color: red;
+\`;
+const Row = styled.div\`
+  padding: \${({ theme }) =>
+    theme.space};
+  & > \${Label} {
+    font-weight: bold;
+  }
+\`;
+export default function R() { return <Row><div><Label>x</Label></div></Row>; }`;
+  const report = analyzeReact(source, {pageCSS, viewport, selectors: true, theme: {space: '8px'}, file: 'Row.jsx'});
+  const w = report.selectors.warnings.find(x => x.code === 'W_CSS_SELECTOR_RELATION');
+  assert.ok(w, JSON.stringify(report.selectors.warnings));
+  assert.equal(w.line, 8);
+});
+
+test('styled-components: an Unknown mixin after a /* comment */ is still in statement position', () => {
+  const source = `import styled from 'styled-components';
+import { tone } from './elsewhere';
+const A = styled.div\`
+  position: relative;
+
+  /* tone by type */
+  \${tone}
+  color: red;
+\`;
+export default function C() { return <A />; }`;
+  const {css, unknowns} = expandReact(source);
+  assert.ok(!unknowns.some(u => u.code === 'U_STYLED_CSS'), JSON.stringify(unknowns));
+  assert.match(css, /position:relative;color:red/);
+});

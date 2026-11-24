@@ -268,18 +268,39 @@ export function evaluateStyled(def, props, ctx) {
   function template(quasi) {
     const parts = quasi.expressions.map(e => ev(e).flatMap(r => (r.v && typeof r.v === 'object' && FN in r.v ? call(r.v[FN]).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })) : [r])).filter(x => x.choices)
       .flatMap(r => valueOf(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })).filter(x => x.choices)));
-    return combine(parts, vs => one(quasi.quasis.map((q, i) => {
-      if (i >= vs.length) return q.value.cooked;
+    // The template's own text: // line comments dropped as stylis does (outside strings and parentheses, so url(http://…)
+    // stays), and an interpolation written over several lines followed by as many newlines, so lines stay the template's.
+    let quote = null, depth = 0;
+    const cooked = quasi.quasis.map((q, i) => {
+      let out = '';
+      const t = q.value.cooked;
+      for (let j = 0; j < t.length; j++) {
+        const c = t[j];
+        if (quote) { if (c === '\\') { out += c + (t[j + 1] ?? ''); j++; continue; } if (c === quote) quote = null; out += c; continue; }
+        if (c === '"' || c === "'") quote = c;
+        else if (c === '(') depth++;
+        else if (c === ')') depth = Math.max(0, depth - 1);
+        else if (c === '/' && t[j + 1] === '/' && depth === 0) { while (j < t.length && t[j] !== '\n') j++; if (j < t.length) out += '\n'; continue; }
+        out += c;
+      }
+      const next = quasi.quasis[i + 1];
+      return next ? out + '\u0003'.repeat(Math.max(0, next.loc.start.line - q.loc.end.line)) : out;
+    });
+    return combine(parts, vs => one(cooked.map((t, i) => {
+      // the newlines an interpolation spans go after its value
+      const pad = (t.match(/\u0003+$/) ?? [''])[0].length, own = t.replace(/\u0003+$/, ''), q = { value: { cooked: own } };
+      const tail = '\n'.repeat(pad);
+      if (i >= vs.length) return own;
       const v = vs[i];
       // An Unknown in statement position (a mixin: only whitespace since the last ; { or }) becomes a comment, so the
       // declarations after it still parse; inside a declaration value it stays a bare mark (the declaration is dropped).
       if (isUnknown(v)) {
         const mark = `\u0001${slot++}\u0001`; marks.set(mark, v[UNK]);
-        const before = quasi.quasis.slice(0, i + 1).map(x => x.value.cooked).join('\u0002');
-        return q.value.cooked + (/(^|[;{}])[\s\u0002]*$/.test(before) ? `/*${mark}*/` : mark);
+        const before = cooked.slice(0, i + 1).map(x => x.replace(/\u0003+$/, '')).join('\u0002').replace(/\/\*[\s\S]*?\*\//g, '');
+        return q.value.cooked + (/(^|[;{}])[\s\u0002]*$/.test(before) ? `/*${mark}*/` : mark) + tail;
       }
       const x = unwrap(v);
-      return q.value.cooked + (x === false || x === null || x === undefined ? '' : typeof x === 'object' ? (() => { const mark = `\u0001${slot++}\u0001`; marks.set(mark, { code: 'U_STYLED_INTERPOLATION', message: 'an interpolation evaluates to an object' }); return mark; })() : String(x).replace(/\n/g, ' '));
+      return q.value.cooked + (x === false || x === null || x === undefined ? '' : typeof x === 'object' ? (() => { const mark = `\u0001${slot++}\u0001`; marks.set(mark, { code: 'U_STYLED_INTERPOLATION', message: 'an interpolation evaluates to an object' }); return mark; })() : String(x).replace(/\n/g, ' ')) + tail;
     }).join('')));
   }
 
@@ -288,13 +309,13 @@ export function evaluateStyled(def, props, ctx) {
     // newlines kept), so every remaining line is still the template's line.
     const unknowns = [];
     if (!/\u0001\d+\u0001/.test(text)) {
-      try { postcss.parse(`x{${text}}`); } catch (e) { return { text: '', choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message})` }] }; }
+      try { postcss.parse(`x{${text}}`); } catch (e) { return { text: '', choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message}${e.line ? ` at template line ${def.line + e.line - 1}: ${JSON.stringify(`x{${text}}`.split('\n')[e.line - 1]?.trim().replace(/[\u0001-\u0003]/g, '·'))}` : ''})` }] }; }
       return { text, choices, unknowns };
     }
     const report = (where, mark) => { const u = marks.get(mark); unknowns.push({ code: u.code, message: `${def.name}${where}: ${u.message}` }); };
     const spans = [];
     let parsed;
-    try { parsed = postcss.parse(`x{${text}}`); } catch (e) { return { text: '', choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message})` }] }; }
+    try { parsed = postcss.parse(`x{${text}}`); } catch (e) { return { text: '', choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message}${e.line ? ` at template line ${def.line + e.line - 1}: ${JSON.stringify(`x{${text}}`.split('\n')[e.line - 1]?.trim().replace(/[\u0001-\u0003]/g, '·'))}` : ''})` }] }; }
     parsed.walk(n => {
       const own = n.type === 'decl' ? `${n.prop}${n.value}` : n.type === 'rule' ? n.selector : '';
       const mark = own.match(/\u0001\d+\u0001/)?.[0];
