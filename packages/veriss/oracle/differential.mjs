@@ -134,6 +134,13 @@ function declaration(r) {
     () => `padding-${r.pick(['left', 'right', 'top', 'bottom', 'inline-start', 'block-end'])}: ${px()}`,
     () => `padding-${r.pick(['inline', 'block'])}: ${Array.from({length: r.int(1, 2)}, px).join(' ')}`,
     () => `border: ${r.chance(0.2) ? '0' : `${px()} solid red`}`,
+    // Border widths and styles in every form: the computed width is 0 where the final style is none or hidden, and an
+    // omitted width is medium (3px).
+    () => { const parts = [r.chance(0.7) ? px() : null, r.chance(0.7) ? r.pick(['solid', 'dashed', 'none', 'hidden']) : null, r.chance(0.3) ? 'red' : null].filter(Boolean); if (!parts.length) parts.push(px()); for (let i = parts.length - 1; i > 0; i--) { const j = r.int(0, i); [parts[i], parts[j]] = [parts[j], parts[i]]; } return `${r.pick(['border', 'border-top', 'border-right', 'border-bottom', 'border-left'])}: ${parts.join(' ')}`; },
+    () => `border-width: ${Array.from({length: r.int(1, 4)}, px).join(' ')}`,
+    () => `border-${r.pick(['top', 'right', 'bottom', 'left'])}-width: ${px()}`,
+    () => `border-style: ${Array.from({length: r.pick([1, 2, 4])}, () => r.pick(['solid', 'none', 'dotted', 'hidden'])).join(' ')}`,
+    () => `border-${r.pick(['top', 'right', 'bottom', 'left'])}-style: ${r.pick(['solid', 'none', 'double', 'hidden'])}`,
     () => `min-width: ${px()}`,
     () => `width: ${r.chance(0.3) ? `${r.pick([25, 50, 100])}%` : px()}`,
     () => `height: ${px()}`,
