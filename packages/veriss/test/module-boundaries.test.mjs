@@ -45,3 +45,13 @@ test('the CSS-mistake checks live in rules/css-mistakes.mjs (M5): they import no
   const engine = readFileSync(join(src, 'layout/engine.mjs'), 'utf8');
   for (const name of ['cssMistakes', 'firstPseudoInert', 'inlineAutoMargin', 'pseudoWithoutContent', 'tableRowRadius', 'aspectInert', 'contentsInert']) assert.ok(!new RegExp(`function ${name}\\(`).test(engine), name);
 });
+
+test('the inert-declaration checks live in rules/inert-declarations.mjs (M6): they import nothing, and the layout only hands over facts', () => {
+  assert.deepEqual(importsOf('rules/inert-declarations.mjs'), []);
+  const engine = readFileSync(join(src, 'layout/engine.mjs'), 'utf8');
+  assert.ok(!/\breasons\.push\(/.test(engine), 'reasons.push');
+  // (W_LAYOUT_DECLARATION_INERT is still reported where the layout rewrites the style it reports: a percentage height to
+  // auto, auto block margins to 0.)
+  for (const code of ['W_LAYOUT_SCROLL_NEVER', 'W_LAYOUT_CONTENT_VISIBILITY_SIZE', 'W_LAYOUT_SVG_UNSIZED', 'W_LAYOUT_EMBED_NO_RATIO', 'W_LAYOUT_CONTAINER_COLLAPSE'])
+    assert.ok(!new RegExp(`code: '${code}'`).test(engine), code);
+});
