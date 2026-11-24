@@ -37,3 +37,14 @@ test('a dynamic value of a shorthand covers its longhands; one in a media query 
   // a media query that holds for part of the viewport range: it can win there
   assert.ok(run('@media (min-width: 600px){.a{width:-veriss-dynamic(4)}}').diagnostics.some(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE'));
 });
+
+test('a dynamic logical value takes the physical side it means in an rtl box', () => {
+  const rtl = css => analyzeHTML('<html lang="ar" dir="rtl"><body><main class="page"><div class="a b"></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}});
+  // padding-inline-start is padding-right in rtl: padding-left does not beat it
+  const wins = rtl('.a{padding-inline-start:-veriss-dynamic(1)}.a.b{padding-left:0}');
+  const d = wins.diagnostics.find(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE');
+  assert.ok(d, JSON.stringify(wins.diagnostics));
+  assert.match(d.message, /padding-right/);
+  const beaten = rtl('.a{padding-inline-start:-veriss-dynamic(1)}.a.b{padding-right:0}');
+  assert.equal(beaten.status, 'verified', JSON.stringify(beaten.diagnostics));
+});

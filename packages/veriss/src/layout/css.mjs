@@ -21,6 +21,10 @@ const pointSize = /^(?:\d+(?:\.\d{1,20})?px|0)$/;
 const remLengths = ['top', 'right', 'bottom', 'left'].flatMap(side => [`margin-${side}`, `padding-${side}`, side]).concat(['inline-size', 'block-size', 'min-inline-size', 'max-inline-size', 'min-block-size', 'max-block-size', 'row-gap', 'column-gap', 'flex-basis', 'font-size']);
 // rem resolves against the analysed html root's px font-size once the engine has seen it (setRootFontSize).
 let rootFontSize = null;
+// A logical inline longhand (padding-inline-start, …) is expanded to the ltr physical side; the side it means in an rtl
+// box, or undefined for a longhand that is not one of the inline sides.
+const logicalFlip = (property, name) => /-inline(?:-start|-end)?$/.test(property) && /(?:^|-)(?:left|right)$/.test(name) ? name.replace(/(left|right)$/, side => side === 'left' ? 'right' : 'left') : undefined;
+
 export function setRootFontSize(size) { rootFontSize = size; }
 // The form-control UA profile of the analysis (layout option ua), or null for the historical Chromium defaults.
 let uaProfile = null;
@@ -1112,7 +1116,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           if (dynamic) {
             const property = declaration.prop.toLowerCase();
             let names; try { names = expand(property, 'initial').map(([name]) => name); } catch { names = [property]; }
-            for (const name of names) declarations.push({ property: name, value: 'initial', dynamic: { id: Number(dynamic[1]), written: `${declaration.prop}: ${declaration.value.trim()}` }, important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename });
+            for (const name of names) { const flip = logicalFlip(property, name); declarations.push({ property: name, value: 'initial', ...(flip ? { flip } : {}), dynamic: { id: Number(dynamic[1]), written: `${declaration.prop}: ${declaration.value.trim()}` }, important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename }); }
             continue;
           } }
         // F86: a "!word" other than !important at the end of a value makes the declaration invalid: the browser drops it
@@ -1169,7 +1173,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           for (const [name, value] of custom ? [[property,declaration.value]] : expand(property,pending ? 'initial' : declaration.value)) {
             // A logical inline side (padding-inline-start, margin-inline, inset-inline-end, …) is stored as its ltr
             // physical side; `flip` is the side it means in an rtl box (computeStyle picks it once the direction is known).
-            const flip = /-inline(?:-start|-end)?$/.test(property) && /(?:^|-)(?:left|right)$/.test(name) ? name.replace(/(left|right)$/, side => side === 'left' ? 'right' : 'left') : undefined;
+            const flip = logicalFlip(property, name);
             declarations.push({ property:name, value, ...(flip ? {flip} : {}), ...(custom ? {expression} : {}), ...(pending ? {pending,specified:declaration.value} : {}), ...(declaration.prop.toLowerCase() === 'text-wrap' ? { wrapShorthand: declaration.value.trim() } : {}), important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename });
           }
         } catch (error) {
