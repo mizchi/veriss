@@ -201,3 +201,12 @@ test('package exports: the resolve-node entry the README imports resolves throug
   const {nodeModuleResolver} = await import('@mizchi/veriss-react/resolve-node');
   assert.equal(typeof nodeModuleResolver(), 'function');
 });
+
+test('props types: export default forwardRef<Ref, Props>(…) takes its props type from the type arguments', () => {
+  const source = `import { forwardRef } from 'react';
+type Props = { tone: 'a' | 'b' };
+export default forwardRef<HTMLSpanElement, Props>(({ tone }, ref) => <span ref={ref}>{tone}</span>);`;
+  const {states, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.deepEqual(states.map(s => [s.choices.tone, s.html]).sort(), [['a', '<span>a</span>'], ['b', '<span>b</span>']]);
+});

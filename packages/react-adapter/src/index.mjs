@@ -424,7 +424,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const visitFn = (name, fn, propsType) => { const found = {}; fn = unwrapComponent(fn, found); if (fn && ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(fn.type)) functions.push({ name, fn, propsType: found.propsType ?? propsType }); };
   for (const stmt of ast.program.body) {
     const defaultDecl = stmt.type === 'ExportDefaultDeclaration' ? unwrapComponent(stmt.declaration) : null;
-    if (defaultDecl && defaultDecl.type !== 'Identifier') visitFn('default', defaultDecl);
+    // visited from the declaration itself, so a wrapper's props type (forwardRef<Ref, Props>) is kept
+    if (defaultDecl && defaultDecl.type !== 'Identifier') visitFn('default', stmt.declaration);
     if (defaultDecl?.type === 'Identifier') functions.push({ name: 'default', ref: defaultDecl.name });
     const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
     if (decl?.type === 'FunctionDeclaration') visitFn(decl.id.name, decl);
