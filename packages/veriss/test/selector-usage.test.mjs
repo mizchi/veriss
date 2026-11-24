@@ -82,3 +82,10 @@ test('the top-level shapes of an svg are its children and each other\'s siblings
   const reported = srun('.a + .b{fill:none}.a ~ .b{fill:none}.a:first-child{fill:none}.icon:has(> .a){color:red}').selectors.warnings.map(w => w.selector).sort();
   assert.deepEqual(reported, []);
 });
+
+test('a sibling chain is behind a boundary only when its leftmost seen compound holds from the holder', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><button class="btn"><i class="icon"></i>…<!--isle-boundary:children--></button></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const warnings = brun('.missing + span{color:red}.btn > .icon + span{color:red}').selectors.warnings;
+  assert.deepEqual(warnings.map(w => [w.code, w.selector]), [['W_CSS_SELECTOR_UNMATCHED', '.missing + span']]);
+});

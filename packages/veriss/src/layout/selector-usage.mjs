@@ -45,18 +45,19 @@ export function selectorUsage(rules, boxes) {
   const elements = [...boxes.filter(box => !box.anonymous && !box.pseudo).map(box => hosts.get(box) ?? box), ...shapes];
   // Content an adapter could not see (a children slot, a child component) may hold the element a selector styles: the
   // selector is possible when its other compounds hold with that boundary's element as the subject's parent (>) or
-  // as it or an ancestor of it (descendant); siblings (+, ~) of unseen content are unknown.
+  // as it or an ancestor of it (descendant), or with one of the boundary element's children as its sibling (+, ~).
   const holders = elements.filter(box => box.boundaries?.length);
   const holdsFrom = (selector, box, i) => i >= (selector.chain ?? []).length || neighbors(box, selector.chain[i].combinator).some(n => compoundMatches(selector.chain[i].compound, n) && holdsFrom(selector, n, i + 1));
   // The subject and any of the compounds next to it (chain[0..k-1]) may be unseen; the first seen compound chain[k]
-  // is the holder (>) or it or an ancestor (descendant), and the rest holds from there. The leftmost compound is
+  // is the holder (>), it or an ancestor (descendant) or a child of it (+, ~), and the rest holds from there. The leftmost compound is
   // always a seen element.
   const behindBoundary = selector => holders.some(holder => {
     const chain = selector.chain ?? [];
     // a single compound is the leftmost one: it must be a seen element
     if (!chain.length) return false;
     return chain.some(({ compound, combinator }, k) => {
-      if (combinator === '+' || combinator === '~') return true;
+      // unseen content sits directly in the holder: a seen sibling of it is one of the holder's children
+      if (combinator === '+' || combinator === '~') return (holder.children ?? []).filter(c => !c.anonymous && !c.pseudo).some(c => compoundMatches(compound, c) && holdsFrom(selector, c, k + 1));
       const anchors = combinator === '>' ? [holder] : [holder, ...neighbors(holder, ' ')];
       return anchors.some(a => compoundMatches(compound, a) && holdsFrom(selector, a, k + 1));
     });
