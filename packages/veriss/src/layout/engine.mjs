@@ -235,6 +235,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // whether html keeps a scrollbar gutter either way (scrollbar-gutter: stable, overflow-y: scroll) or never shows one
   // (overflow-y: hidden or clip).
   let pageScroll;
+  // An inline replaced box alone on its line (lineBox below): the margins that place it in its line box, by path.
+  const lineBoxes = new Map();
   const animated = []; // boxes with a running animation whose keyframes lay out: {box, region, name}
   const domain = validateOptions(options), block = options.block ?? Boolean(options.viewport.height);
   const component = options.name ?? 'Document';
@@ -561,6 +563,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         textFonts.set(box.path, seen && seen !== 'varied' && JSON.stringify(seen) !== JSON.stringify(facts) ? 'varied' : seen === 'varied' ? 'varied' : facts);
       }
       if (gridItem && inherited && ['inline', 'inline-block'].includes(style.display)) style = { ...style, display: 'block', $inlineLevel: true, $inlineDisplay: style.display };
+      // (Its own margins kept for lineBox, which derives the placing margins from them again in every pass.)
+      if (style.$inlineLevel && lineBoxes.has(box.path)) style = { ...style, ...lineBoxes.get(box.path), $ownMargins: Object.fromEntries(['top', 'right', 'bottom', 'left'].map(side => [`margin-${side}`, style[`margin-${side}`]])) };
       // content-visibility: auto: on screen the box lays out as usual; offscreen it is size-contained. Admitted where
       // its width does not come from its content (block flow, or grid columns that are not content-sized), so that
       // only its height changes offscreen (W_LAYOUT_CONTENT_VISIBILITY_SIZE).
@@ -2917,6 +2921,51 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const empty = !(box.children ?? []).length && !box.text && !box.inline?.length;
     return style[`min-${size}`] !== 'auto' || scroller || empty ? size : null;
   }
+  // An atomic inline replaced box (iframe, img, video, canvas, embed, object) that is the only in-flow content of a block
+  // container (an ad tag's iframe, whitespace around it allowed) sits on a line box of its own, with the container's
+  // strut: on the baseline (vertical-align: baseline) the line keeps the strut's part below the baseline under it, and
+  // its part above when the box is shorter. Returns the margins that place it as a block in that line box ({margins}),
+  // {reason} when the line is not decided, or {} when this is not that case. The strut is known with font-size 0 (it is
+  // empty: all three engines), from the container's font contract with ascent and descent (Chromium: the baseline sits
+  // A + floor((L − A − D) / 2) below the line top; measured), or as a whole line height for vertical-align top/bottom.
+  function lineBox(container, cs, child) {
+    const st = { ...child.style, ...child.style.$ownMargins }, tag = child.box.tag;
+    if (!['iframe', 'img', 'video', 'canvas', 'embed', 'object'].includes(tag) || st.$inlineDisplay !== 'inline' || child.box.pseudo || container.text || (container.inline ?? []).length) return {};
+    const pxv = v => String(v) === '0' || String(v) === 'auto' ? zero : /^-?\d+(?:\.\d+)?px$/.test(String(v)) ? px(String(v)) : null;
+    if (container.whitespace && !['normal', 'nowrap'].includes(String(cs['white-space']))) return { reason: `white-space: ${cs['white-space']} keeps the white space around it, which makes lines of its own; that line layout is not modeled` };
+    if (cs.direction === 'rtl') return { reason: 'its line in a right-to-left block is not modeled' };
+    const align = String(cs['text-align'] ?? 'start'), ml = pxv(st['margin-left']), mr = pxv(st['margin-right']), mt = pxv(st['margin-top']), mb = pxv(st['margin-bottom']);
+    if ([ml, mr, mt, mb].includes(null)) return { reason: 'its margins are not px lengths' };
+    const horizontal = ['start', 'left', 'justify', 'ua', 'match-parent'].includes(align) ? {} : ['center', 'right', 'end'].includes(align) && cmp(ml, zero) === 0 && cmp(mr, zero) === 0 ? (align === 'center' ? { 'margin-left': 'auto', 'margin-right': 'auto' } : { 'margin-left': 'auto' }) : null;
+    if (!horizontal) return { reason: `text-align: ${align} with horizontal margins on it is not modeled` };
+    // Its outer height (margin box), when its height is a px length.
+    const bs = pxv(st['block-size']), edges = ['top', 'bottom'].map(side => [pxv(st[`padding-${side}`]), pxv(st[`border-${side}`])]).flat();
+    const outer = bs === null || edges.includes(null) ? null : add(add(st['box-sizing'] === 'border-box' ? bs : edges.reduce(add, bs), mt), mb);
+    const va = String(st['vertical-align'] ?? 'baseline'), size = pxv(cs['font-size']), lh = String(cs['line-height']);
+    const font = container.contract?.font;
+    // The strut: its parts above and below the baseline, or null.
+    let strut = null, lineHeight = null;
+    if (size !== null && cmp(size, zero) === 0 && (lh === 'normal' || /^\d+(?:\.\d+)?$/.test(lh))) strut = { above: zero, below: zero };
+    else if (font?.ascent !== undefined && !textFontMismatch(cs, font, options.defaultFontSize)) {
+      if (uaEngine && uaEngine !== 'chromium') return { reason: `${uaEngine === 'webkit' ? 'WebKit' : 'Firefox'} places the baseline with unrounded font metrics, which the font contract does not give` };
+      const L = q(String(font.lineHeight)), A = q(String(font.ascent)), D = q(String(font.descent));
+      const above = add(A, q(String(Math.floor(Number(number(sub(sub(L, A), D))) / 2))));
+      strut = { above, below: sub(L, above) };
+    }
+    if (strut) lineHeight = add(strut.above, strut.below);
+    else if (size !== null && /^\d+(?:\.\d+)?px$/.test(lh)) lineHeight = px(lh);
+    else if (size !== null && /^\d+(?:\.\d+)?$/.test(lh)) lineHeight = mul(q(lh), size);
+    const max = (a, b) => cmp(a, b) >= 0 ? a : b;
+    const done = (offset, gap) => ({ margins: { ...horizontal, 'margin-top': `${lengthText(add(mt, offset))}px`, 'margin-bottom': `${lengthText(add(mb, gap))}px` } });
+    if (strut && cmp(strut.above, zero) <= 0 && cmp(strut.below, zero) <= 0 && ['baseline', 'top', 'bottom', 'middle'].includes(va)) return done(zero, zero);
+    if (va === 'baseline' && strut) {
+      if (cmp(strut.above, zero) > 0 && outer === null) return { reason: 'its height is not a px length, so whether the strut\'s ascent reaches above it is not known' };
+      return done(cmp(strut.above, zero) > 0 && cmp(outer, strut.above) < 0 ? sub(strut.above, outer) : zero, max(strut.below, zero));
+    }
+    if (['top', 'bottom'].includes(va) && lineHeight !== null && outer !== null && cmp(outer, lineHeight) >= 0) return done(zero, zero);
+    if (['top', 'bottom'].includes(va)) return { reason: `vertical-align: ${va} in a line ${lineHeight === null ? 'whose height depends on the font (line-height: normal)' : 'taller than it'} is not modeled` };
+    return { reason: `it sits on the baseline of ${container.label}'s line, which keeps room for the font's descent below it (a few px, depending on the font and line-height), and that is not known. Give it display: block or vertical-align: top (with a px line-height no taller than it), set font-size: 0 on ${container.label}, or declare ${container.label}'s font with its ascent and descent (a font contract)` };
+  }
   // The ancestors whose overflow can clip or scroll a box: those from its nearest position: fixed ancestor (or itself)
   // down. A fixed box's containing block is the viewport (an ancestor that would contain it is Unknown before this), so
   // the overflow of the boxes around it neither clips nor scrolls it or its descendants (CSS Overflow 3 §3).
@@ -3488,6 +3537,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       if (!fontless && !layoutWarnings.some(w => w.code === 'W_LAYOUT_IMAGE_BASELINE_GAP' && w.path === img.box.path))
                         layoutWarnings.push({ code: 'W_LAYOUT_IMAGE_BASELINE_GAP', severity: 'warning', box: img.box.label, path: img.box.path, parent: box.label,
                           message: `${img.box.label} is an inline image in ${box.label}: it sits on the text baseline, so ${box.label} is taller than the image by the font's descender (a few pixels of gap under it). Give ${img.box.label} display: block (or vertical-align: top)`, ...ranges(bs.region) });
+                    if (flow.length === 1 && flow[0].style.$inlineLevel) {
+                      const placed = lineBox(box, style, flow[0]);
+                      if (placed.reason) throw Object.assign(new Error(`${flow[0].box.label} is inline-level inside the block container ${box.label}: ${placed.reason}`), { code: 'U_LAYOUT_INLINE', box: flow[0].box, region: children.region });
+                      if (placed.margins) {
+                        lineBoxes.set(flow[0].box.path, { ...placed.margins, $lineBox: true });
+                        const index = children.children.indexOf(flow[0]);
+                        children.children[index] = { ...flow[0], style: { ...flow[0].style, ...placed.margins, $inlineLevel: false, $lineBox: true } };
+                        flow[0] = children.children[index];
+                      }
+                    }
                     for (const child of flow) if (child.style.$inlineLevel) throw Object.assign(new Error(`${child.box.label} is inline-level inside the block container ${box.label}: its line layout is not modeled (give it display: block, or make ${box.label} a grid or flex container)`), { code: 'U_LAYOUT_INLINE', box: child.box, region: children.region });
                     // Grid placement and self-alignment do nothing in block flow: laid out as auto, reported as inert.
                     // (justify-self is not inert: Chromium aligns block-level boxes by it — measured — which is not modeled.)
@@ -3507,7 +3566,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                     // Vertical margins collapse between adjacent siblings (the larger one wins; measured): the next
                     // sibling's top margin becomes max(previous bottom, its top) − previous bottom. Collapsing through the
                     // container (no padding or border on that side) or through an empty child is not modeled.
-                    const mv = (child, side) => /^\d+(?:\.\d+)?px$/.test(String(child.style[`margin-${side}`])) ? px(child.style[`margin-${side}`]) : zero;
+                    // (The margins of a box on a line box of its own stay inside that line box: none collapse.)
+                    const mv = (child, side) => !child.style.$lineBox && /^\d+(?:\.\d+)?px$/.test(String(child.style[`margin-${side}`])) ? px(child.style[`margin-${side}`]) : zero;
                     // A plain block child (not a formatting root, no padding or border on that side) lets its first
                     // (last) child's top (bottom) margin collapse through it: its own margin becomes the larger of the
                     // two, and it lays that grandchild out without it (collapsedTop / collapsedBottom). The grandchild's
@@ -3540,7 +3600,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                         const inner = [...at, { box: owner, style: st, inline: null, block: null, type: st['container-type'], names: [] }];
                         const kids = flowOf(owner, st, inner);
                         if (!kids) return null;
-                        if (!kids.length || kids.some(k => /inline|contents|table/.test(String(k.style.display)))) return own;
+                        if (!kids.length || kids.some(k => k.style.$inlineLevel || /inline|contents|table/.test(String(k.style.display)))) return own;
                         const edge = side === 'top' ? kids[0] : kids.at(-1);
                         const theirs = outward(edge.box, edge.style, inner, side, depth + 1);
                         if (theirs === null) return null;
@@ -3548,7 +3608,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       };
                       const updates = {};
                       const grand = flowOf(child.box, child.style, childAncestors);
-                      if (!grand || grand.some(g => /inline|contents|table/.test(String(g.style.display)))) return;
+                      if (!grand || grand.some(g => g.style.$inlineLevel || /inline|contents|table/.test(String(g.style.display)))) return;
                       const childOf = [...childAncestors];
                       for (const side of ['top', 'bottom']) {
                         if (!grand.length || !zeroEdge(child.style, side) || (side === 'bottom' && child.style['block-size'] !== 'auto')) continue;

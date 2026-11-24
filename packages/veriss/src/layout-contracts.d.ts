@@ -46,7 +46,8 @@ export interface LayoutBoxContract {
   overflow?: 'fit' | 'scroll' | 'clip' | 'visible';
   overflowBlock?: 'fit' | 'scroll' | 'clip' | 'visible';
   /** Font the size bounds were measured with (`/text`); the computed CSS font must match or the box is Unknown. */
-  font?: { family: string; size: number; lineHeight: number; weight?: number; style?: 'normal' };
+  /** ascent / descent: the font's whole-px ascent and descent as Chromium rounds them (both or neither), for the strut of a line that holds only an inline replaced box. */
+  font?: { family: string; size: number; lineHeight: number; weight?: number; style?: 'normal'; ascent?: number; descent?: number };
   /** Provenance of font-derived bounds. A domain bound table indexed by character count. */
   textMetrics?: { kind: 'content'; text: string; width: number; font?: object; allowance?: string }
     | { kind: 'domain'; characters: string; maxLength: number; perCharacter: number; pairAdjustment: number; widest: string; bounds: number[]; font?: object; allowance?: string }
