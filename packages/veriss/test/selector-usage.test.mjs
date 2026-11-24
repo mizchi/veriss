@@ -67,3 +67,11 @@ test('selectors on the shapes inside an svg (not laid out as boxes) match them; 
   const reported = srun('.dot{fill:none}.icon > .dot{stroke-width:3}.missing{fill:none}').selectors.warnings.map(w => w.selector).sort();
   assert.deepEqual(reported, ['.missing']);
 });
+
+test('a single-compound selector is judged on the seen elements even when a boundary is present', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><span class="label">x</span><div class="slot">…<!--isle-boundary:children--></div></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  // a span is never :disabled; .lable is a typo of .label
+  const reported = brun('.label:disabled{color:gray}.lable{color:red}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, ['.label:disabled', '.lable']);
+});

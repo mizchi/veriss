@@ -49,7 +49,8 @@ export function selectorUsage(rules, boxes) {
   // always a seen element.
   const behindBoundary = selector => holders.some(holder => {
     const chain = selector.chain ?? [];
-    if (!chain.length) return true;
+    // a single compound is the leftmost one: it must be a seen element
+    if (!chain.length) return false;
     return chain.some(({ compound, combinator }, k) => {
       if (combinator === '+' || combinator === '~') return true;
       const anchors = combinator === '>' ? [holder] : [holder, ...neighbors(holder, ' ')];
