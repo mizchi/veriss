@@ -48,3 +48,26 @@ test('a dynamic logical value takes the physical side it means in an rtl box', (
   const beaten = rtl('.a{padding-inline-start:-veriss-dynamic(1)}.a.b{padding-right:0}');
   assert.equal(beaten.status, 'verified', JSON.stringify(beaten.diagnostics));
 });
+
+test('a dynamic value under a media query is reported for the viewport range where it wins', () => {
+  const d = run('@media (min-width: 600px){.a{width:-veriss-dynamic(4)}}').diagnostics.find(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE');
+  assert.ok(d);
+  assert.equal(d.range.min, 600);
+  assert.equal(d.range.max, 800);
+});
+
+test('a dynamic value that wins only in the hovered layout is an error', () => {
+  const report = run('.a{width:100px}.a:hover{width:-veriss-dynamic(1)}');
+  assert.equal(report.status, 'violated', JSON.stringify(report.diagnostics));
+  const d = report.diagnostics.find(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE');
+  assert.ok(d);
+  assert.match(d.message, /-veriss-dynamic\(1\)/);
+  assert.match(d.message, /hovered layout/);
+});
+
+test('a dynamic value in a keyframe is an error in that frame\'s layout', () => {
+  const report = analyzeHTML('<html lang="en"><body><main class="page"><div class="a"></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}.a{width:100px;height:10px;animation:k 1s}@keyframes k{from{width:-veriss-dynamic(1)}}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}});
+  assert.equal(report.status, 'violated', JSON.stringify(report.diagnostics));
+  const d = report.diagnostics.find(x => x.code === 'E_LAYOUT_DYNAMIC_VALUE');
+  assert.match(d.message, /keyframe/);
+});
