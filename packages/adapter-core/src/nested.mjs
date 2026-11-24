@@ -36,16 +36,17 @@ const resolve = (parent, nested) => (hasParent(nested) ? nested.trim().replace(P
 
 export function lowerNested(blocks) {
   const lines = [], map = [];
-  const emit = (selector, decls, media, origin, path, relation, nodeLine) => {
-    const rule = `${selector}{${decls.map(decl).join(';')}}`;
-    lines.push(media ? `@media ${media}{${rule}}` : rule);
+  // wrappers: the conditional at-rules around the rule, outermost first ({name, params})
+  const emit = (selector, decls, wrappers, origin, path, relation, nodeLine) => {
+    const prefix = wrappers.map(w => `@${w.name} ${w.params}{`).join('');
+    lines.push(`${prefix}${selector}{${decls.map(decl).join(';')}}${'}'.repeat(wrappers.length)}`);
     // origin.lines (optional): the template line of each text line, when the text is not line-for-line the template
     // (an interpolation written over several lines collapsed into its value)
     const { lines: lineMap, ...rest } = origin;
     const templateLine = l => lineMap?.[l - 1] ?? origin.line + l - 1;
     // each declaration: its 1-based column in the emitted line, and where it is in the template (the column only when
     // the text is line-for-line the template)
-    let column = (media ? `@media ${media}{` : '').length + selector.length + 2;
+    let column = prefix.length + selector.length + 2;
     const declarations = decls.map(d => {
       const at = { column, line: templateLine(d.source.start.line), ...(lineMap ? {} : { templateColumn: d.source.start.line === 1 ? d.source.start.column - selector.length - 1 : d.source.start.column }) };
       column += decl(d).length + 1;
@@ -57,24 +58,27 @@ export function lowerNested(blocks) {
     const root = postcss.parse(`${block.selector}{${block.text}}`);
     // A nested style rule's first declarations are reported at its selector line (where a relation is written);
     // later runs, and runs inside @media, at their first declaration.
-    const walk = (node, selector, media, path, relation, head = null) => {
+    const walk = (node, selector, wrappers, path, relation, head = null) => {
       let run = [];
-      const flush = () => { if (run.length) { emit(selector, run, media, block.origin, path, relation, head ?? run[0].source.start.line); head = null; } run = []; };
+      const flush = () => { if (run.length) { emit(selector, run, wrappers, block.origin, path, relation, head ?? run[0].source.start.line); head = null; } run = []; };
       for (const n of node.nodes ?? []) {
         if (n.type === 'decl') { run.push(n); continue; }
         if (n.type === 'comment') continue;
         flush();
         if (n.type === 'rule') {
-          for (const part of postcss.list.comma(n.selector)) walk(n, resolve(selector, part), media, [...path, part.trim()], edge(selector, part), n.source.start.line);
+          for (const part of postcss.list.comma(n.selector)) walk(n, resolve(selector, part), wrappers, [...path, part.trim()], edge(selector, part), n.source.start.line);
         } else if (n.type === 'atrule' && conditional.has(n.name)) {
-          const params = n.name === 'media' ? n.params : null;
-          if (params === null) continue;
-          walk(n, selector, media ? `${media} and ${params}` : params, path, relation);
+          // @media directly inside @media is one @media (the conditions joined); any other nesting is a block each
+          const last = wrappers.at(-1);
+          const next = n.name === 'media' && last?.name === 'media'
+            ? [...wrappers.slice(0, -1), { name: 'media', params: `${last.params} and ${n.params}` }]
+            : [...wrappers, { name: n.name, params: n.params }];
+          walk(n, selector, next, path, relation);
         }
       }
       flush();
     };
-    walk(root.nodes[0], block.selector, null, [block.selector], null);
+    walk(root.nodes[0], block.selector, [], [block.selector], null);
   }
   return { css: lines.join('\n'), map };
 }

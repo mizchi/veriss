@@ -120,3 +120,15 @@ test('lowerNested: an & inside a quoted attribute value is not the parent refere
   assert.equal(css, '.sc-Card [data-label="A&B"]{color:red}');
   assert.deepEqual(map[0].relation, {parent: '.sc-Card', combinator: ' ', child: '[data-label="A&B"]'});
 });
+
+test('lowerNested: @supports and @container wrap the rule like @media', () => {
+  for (const [at, params] of [['supports', '(display: grid)'], ['container', 'card (min-width: 400px)']]) {
+    const {css, map} = lowerNested([{selector: '.sc-A', text: `@${at} ${params} { display: grid; }`, origin: {file: 'f.ts', line: 1, name: 'A'}}]);
+    assert.equal(css, `@${at} ${params}{.sc-A{display:grid}}`);
+    assert.equal(map.length, 1);
+    assert.equal(map[0].declarations[0].column, `@${at} ${params}{.sc-A{`.length + 1);
+  }
+  // nested wrappers: each its own block, @media conditions joined
+  const {css} = lowerNested([{selector: '.sc-A', text: '@media (min-width: 1px) { @supports (gap: 0) { @media print { gap: 0; } } }', origin: {file: 'f.ts', line: 1, name: 'A'}}]);
+  assert.equal(css, '@media (min-width: 1px){@supports (gap: 0){@media print{.sc-A{gap:0}}}}');
+});
