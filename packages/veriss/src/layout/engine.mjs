@@ -270,7 +270,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   const { rules, layers, notes = [], keyframes: keyframeNames = new Set(), dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], keyframeFrames, fontFaces, registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [] } = parseLayoutCSS(styleSources, (code, message, line, file, detail) => {
     if(detail) diagnostics.push({code,message,...detail});
     else unknown(code,message,line,undefined,file);
-  });
+  }, { shorthandConflicts: options.shorthandConflicts });
   // A selector testing the value of an attribute that is dynamic on an element (an adapter's placeholder): whether
   // the rule applies there is not known.
   // Likewise a structural pseudo-class on the root of a component: its siblings in the page are not known.

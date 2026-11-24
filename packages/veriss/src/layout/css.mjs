@@ -736,7 +736,7 @@ function flexShorthand(value) {
   return [['flex-grow', factors[0] ?? '1'], ['flex-shrink', factors[1] ?? '1'], ['flex-basis', basis ?? '0%']];
 }
 
-export function parseLayoutCSS(sheets, diagnostic) {
+export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error' } = {}) {
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
   const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
@@ -1075,11 +1075,14 @@ export function parseLayoutCSS(sheets, diagnostic) {
       for(const conflict of conflicts) {
         const location=index=>({file:filename,line:authored[index].source.start.line,column:authored[index].source.start.column});
         const css=location(conflict.later);
+        // 'warning' (CSS this rule was not written for, such as an adapter's CSS-in-JS): reported, and the rule is kept
+        // (within one rule the later declaration wins)
+        if(shorthandConflicts==='warning') { note('W_CSS_SHORTHAND_CONFLICT',{selector:node.selector,properties:conflict.properties,longhands:conflict.longhands,later:css,earlier:location(conflict.earlier)}); continue; }
         diagnostic('E_CSS_SHORTHAND_CONFLICT',cssWriteConflictMessage(conflict),css.line,filename,
           {severity:'error',css,hint:conflict.hint,conflict:{properties:conflict.properties,longhands:conflict.longhands},
             related:[{css:location(conflict.earlier),message:`Earlier ${conflict.properties[0]} declaration`}]});
       }
-      if(conflicts.length) continue;
+      if(conflicts.length && shorthandConflicts!=='warning') continue;
       // F123: isolation: isolate next to mix-blend-mode on the same element isolates its descendants, not the element: it
       // still blends with what is behind it (measured in Chromium, Firefox and WebKit). The parent needs the isolation.
       { const decls = node.nodes.filter(d => d.type === 'decl'), last = prop => decls.findLast(d => d.prop.toLowerCase() === prop);

@@ -55,6 +55,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_SELECTOR_LIST_VENDOR` | 並びの中の `-moz-`・`-ms-` の擬似でリスト全体が捨てられる(F132) | 差を報告(解析は Unknown) |
 | `W_CSS_DUPLICATE_DECLARATION` | 同じ規則で 2 回書いたプロパティ(F6)。古いブラウザー向けの代わりの書き方は除く | 検査可 |
 | `E_CSS_SHORTHAND_CONFLICT` | 同じ規則の中の一括指定と個別指定(E2) | 検査可(その状態の配置は解析しない) |
+| `W_CSS_SHORTHAND_CONFLICT` | 同じ規則の中の一括指定と個別指定(`shorthandConflicts: 'warning'`、アダプタの既定) | 検査可(後の宣言が勝つものとして配置も解析する) |
 
 ## 2. at-rule とカスケード
 

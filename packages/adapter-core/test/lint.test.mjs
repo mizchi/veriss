@@ -228,12 +228,15 @@ test('noshift (Vue, React): the same contract, and the same error on a child com
   assert.deepEqual(react.findings.filter(f => f.code === 'E_LAYOUT_NOSHIFT').length, 1);
 });
 
-test('lint: CSS errors that stop the layout analysis are errors, and the states they stop are listed as not checked', () => {
+test('lint: a shorthand conflict in a component is a warning and the layout is analysed; with shorthandConflicts: error it stops the layout and the states are listed as not checked', () => {
   const g = 'display: grid; grid-template-columns: minmax(0, 1fr);';
-  const r = analyzeSvelte(`<div class="bar"><button class="save" type="button">Save</button></div>\n<style>.bar { ${g} } .save { display: block; height: 36px; font: inherit; font-size: 14px; }</style>`, scopeOptions);
-  const out = lint(r, {file: 'S.svelte'});
-  assert.equal(out.find(m => m.code === 'E_CSS_SHORTHAND_CONFLICT')?.severity, 'error');
-  assert.match(out.find(m => m.code === 'U_LAYOUT_NOT_ANALYZED')?.message ?? '', /not checked: the layout of every state was not analyzed/);
+  const src = `<div class="bar"><button class="save" type="button">Save</button></div>\n<style>.bar { ${g} } .save { display: block; height: 36px; font: inherit; font-size: 14px; }</style>`;
+  const loose = lint(analyzeSvelte(src, scopeOptions), {file: 'S.svelte'});
+  assert.equal(loose.find(m => m.code === 'W_CSS_SHORTHAND_CONFLICT')?.severity, 'warning');
+  assert.ok(!loose.some(m => m.code === 'E_CSS_SHORTHAND_CONFLICT' || m.code === 'U_LAYOUT_NOT_ANALYZED'));
+  const strict = lint(analyzeSvelte(src, {...scopeOptions, shorthandConflicts: 'error'}), {file: 'S.svelte'});
+  assert.equal(strict.find(m => m.code === 'E_CSS_SHORTHAND_CONFLICT')?.severity, 'error');
+  assert.match(strict.find(m => m.code === 'U_LAYOUT_NOT_ANALYZED')?.message ?? '', /not checked: the layout of every state was not analyzed/);
 });
 
 test('text beside a button in a flex row is an anonymous item (an unstyled span); a selector that could match that span keeps it Unknown', () => {

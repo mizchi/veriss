@@ -88,6 +88,12 @@ export function relocateFindings(findings, map, { offset = 0 } = {}) {
     return { css: { file: m.origin.file, line: d?.line ?? m.origin.line, ...(d?.templateColumn ? { column: d.templateColumn } : {}) }, component: m.origin.name };
   };
   return findings.map(f => {
+    // a warning's css is a list of locations (each with its property): each moved
+    if (Array.isArray(f.css)) {
+      const moved = f.css.map(c => { const m = move(c); return m ? { ...c, ...m.css, component: m.component } : c; });
+      const first = moved.find(c => c.component);
+      return first ? { ...f, css: moved.map(({ component, ...c }) => c), component: first.component } : f;
+    }
     const at = move(f.css);
     if (!at) return f;
     return { ...f, ...at, cssLine: f.css.line, ...(f.related ? { related: f.related.map(r => { const m = move(r.css); return m ? { ...r, css: m.css } : r; }) } : {}) };
