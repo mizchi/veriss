@@ -33,8 +33,16 @@ union, and Unknown when its value is written into a declaration. `theme` comes f
 `U_STYLED_VALUE`, `U_STYLED_INTERPOLATION`); `styled(Component)` of a non-styled component, `as`, spreads and `.attrs`
 are Unknown.
 
+Styled components, `css``` fragments and constants imported from other modules (`import * as Styled from './styled'`,
+`<Styled.Container>`, `${trimVertical}` from a typography module) are read through `resolveModule(specifier,
+importerFile) -> {file, source} | null`; each template is evaluated in the module that holds it, and its warnings carry
+that module's file and line. `nodeModuleResolver()` (`src/resolve-node.mjs`) reads relative specifiers from the file
+system with the usual extensions and index files; packages are not read. Without a resolver, an imported component is
+Unknown and says so.
+
 ```js
-analyzeReact(source, {pageCSS, viewport, theme, file: 'Card.tsx', selectors: true});
+import {nodeModuleResolver} from '@mizchi/veriss-react/src/resolve-node.mjs';
+analyzeReact(source, {pageCSS, viewport, theme, file: '/abs/Card.tsx', resolveModule: nodeModuleResolver(), selectors: true});
 ```
 
 Unknown: other components, `dangerouslySetInnerHTML`, dynamic `className`/`style` of other shapes, spreads other

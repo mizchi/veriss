@@ -82,3 +82,62 @@ test('styled-components: every state has the structure styled-components itself 
     assert.equal(shape(html), shape(s.html), JSON.stringify(s.choices));
   }
 });
+
+const splitDir = new URL('../fixtures/styled-split/', import.meta.url);
+const splitSource = name => readFileSync(new URL(name, splitDir), 'utf8');
+// an in-memory resolver over the fixture directory (relative specifiers, .js added)
+const splitResolver = (specifier) => {
+  if (!specifier.startsWith('./')) return null;
+  const file = `${specifier.slice(2)}.js`;
+  try { return {file, source: splitSource(file)}; } catch { return null; }
+};
+
+test('styled-components across modules: namespace and named imports, imported fragments and constants', () => {
+  const {states, css, unknowns} = expandReact(splitSource('Chip.jsx'), {file: 'Chip.jsx', resolveModule: splitResolver});
+  assert.deepEqual(unknowns, []);
+  assert.equal(states.length, 2);
+  const large = states.find(s => s.choices.large === true);
+  const [iconBase, iconLarge] = classOf(large.html, 'span');
+  assert.equal(iconBase, 'sc-Icon');
+  assert.match(css, new RegExp(`\\.${iconLarge}\\{display:block;width:24px;height:24px\\}`));
+  assert.match(css, /\{line-height:1\.5;display:block;height:20px\}/);
+  assert.match(css, /row-gap:8px/);
+  assert.match(css, /> \.sc-Icon\{justify-self:start\}/);
+});
+
+test('styled-components across modules: a relation warning points into the module that holds the template', () => {
+  const source = `import * as Styled from './styled';
+export default function Bad() { return <Styled.Container><div><Styled.Icon $size="small" /></div></Styled.Container>; }`;
+  const report = analyzeReact(source, {pageCSS, viewport, selectors: true, file: 'Bad.jsx', resolveModule: splitResolver});
+  const w = report.selectors.warnings.find(x => x.code === 'W_CSS_SELECTOR_RELATION');
+  assert.ok(w, JSON.stringify(report.selectors.warnings));
+  assert.equal(w.file, 'styled.js');
+  assert.equal(w.line, 22);
+  assert.equal(w.component, 'Container');
+});
+
+test('styled-components across modules: without a resolver the imported component is Unknown and says what is missing', () => {
+  const {unknowns} = expandReact(splitSource('Chip.jsx'));
+  assert.ok(unknowns.some(u => /resolveModule/.test(u.message)), JSON.stringify(unknowns));
+});
+
+test('nodeModuleResolver: extensions and index files, relative to the importer', async () => {
+  const {nodeModuleResolver} = await import('../src/resolve-node.mjs');
+  const resolve = nodeModuleResolver();
+  const importer = new URL('Chip.jsx', splitDir).pathname;
+  const r = resolve('./typography', importer);
+  assert.equal(r.file, new URL('typography.js', splitDir).pathname);
+  assert.match(r.source, /trimVertical/);
+  assert.equal(resolve('styled-components', importer), null);
+  assert.equal(resolve('./missing', importer), null);
+});
+
+test('styled-components across modules: every state has the structure styled-components renders from the bundled modules', async () => {
+  const {renderStyledFile} = await import('./ssr.mjs');
+  const shape = html => html.replace(/ class="[^"]*"/g, '').replace(/>\s+</g, '><').trim();
+  const {states} = expandReact(splitSource('Chip.jsx'), {file: 'Chip.jsx', resolveModule: splitResolver});
+  for (const s of states) {
+    const {html} = await renderStyledFile(new URL('Chip.jsx', splitDir).pathname, s.choices);
+    assert.equal(shape(html), shape(s.html), JSON.stringify(s.choices));
+  }
+});

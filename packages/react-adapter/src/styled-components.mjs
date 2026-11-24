@@ -8,9 +8,10 @@
 // them, and Unknown otherwise. Theme values come from options.theme; a path missing there is Unknown. An Unknown value
 // leaves its declaration out (never guessed) and is reported: U_STYLED_THEME, U_STYLED_VALUE, U_STYLED_INTERPOLATION.
 import postcss from 'postcss';
+import { parse } from '@babel/parser';
 import { merge, choose } from '@mizchi/veriss-adapter-core';
 
-const UNK = Symbol('unknown'), SYM = Symbol('symbol'), PROPS = Symbol('props'), FN = Symbol('function');
+const UNK = Symbol('unknown'), SYM = Symbol('symbol'), PROPS = Symbol('props'), FN = Symbol('function'), NS = Symbol('namespace');
 const unknownValue = (code, message) => ({ [UNK]: { code, message } });
 const isUnknown = v => v !== null && typeof v === 'object' && UNK in v;
 const isSym = v => v !== null && typeof v === 'object' && SYM in v;
@@ -61,6 +62,62 @@ export function collectStyled(ast, text, names) {
 }
 
 /**
+ * A module as the styled evaluation sees it: its styled components, css fragments, const initializers (evaluated when
+ * read) and imports. Imports are followed through resolveModule(specifier, importerFile) -> {file, source} | null.
+ */
+export function loadModule({ file, source, ast }, resolveModule, cache = new Map()) {
+  if (cache.has(file)) return cache.get(file);
+  ast ??= parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+  const names = styledImports(ast);
+  const { defs, fragments } = collectStyled(ast, source, names);
+  const consts = new Map(), imports = new Map();
+  for (const stmt of ast.program.body) {
+    if (stmt.type === 'ImportDeclaration' && stmt.source.value !== 'styled-components') {
+      for (const sp of stmt.specifiers) imports.set(sp.local.name, { specifier: stmt.source.value, imported: sp.type === 'ImportNamespaceSpecifier' ? '*' : sp.type === 'ImportDefaultSpecifier' ? 'default' : sp.imported.name ?? sp.imported.value });
+    }
+    const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
+    if (decl?.type === 'VariableDeclaration' && decl.kind === 'const') for (const d of decl.declarations) if (d.id.type === 'Identifier' && d.init && !defs.has(d.id.name) && !fragments.has(d.id.name)) consts.set(d.id.name, d.init);
+  }
+  const mod = { file, source, ast, names, defs, fragments, consts, imports };
+  mod.load = specifier => {
+    if (!resolveModule) return null;
+    const r = resolveModule(specifier, file);
+    return r ? loadModule({ file: r.file, source: r.source }, resolveModule, cache) : null;
+  };
+  for (const d of defs.values()) d.mod = mod;
+  for (const f of fragments.values()) f.mod = mod;
+  cache.set(file, mod);
+  return mod;
+}
+
+/**
+ * What a name means in a module: a styled component, a css fragment, a const, an imported module namespace, an import
+ * that could not be read ({missing}), or null (not something styled evaluation knows).
+ */
+export function binding(mod, name, seen = new Set()) {
+  if (mod.defs.has(name)) return { kind: 'def', def: mod.defs.get(name) };
+  if (mod.fragments.has(name)) return { kind: 'fragment', fragment: mod.fragments.get(name) };
+  if (mod.consts.has(name)) return { kind: 'const', node: mod.consts.get(name), mod };
+  const im = mod.imports.get(name);
+  if (!im) return null;
+  const target = mod.load(im.specifier);
+  if (!target) return /^[./]/.test(im.specifier) ? { kind: 'missing', message: `${name} is imported from '${im.specifier}', which was not read (pass options.resolveModule)` } : null;
+  if (im.imported === '*') return { kind: 'ns', mod: target };
+  const key = `${target.file}\u0000${im.imported}`;
+  if (seen.has(key)) return null;
+  seen.add(key);
+  return binding(target, im.imported, seen);
+}
+
+/** The styled component a JSX tag names (Name or Namespace.Name), an import that was not read, or null. */
+export function styledTag(mod, tag) {
+  const [head, member] = tag.split('.');
+  let b = binding(mod, head);
+  if (member !== undefined && b) b = b.kind === 'ns' ? binding(b.mod, member) : b.kind === 'missing' ? b : null;
+  return b && (b.kind === 'def' || b.kind === 'missing') ? b : null;
+}
+
+/**
  * Evaluate a styled component's template for the props an element passes.
  * @param {object} def from collectStyled
  * @param {Map<string, Array<{v, choices}>>} props a prop's variants (absent: undefined)
@@ -68,7 +125,19 @@ export function collectStyled(ast, text, names) {
  * @returns {Array<{text: string, choices: object, unknowns: Array<{code, message}>}>}
  */
 export function evaluateStyled(def, props, ctx) {
-  const src = node => ctx.source.slice(node.start, node.end);
+  // the module being evaluated: a fragment or const from another module is read in that module
+  const mods = [def.mod];
+  const cur = () => mods[mods.length - 1];
+  const inModule = (mod, f) => { mods.push(mod); try { return f(); } finally { mods.pop(); } };
+  const src = node => cur().source.slice(node.start, node.end);
+  const fromBinding = (b, name) => {
+    if (!b) return one(unknownValue('U_STYLED_INTERPOLATION', `${name} is not a module constant, a styled component or a css fragment`));
+    if (b.kind === 'def') return one(`.sc-${b.def.name}`);
+    if (b.kind === 'fragment') return inModule(b.fragment.mod, () => template(b.fragment.quasi));
+    if (b.kind === 'const') return inModule(b.mod, () => ev(b.node));
+    if (b.kind === 'ns') return one({ [NS]: b.mod });
+    return one(unknownValue('U_STYLED_INTERPOLATION', b.message));
+  };
   const propsLookup = key => key === 'theme'
     ? one(ctx.theme === undefined ? unknownValue('U_STYLED_THEME', 'no theme was given (options.theme)') : { theme: ctx.theme, path: 'theme' })
     : props.get(key) ?? one(undefined);
@@ -96,6 +165,7 @@ export function evaluateStyled(def, props, ctx) {
   const member = (objNode, keyOf, node) => combine([ev(objNode), keyOf], ([o, k]) => {
     if (isUnknown(o)) return one(o[UNK].missing ? themeMissing(node, o[UNK].missing) : o);
     if (o === PROPS) return propsLookup(k);
+    if (o && typeof o === 'object' && NS in o) return fromBinding(binding(o[NS], k), `${src(objNode)}.${k}`);
     if (isSym(o)) return one(unknownValue('U_STYLED_VALUE', `${src(node)}: a member of a prop that is not a literal`));
     const base = unwrap(o);
     if (base !== null && typeof base === 'object' && Object.hasOwn(base, k)) {
@@ -122,10 +192,7 @@ export function evaluateStyled(def, props, ctx) {
       case 'Identifier': {
         const bound = lookup(node.name); if (bound) return bound;
         if (node.name === 'undefined') return one(undefined);
-        if (ctx.constants.has(node.name)) return one(ctx.constants.get(node.name));
-        if (ctx.defs.has(node.name)) return one(`.sc-${node.name}`);
-        if (ctx.fragments.has(node.name)) return template(ctx.fragments.get(node.name).quasi);
-        return one(unknownValue('U_STYLED_INTERPOLATION', `${node.name} is not a module constant, a styled component or a css fragment`));
+        return fromBinding(binding(cur(), node.name), node.name);
       }
       case 'MemberExpression': case 'OptionalMemberExpression':
         return member(node.object, node.computed ? ev(node.property).flatMap(r => valueOf(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) }))) : one(node.property.name), node);
@@ -155,9 +222,19 @@ export function evaluateStyled(def, props, ctx) {
         });
       }
       case 'TaggedTemplateExpression':
-        if (node.tag.type === 'Identifier' && node.tag.name === ctx.names.css) return template(node.quasi);
+        if (node.tag.type === 'Identifier' && node.tag.name === cur().names.css) return template(node.quasi);
         break;
       case 'ArrowFunctionExpression': case 'FunctionExpression': return one({ [FN]: node });
+      case 'ObjectExpression': case 'ArrayExpression': {
+        // a literal object or array of single values (a token table); anything else is Unknown
+        const out = node.type === 'ArrayExpression' ? [] : {};
+        for (const p of node.type === 'ArrayExpression' ? node.elements.map((value, i) => ({ key: i, value })) : node.properties.map(p => p.type === 'ObjectProperty' && !p.computed ? { key: p.key.name ?? p.key.value, value: p.value } : null)) {
+          const r = p && ev(p.value);
+          if (!r || r.length !== 1 || isUnknown(r[0].v) || isSym(r[0].v) || Object.keys(r[0].choices).length) return one(unknownValue('U_STYLED_VALUE', `${src(node)} is not a literal table`));
+          out[p.key] = unwrap(r[0].v);
+        }
+        return one(out);
+      }
       default: break;
     }
     return one(unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`));

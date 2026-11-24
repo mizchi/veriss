@@ -14,7 +14,7 @@
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
 import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree, lowerNested, relocateSelectorWarnings } from '@mizchi/veriss-adapter-core';
-import { styledImports, collectStyled, evaluateStyled, symbolOf, styledClass } from './styled-components.mjs';
+import { loadModule, binding, styledTag, evaluateStyled, symbolOf, styledClass } from './styled-components.mjs';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = s => escapeText(s).replace(/"/g, '&quot;');
@@ -71,10 +71,11 @@ function linariaRules(className, text) {
  * @param {string} source a module (JSX/TSX) whose default export (or `component`) is a function component
  * @param {{component?: string, maxStates?: number, eachCounts?: number[]}} options
  */
-export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component' } = {}) {
+export function expandReact(source, { component, maxStates = 64, eachCounts = [0, 1, 2], sourceLines = false, theme, file = 'component', resolveModule } = {}) {
   const ast = parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   // styled-components (imported from 'styled-components'): evaluated per element from the props it passes.
-  const scNames = styledImports(ast), sc = collectStyled(ast, source, scNames), scBlocks = new Map();
+  // Imported styled modules are read through options.resolveModule(specifier, importerFile).
+  const sc = loadModule({ file, source, ast }, resolveModule), scBlocks = new Map();
   const unknowns = [], assumptions = new Set();
   const unknown = (code, message) => { if (!unknowns.some(u => u.message === message)) unknowns.push({ code, message }); };
   const limit = { maxStates, onLimit: max => unknown('U_REACT_STATES', `more than ${max} component states; raise maxStates or split the component`) };
@@ -214,11 +215,14 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
 
   // A styled-components element: its tag (through styled(Base) chains), stable classes, and one class per evaluated
   // CSS of each component in the chain, base first (its rules come first, so the extension wins at equal specificity).
-  function styledElement(name, node) {
+  function styledElement(name, node, def) {
     const chain = [];
-    for (let d = sc.defs.get(name); d; d = d.base ? sc.defs.get(d.base) : null) {
+    for (let d = def; d; ) {
       chain.unshift(d);
-      if (d.base && !sc.defs.has(d.base)) { unknown('U_STYLED_BASE', `${d.name} extends ${d.base}, which is not a styled component of this module; its markup is analysed with that component`); return null; }
+      if (!d.base) break;
+      const b = binding(d.mod, d.base);
+      if (b?.kind !== 'def') { unknown('U_STYLED_BASE', `${d.name} extends ${d.base}, which is not a styled component${b?.kind === 'missing' ? ` (${b.message})` : ''}; its markup is analysed with that component`); return null; }
+      d = b.def;
     }
     const props = new Map();
     for (const a of node.openingElement.attributes) {
@@ -232,12 +236,12 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
     }
     let lists = [{ classes: [], choices: {} }];
     for (const d of chain) {
-      const variants = evaluateStyled(d, props, { defs: sc.defs, fragments: sc.fragments, constants, theme, names: scNames, source, literalProps });
+      const variants = evaluateStyled(d, props, { theme, literalProps });
       for (const v of variants) for (const u of v.unknowns) unknown(u.code, u.message);
       lists = lists.flatMap(l => variants.map(v => {
         const choices = merge(l.choices, v.choices); if (!choices) return null;
         const cls = styledClass(d.name, v.text);
-        if (!scBlocks.has(cls)) scBlocks.set(cls, { selector: `.${cls}`, text: v.text, origin: { file, line: d.line, name: d.name } });
+        if (!scBlocks.has(cls)) scBlocks.set(cls, { selector: `.${cls}`, text: v.text, origin: { file: d.mod.file, line: d.line, name: d.name } });
         return { classes: [...l.classes, cls], choices };
       }).filter(Boolean));
     }
@@ -247,8 +251,10 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   function element(node) {
     const name = node.openingElement.name;
     let tag = name.type === 'JSXIdentifier' ? name.name : text(name), baseClasses = [], scLists = null;
-    if (sc.defs.has(tag)) {
-      const r = styledElement(tag, node);
+    const scTag = /^[A-Z]/.test(tag) ? styledTag(sc, tag) : null;
+    if (scTag?.kind === 'missing') { unknown('U_REACT_COMPONENT', `child component <${tag}>: ${scTag.message}`); return [{ html: boundary('component', tag), choices: {} }]; }
+    if (scTag) {
+      const r = styledElement(tag, node, scTag.def);
       if (!r) return [{ html: boundary('component', tag), choices: {} }];
       ({ tag, baseClasses, scLists } = r);
     } else if (styled.has(tag)) { baseClasses = [styled.get(tag).className]; tag = styled.get(tag).tag; }
@@ -379,8 +385,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
  * @param {object} options veriss options plus pageCSS, page, css (an external stylesheet for plain classNames),
  *   component, maxStates, eachCounts
  */
-export function analyzeReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, css = '', ...options } = {}) {
-  const expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines, theme, file });
+export function analyzeReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule, css = '', ...options } = {}) {
+  const expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule });
   // An external stylesheet is the page's, not the component's: with a component scope it goes before the component CSS.
   const scoped = Boolean(expanded.scope && css);
   const pageCSS = scoped ? `${options.pageCSS ?? ''}\n${css}` : options.pageCSS ?? '';
