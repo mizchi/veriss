@@ -562,6 +562,11 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   break-all は継承し、break-all で測ったテキストだけを配置する(仮定の寸法のテキストは Unknown)。e2e(`e2e/layout-word-break.spec.mjs`)で、
   英語と日本語の行数が Chromium 以上で、9 割以上の幅で一致した。Firefox は Chromium が切る 1,034 組で切らず、
   WebKit は約物の前後を中心に 3,068 組で余分に切り、83 組で切らない(21,025 組中。Firefox は baseline に載せた。docs/css-baseline.md)。
+- [x] **I15. 配置を変える `:active` のルール**: 押したときに中身を下げるボタン(`:active:not([disabled]) { padding-top: 2px }`)で、
+  当たる箱を Unknown にしていた。`:hover` と同じく、当たる箱ごとに押した状態で配置し直す。マウスで押す状態(`:active` と `:hover`)と
+  キーで押す状態(`:active` だけ)を、箱と祖先に付ける。押した配置の違反のうち元の配置にないものを、押している間のものとして報告し
+  (`pressed`)、決まらなければ Unknown にする。ずれは、押す入力に続くので報告しない。3 ブラウザーでボタンをマウスと Space キーで押し、
+  中身のはみ出しが報告と一致した(Firefox は Space キーでボタンに `:active` を付けないので、キーの側は安全側。`e2e/layout-active.spec.mjs`)。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

@@ -29,8 +29,9 @@ test('a rule that may change layout makes Unknown the boxes it may match, and on
   assert.equal(run('.c:hover + .z{height:40px}', row).status, 'verified');
 });
 
-test('a state rule that changes layout in a state the analysis does not lay out (:active)', () => {
-  const css = '.btn:active:not([disabled]){padding-top:2px}';
+// (:active is laid out again pressed: active-layout.test.mjs.)
+test('a state rule that changes layout in a state the analysis does not lay out (:target)', () => {
+  const css = '.btn:target:not([disabled]){padding-top:2px}';
   const r = run(css, '<button class="btn" type="button">Go</button>');
   assert.deepEqual(global(r), []);
   assert.ok(onBox(r, '.btn').some(d => d.code === 'U_LAYOUT_SELECTOR'), JSON.stringify(r.diagnostics));
