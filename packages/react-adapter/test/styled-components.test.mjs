@@ -875,3 +875,17 @@ export default function C({ size }: { size: 'sm' | 'lg' }) { return <Box $size={
   assert.deepEqual(states.map(s => s.choices.size).sort(), ['lg', 'sm']);
   for (const s of states) assert.match(css, new RegExp(`\\.${classOf(s.html, 'div')[1]}\\{width:${s.choices.size}\\}`));
 });
+
+test('styled-components: a member of a namespace import (tokens.gap) is read from that module', () => {
+  const files = {tokens: `export const gap = '8px';`};
+  const source = `import styled from 'styled-components';
+import * as tokens from './tokens';
+const Box = styled.div\`
+  gap: \${tokens.gap};
+  margin: \${tokens.missing};
+\`;
+export default function C() { return <Box />; }`;
+  const {css, unknowns} = expandReact(source, {file: 'C.jsx', resolveModule: memoryResolver(files)});
+  assert.match(css, /\{gap:8px\}/);
+  assert.ok(unknowns.some(u => u.code === 'U_STYLED_INTERPOLATION' && /tokens\.missing/.test(u.message)), JSON.stringify(unknowns));
+});

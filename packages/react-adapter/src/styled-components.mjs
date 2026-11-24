@@ -249,7 +249,7 @@ export function evaluateStyled(def, props, ctx) {
   const getKey = (o, k, node) => {
     if (isUnknown(o)) return one(o[UNK].missing ? themeMissing(node, o[UNK].missing) : o);
     if (o === PROPS) return propsLookup(k);
-    if (o && typeof o === 'object' && NS in o) return fromBinding(binding(o[NS], k), `${src(objNode)}.${k}`);
+    if (o && typeof o === 'object' && NS in o) return fromBinding(binding(o[NS], k), src(node));
     if (isSym(o)) return one(unknownValue('U_STYLED_VALUE', `${src(node)}: a member of a prop that is not a literal`));
     const base = unwrap(o);
     if (base !== null && typeof base === 'object' && Object.hasOwn(base, k)) {
