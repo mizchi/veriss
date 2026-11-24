@@ -344,10 +344,17 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
 
   // The component: the named one, else the default export; its returned JSX.
   const functions = [];
-  const visitFn = (name, fn) => { if (fn && ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(fn.type)) functions.push({ name, fn }); };
+  // forwardRef(fn) / memo(fn) (React.-qualified or not) wrap the component; `x as T` and `x!` are only types.
+  const unwrapComponent = node => {
+    while (node && ['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression', 'ParenthesizedExpression'].includes(node.type)) node = node.expression;
+    if (node?.type === 'CallExpression' && /^(?:React\.)?(?:forwardRef|memo)$/.test(text(node.callee))) return unwrapComponent(node.arguments[0]);
+    return node;
+  };
+  const visitFn = (name, fn) => { fn = unwrapComponent(fn); if (fn && ['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(fn.type)) functions.push({ name, fn }); };
   for (const stmt of ast.program.body) {
-    if (stmt.type === 'ExportDefaultDeclaration') visitFn('default', stmt.declaration.type === 'Identifier' ? null : stmt.declaration);
-    if (stmt.type === 'ExportDefaultDeclaration' && stmt.declaration.type === 'Identifier') functions.push({ name: 'default', ref: stmt.declaration.name });
+    const defaultDecl = stmt.type === 'ExportDefaultDeclaration' ? unwrapComponent(stmt.declaration) : null;
+    if (defaultDecl && defaultDecl.type !== 'Identifier') visitFn('default', defaultDecl);
+    if (defaultDecl?.type === 'Identifier') functions.push({ name: 'default', ref: defaultDecl.name });
     const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
     if (decl?.type === 'FunctionDeclaration') visitFn(decl.id.name, decl);
     if (decl?.type === 'VariableDeclaration') for (const d of decl.declarations) visitFn(d.id.name, d.init);

@@ -142,3 +142,17 @@ test('a prop with a literal default ({ label = "…" }): the default is a state 
   const {states} = expandReact(`export default function B({ label = 'Save changes' }) { return <button type="button">{label}</button>; }`);
   assert.deepEqual(states.map(s => s.html).sort(), ['<button type="button">Save changes</button>', '<button type="button">…</button>']);
 });
+
+test('components wrapped in forwardRef / memo, and a default export written with `as`, are found', () => {
+  const shapes = [
+    `import React from 'react'; const Box = React.forwardRef(function Box(props, ref) { return <div ref={ref} className="a">x</div>; }); export default Box;`,
+    `import { forwardRef } from 'react'; export const Box = forwardRef((props, ref) => <div className="a">x</div>); export default Box;`,
+    `import React from 'react'; const Box = React.memo(function Box() { return <div className="a">x</div>; }); export default Box;`,
+    `import React from 'react'; const Inner = React.forwardRef<HTMLDivElement, {}>((props, ref) => <div className="a">x</div>); export default Inner as unknown as React.FC;`,
+  ];
+  for (const source of shapes) {
+    const {states, unknowns} = expandReact(source);
+    assert.deepEqual(unknowns, [], source);
+    assert.equal(states[0].html, '<div class="a">x</div>', source);
+  }
+});
