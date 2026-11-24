@@ -586,3 +586,27 @@ export default function C({ variant }: P) { return <Box $variant={variant} />; }
     }
   }
 });
+
+test('styled props: JSX expressions are evaluated in the component (module tables, local consts, destructuring, module functions, useTheme)', () => {
+  const source = `import styled from 'styled-components';
+import { useTheme } from 'styled-components';
+const DOT = { small: 4, large: 8 };
+const tone = (name, theme) => (name === 'muted' ? theme.colors.text : '#c00');
+const Box = styled.div\`
+  width: \${({ $w }) => $w}px;
+  height: \${({ $h }) => $h}px;
+  color: \${({ $c }) => $c};
+\`;
+type P = { size: 'small' | 'large'; kind: 'muted' | 'alert'; };
+export default function C({ size, kind }: P) {
+  const theme = useTheme();
+  const dims = { width: DOT[size], height: DOT[size] * 2 };
+  const { width, height } = dims;
+  return <Box $w={width} $h={height} $c={tone(kind, theme)} />;
+}`;
+  const {states, css, unknowns} = expandReact(source, {theme});
+  assert.deepEqual(unknowns.map(u => u.message), []);
+  const rule = (size, kind) => { const s = states.find(x => x.choices.size === size && x.choices.kind === kind); const [, cls] = classOf(s.html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.match(rule('small', 'muted'), /^width:4px;height:8px;color:#222$/);
+  assert.match(rule('large', 'alert'), /^width:8px;height:16px;color:#c00$/);
+});

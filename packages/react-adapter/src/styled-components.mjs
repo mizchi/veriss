@@ -111,6 +111,17 @@ export function loadModule({ file, source, ast }, resolveModule, cache = new Map
  * What a name means in a module: a styled component, a css fragment, a const, an imported module namespace, an import
  * that could not be read ({missing}), or null (not something styled evaluation knows).
  */
+// the names a binding pattern declares
+function patternNames(p) {
+  if (!p) return [];
+  if (p.type === 'Identifier') return [p.name];
+  if (p.type === 'AssignmentPattern') return patternNames(p.left);
+  if (p.type === 'RestElement') return patternNames(p.argument);
+  if (p.type === 'ObjectPattern') return p.properties.flatMap(x => patternNames(x.type === 'RestElement' ? x : x.value));
+  if (p.type === 'ArrayPattern') return p.elements.flatMap(patternNames);
+  return [];
+}
+
 // a function declaration of the module by name (export default function counts as 'default')
 function functionDeclaration(mod, name) {
   for (const stmt of mod.ast.program.body) {
@@ -162,6 +173,10 @@ export function styledTag(mod, tag) {
  * @param {{defs, fragments, constants: Map, theme?: object, names, source: string, literalProps?: Map}} ctx
  * @returns {Array<{text: string, choices: object, unknowns: Array<{code, message}>}>}
  */
+/** One expression of a component in module `mod` (see expression mode in evaluateStyled): [{v, choices}]. */
+export const evaluateExpression = (expression, mod, ctx) => evaluateStyled({ mod, name: '' }, new Map(), { ...ctx, expression });
+export const isUnknownValue = v => isUnknown(v);
+
 export function evaluateStyled(def, props, ctx) {
   // the module being evaluated: a fragment or const from another module is read in that module
   const mods = [def.mod];
@@ -290,6 +305,20 @@ export function evaluateStyled(def, props, ctx) {
   // name, by object pattern ({ a, theme }) and with defaults ({ size = 'm' }, style = 'solid'); the body is evaluated
   // in the function's module, over the scopes it closed over.
   let depth = 0;
+  // a binding pattern (name, default, object pattern) set in `scope` from value variants; false if not modeled
+  const withDefault = (variants, right) => variants.flatMap(r => r.v === undefined ? ev(right).map(d => ({ v: d.v, choices: merge(r.choices, d.choices) })).filter(x => x.choices) : [r]);
+  const bind = (scope, pattern, variants) => {
+    if (pattern.type === 'Identifier') { scope.set(pattern.name, variants); return true; }
+    if (pattern.type === 'AssignmentPattern' && pattern.left.type === 'Identifier') { scope.set(pattern.left.name, withDefault(variants, pattern.right)); return true; }
+    if (pattern.type !== 'ObjectPattern') return false;
+    for (const p of pattern.properties) {
+      if (p.type !== 'ObjectProperty' || p.computed) return false;
+      const key = p.key.name ?? p.key.value;
+      const field = variants.flatMap(a => fieldOf(a.v, key, p).map(x => ({ v: x.v, choices: merge(a.choices, x.choices) })).filter(x => x.choices));
+      if (!bind(scope, p.value, field)) return false;
+    }
+    return true;
+  };
   // a destructured field: a plain object (an argument built in the template) without the key gives undefined, as in JS
   const fieldOf = (v, key, node) => {
     const plain = v !== PROPS && !isUnknown(v) && !isSym(v) && !(v && typeof v === 'object' && ('path' in v || NS in v || FN in v));
@@ -303,21 +332,8 @@ export function evaluateStyled(def, props, ctx) {
       const saved = scopes, scope = new Map();
       scopes = [...(f.env ?? []), scope]; depth++;
       try {
-        const withDefault = (variants, right) => variants.flatMap(r => r.v === undefined ? ev(right).map(d => ({ v: d.v, choices: merge(r.choices, d.choices) })).filter(x => x.choices) : [r]);
-        const bind = (pattern, variants) => {
-          if (pattern.type === 'Identifier') { scope.set(pattern.name, variants); return true; }
-          if (pattern.type === 'AssignmentPattern' && pattern.left.type === 'Identifier') { scope.set(pattern.left.name, withDefault(variants, pattern.right)); return true; }
-          if (pattern.type !== 'ObjectPattern') return false;
-          for (const p of pattern.properties) {
-            if (p.type !== 'ObjectProperty' || p.computed) return false;
-            const key = p.key.name ?? p.key.value;
-            const field = variants.flatMap(a => fieldOf(a.v, key, p).map(x => ({ v: x.v, choices: merge(a.choices, x.choices) })).filter(x => x.choices));
-            if (!bind(p.value, field)) return false;
-          }
-          return true;
-        };
         for (const [i, param] of fn.params.entries()) {
-          if (!bind(param, args[i] ?? one(undefined))) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: the parameter ${src(param)} is not modeled`));
+          if (!bind(scope, param, args[i] ?? one(undefined))) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(fn)}: the parameter ${src(param)} is not modeled`));
         }
         if (fn.body.type !== 'BlockStatement') return ev(fn.body);
         // falling off the end returns undefined
@@ -348,6 +364,8 @@ export function evaluateStyled(def, props, ctx) {
   const callExpression = node => {
     if (node.arguments.some(a => a.type === 'SpreadElement')) return one(unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`));
     if (['MemberExpression', 'OptionalMemberExpression'].includes(node.callee.type) && !node.callee.computed && Object.hasOwn(METHODS, node.callee.property.name)) return method(node);
+    // the theme hook (useTheme from styled-components or a wrapper named like it) is the theme
+    if (node.callee.type === 'Identifier' && /^use\w*Theme$/.test(node.callee.name) && !node.arguments.length) return propsLookup('theme');
     return ev(node.callee).flatMap(c => {
       if (!(c.v && typeof c.v === 'object' && FN in c.v)) return [{ v: isUnknown(c.v) ? c.v : unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`), choices: c.choices }];
       return thread(c, apply(c.v, node.arguments.map(a => ev(a))));
@@ -372,8 +390,8 @@ export function evaluateStyled(def, props, ctx) {
         return thread({ choices }, branch ? step(branch) : [{ done: false, choices: {} }]);
       }));
       case 'VariableDeclaration': {
-        if (st.kind === 'var' || !st.declarations.every(d => d.id.type === 'Identifier' && d.init)) return notModeled(st);
-        for (const d of st.declarations) scopes[scopes.length - 1].set(d.id.name, ev(d.init));
+        if (st.kind === 'var' || !st.declarations.every(d => d.init)) return notModeled(st);
+        for (const d of st.declarations) if (!bind(scopes[scopes.length - 1], d.id, ev(d.init))) return notModeled(st);
         return [{ done: false, choices: {} }];
       }
       case 'SwitchStatement': return ev(st.discriminant).flatMap(dr => valueOf(dr.v).flatMap(x => {
@@ -421,6 +439,14 @@ export function evaluateStyled(def, props, ctx) {
     }).join('')));
   }
 
+  // Expression mode: one expression of a component (a prop passed to a styled element), over the component's props
+  // (ctx.scope: name → variants) and its local bindings (ctx.bindings: [pattern, init], in order).
+  if (ctx.expression) {
+    const scope = new Map(ctx.scope ?? []);
+    scopes = [scope];
+    for (const [pattern, init] of ctx.bindings ?? []) if (!bind(scope, pattern, ev(init))) for (const name of patternNames(pattern)) scope.set(name, one(unknownValue('U_STYLED_VALUE', `${src(init)} is not modeled`)));
+    return ev(ctx.expression);
+  }
   const lines = templateLines(def.quasi);
   const unreadable = (text, e, choices) => ({ text: '', lines, choices, unknowns: [{ code: 'U_STYLED_CSS', message: `${def.name}: its CSS cannot be read (${e.reason ?? e.message}${e.line ? ` at template line ${lines[e.line - 1] ?? def.line}: ${JSON.stringify(`x{${text}}`.split('\n')[e.line - 1]?.trim().replace(/[\u0001-\u0003]/g, '·'))}` : ''})` }] });
   return template(def.quasi).map(({ v: text, choices }) => {

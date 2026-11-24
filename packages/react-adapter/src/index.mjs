@@ -14,7 +14,7 @@
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
 import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings } from '@mizchi/veriss-adapter-core';
-import { loadModule, binding, styledTag, evaluateStyled, symbolOf, symbolInfo, styledClass } from './styled-components.mjs';
+import { loadModule, binding, styledTag, evaluateStyled, evaluateExpression, isUnknownValue, symbolOf, symbolInfo, styledClass } from './styled-components.mjs';
 import { typeMembers, literalValues, isTextType } from './types.mjs';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -86,7 +86,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const empty = [{ html: '', choices: {} }];
   // Props typed as a union of string or number literals (status: 'Active' | 'Pending review'): their text is one of
   // those values, a state each (the choice is the prop's value).
-  let literalProps = new Map(), propsName = null, textProps = new Set(); const defaultProps = new Map();
+  let literalProps = new Map(), propsName = null, textProps = new Set(), componentEnv = null; const defaultProps = new Map();
   const text = node => source.slice(node.start, node.end);
   const choice = (node, value) => { const { key, negate } = conditionKey(text(node)); return choose(key, value !== negate); };
 
@@ -238,7 +238,13 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       if (value === null || value === undefined) props.set(key, [{ v: true, choices: {} }]);
       else if (['StringLiteral', 'NumericLiteral', 'BooleanLiteral'].includes(value.type)) props.set(key, [{ v: value.value, choices: {} }]);
       else if (value.type === 'ConditionalExpression' && [value.consequent, value.alternate].every(e => ['StringLiteral', 'NumericLiteral', 'BooleanLiteral'].includes(e.type))) props.set(key, [true, false].map(on => ({ v: (on ? value.consequent : value.alternate).value, choices: choice(value.test, on) })));
-      else { const { key: cond, negate } = conditionKey(text(value)); props.set(key, [{ v: symbolOf(cond, key, negate), choices: {} }]); }
+      else {
+        // evaluated in the component (its props, local consts, module tables and functions); a prop it reads stays a
+        // symbol under this attribute's name; when any variant is Unknown, the expression is one symbol of its text
+        const evaluated = componentEnv && evaluateExpression(value, sc, { ...componentEnv, theme, literalProps });
+        if (evaluated?.length && !evaluated.some(r => isUnknownValue(r.v))) props.set(key, evaluated.map(r => { const sym = symbolInfo(r.v); return sym ? { v: symbolOf(sym.key, key, sym.negate), choices: r.choices } : r; }));
+        else { const { key: cond, negate } = conditionKey(text(value)); props.set(key, [{ v: symbolOf(cond, key, negate), choices: {} }]); }
+      }
     }
     let lists = [{ classes: [], choices: {} }];
     for (const d of chain) {
@@ -421,6 +427,13 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // A prop with a literal default ({ label = 'Save changes' }): its default is a state of its own (the prop left out).
   for (const p of param?.type === 'ObjectPattern' ? param.properties : []) if (p.type === 'ObjectProperty' && p.key.type === 'Identifier' && p.value.type === 'AssignmentPattern' && p.value.left.type === 'Identifier' && p.value.left.name === p.key.name && ['StringLiteral', 'NumericLiteral'].includes(p.value.right.type) && !literalProps.has(p.key.name)) defaultProps.set(p.key.name, p.value.right.value);
   if (defaultProps.size) assumptions.add(`props with a literal default (${[...defaultProps.keys()].join(', ')}) are checked with that default and with placeholder text for any other value`);
+  // The component's environment for expressions passed to styled elements: its props by name (symbols; literal unions
+  // take their values when read) and the const / let bindings of its body before the return, in order.
+  if (sc.defs.size || sc.imports.size) {
+    const names = new Set([...(local ?? []), ...defaults.keys()]);
+    const bindings = target.fn.body.type === 'BlockStatement' ? target.fn.body.body.filter(st => st.type === 'VariableDeclaration' && st.kind !== 'var').flatMap(st => st.declarations.filter(d => d.init).map(d => [d.id, d.init])) : [];
+    componentEnv = { scope: [...names].map(n => [n, [{ v: symbolOf(n, n), choices: {} }]]), bindings };
+  }
   if (literalProps.size) assumptions.add(`text of props typed as literal unions (${[...literalProps.keys()].join(', ')}) is each of their values`);
   const body = target.fn.body.type === 'BlockStatement' ? target.fn.body.body.filter(s => s.type === 'ReturnStatement').at(-1)?.argument : target.fn.body;
   if (target.fn.body.type === 'BlockStatement' && target.fn.body.body.filter(s => s.type === 'ReturnStatement').length > 1) unknown('U_REACT_EARLY_RETURN', 'the component returns early; only its last return is modeled');
