@@ -130,6 +130,20 @@ test('F14: a border width with no border style draws no border', () => {
   assert.deepEqual(codes(run('.a{border-width:0 2px}'), 'W_CSS_BORDER_NO_STYLE')[0]?.sides, ['right', 'left']);
   assert.equal(codes(run('.a{border-width:0 2px;border-style:solid}'), 'W_CSS_BORDER_NO_STYLE').length, 0);
   for (const css of ['.a{border-width:2px;border-style:solid}', '.a{border:2px solid red}', '.a{border-width:0}', '.a{border-style:solid;border-width:2px}']) assert.equal(codes(run(css), 'W_CSS_BORDER_NO_STYLE').length, 0, css);
+  // A side's own shorthand gives it a style: no warning for it, and the shorthand is read (not Unknown).
+  const unknown = r => r.diagnostics.filter(d => d.severity === 'unknown' && /border/.test(d.message));
+  for (const css of ['.a{border:none}.a{border-top:1px dashed rgb(179, 186, 193)}', '.a{border-right:1px solid rgb(226, 232, 234)}', '.a{border-bottom:2px dotted}', '.a{border:2px dashed #333}', '.a{border-left:solid 3px blue}']) {
+    const r = run(css);
+    assert.equal(codes(r, 'W_CSS_BORDER_NO_STYLE').length, 0, css);
+    assert.deepEqual(unknown(r), [], css);
+  }
+  assert.deepEqual(codes(run('.a{border-width:2px}.a{border-top:1px solid red}'), 'W_CSS_BORDER_NO_STYLE')[0]?.sides, ['right', 'bottom', 'left']);
+  // A width alone in a side's shorthand leaves its style none, as in border.
+  assert.deepEqual(codes(run('.a{border-top:2px}'), 'W_CSS_BORDER_NO_STYLE')[0]?.sides, ['top']);
+  // The style declared none (or hidden) beside the width says there is no border on purpose: the longhands a browser
+  // serializes border: none into (border-width: medium; border-style: none) are not a forgotten style.
+  for (const css of ['.a{border-width:medium;border-style:none;border-color:currentcolor}', '.a{border-right-width:medium;border-right-style:none}', '.a{border-width:2px;border-style:hidden}'])
+    assert.equal(codes(run(css), 'W_CSS_BORDER_NO_STYLE').length, 0, css);
 });
 
 test('F15, F16: background-size with no image, text-decoration-color with no line', () => {

@@ -280,17 +280,30 @@ function expand(property, value) {
     const values = property === 'margin' ? [parts[0], parts[1] ?? parts[0], parts[2] ?? parts[0], parts[3] ?? parts[1] ?? parts[0]] : sides.length === 2 ? [parts[0], parts[1] ?? parts[0]] : [parts[0]];
     return sides.map((side, i) => [`margin-${side}`, margin(values[i])]);
   }
-  if (property === 'border' || property === 'border-inline' || property === 'border-block') {
-    const sides = property === 'border' ? ['left', 'right', 'top', 'bottom'] : property === 'border-inline' ? ['left', 'right'] : ['top', 'bottom'];
-    // The color is kept as paint (border-<side>-color) for the non-text contrast rules.
+  // The border shorthands: border, border-inline, border-block and each side's (border-top, …). Any order of [width]
+  // [style] [color], each optional (CSS Backgrounds 3 §4.4): an omitted width is medium, an omitted style none (kept
+  // apart from a written none: 'none-implied'), an omitted color currentcolor. Each side keeps its width ($bw-side) and
+  // style ($bs-side); computeStyle derives the used width from the pair after the cascade. The color is kept as paint
+  // (border-<side>-color) for the non-text contrast rules.
+  const borderSides = { border: ['left', 'right', 'top', 'bottom'], 'border-inline': ['left', 'right'], 'border-block': ['top', 'bottom'], 'border-top': ['top'], 'border-right': ['right'], 'border-bottom': ['bottom'], 'border-left': ['left'] };
+  if (property in borderSides) {
+    const sides = borderSides[property];
     if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value]]);
-    const p = postcss.list.space(value);
-    // A width alone (0, 5px, medium) leaves the style at its initial none, so the used width is 0: no border, as 0 is
-    // (measured in Chromium, Firefox and WebKit). A percentage or a negative length is not a width (dropped).
-    if (p.length === 1 && (['0', 'none', 'thin', 'medium', 'thick'].includes(value) || /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/.test(value))) return sides.flatMap(side => [[`border-${side}`, '0'], [`border-${side}-color`, 'currentcolor'], [`$bw-${side}`, '0'], [`$bs-${side}`, 'none']]);
-    if (p.length !== 3 || p[1] !== 'solid') throw new Error('Use a pixel solid border with a color');
-    if (!/^(?:black|white|red|green|blue|transparent|currentcolor|#[\da-f]{3}|#[\da-f]{4}|#[\da-f]{6}|#[\da-f]{8})$/.test(p[2])) throw new Error('Use a supported literal border color');
-    px(p[0]); return sides.flatMap(side => [[`border-${side}`, p[0]], [`border-${side}-color`, p[2]], [`$bw-${side}`, p[0]], [`$bs-${side}`, 'solid']]);
+    const styles = new Set(['none', 'hidden', 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
+    const lengthLike = /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/;
+    let width, style, color;
+    for (const part of postcss.list.space(value)) {
+      if (style === undefined && styles.has(part)) style = part;
+      else if (width === undefined && (['0', 'thin', 'medium', 'thick'].includes(part) || lengthLike.test(part))) width = part;
+      // (A percentage, a negative length or another number is not a color: the declaration is dropped.)
+      else if (color === undefined && !styles.has(part) && !/^[-+]?(?:\d|\.\d)/.test(part)) color = part;
+      else throw new Error(`Unsupported ${property}: ${value}`);
+    }
+    // With no style the border draws nothing whatever the width (measured in Chromium, Firefox and WebKit), so any
+    // length is taken; a drawn border needs a px width (or a keyword).
+    const drawn = style !== undefined && !['none', 'hidden'].includes(style);
+    const w = width === undefined ? '3px' : /^0(?:\.0+)?(?:[a-z]+)?$/.test(width) ? '0' : width === 'thin' ? '1px' : width === 'medium' ? '3px' : width === 'thick' ? '5px' : drawn ? (px(width), width) : width;
+    return sides.flatMap(side => [[`border-${side}`, drawn ? w : '0'], [`border-${side}-color`, color ?? 'currentcolor'], [`$bw-${side}`, w], [`$bs-${side}`, style ?? 'none-implied']]);
   }
   // border-width / border-style and their side longhands (StyleX writes borders this way): kept as each side's width
   // ($bw-side) and style ($bs-side); computeStyle derives the side's used width from the pair after the cascade (none or
@@ -1503,7 +1516,11 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     const uaStyled = values[`border-${side}`] === 'ua' || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
     const style = sources[bs] ? values[bs] : (uaStyled ? 'ua' : 'none');
     const width = sources[bw] ? values[bw] : (uaStyled ? values[`border-${side}`] : '3px');
-    values[`border-${side}`] = ['none', 'hidden'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
+    values[`border-${side}`] = ['none', 'hidden', 'none-implied'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
+    // For the border rule (F14): a non-zero width the author wrote, and a style written none or hidden (no border on
+    // purpose; a shorthand that leaves the style out does not say so).
+    if (sources[bw] && !['0', 'none-implied'].includes(String(values[bw])) && !wide.has(String(values[bw]))) (values.$borderWidthSet ??= []).push(side);
+    if (sources[bs] && ['none', 'hidden'].includes(style)) (values.$borderNone ??= []).push(side);
     const later = [sources[bw], sources[bs]].filter(Boolean).at(-1);
     sources[`border-${side}`] = later;
     delete values[bw]; delete values[bs];

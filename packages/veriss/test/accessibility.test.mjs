@@ -2276,8 +2276,11 @@ test('a border shorthand with only a width (0, 0px, 5px, medium) leaves the styl
   const tree = page([{tag: 'button', classes: ['b'], named: true}]);
   const css = border => pageCSS(`.page { background: #fff; }\n.b { appearance: none; display: block; padding: 0; border: ${border}; min-width: 0; min-height: 0; }`);
   for (const border of ['0', '0px', '0em', '0.0px', '5px', '1.5rem', 'thin', 'medium', 'thick']) assert.equal(run(tree, css(border)).status, 'verified', border);
-  // Not a width: a percentage or a negative length drops the declaration (the UA border stays); a style alone draws one.
-  for (const border of ['0%', '-1px', 'solid']) assert.equal(run(tree, css(border)).status, 'unknown', border);
+  // Not a width: a percentage or a negative length drops the declaration (the UA border stays).
+  for (const border of ['0%', '-1px']) assert.equal(run(tree, css(border)).status, 'unknown', border);
+  // A style alone draws a medium (3px) border in currentcolor (measured in Chromium, Firefox and WebKit: border: solid
+  // lays out and paints as border: 3px solid).
+  assert.equal(run(tree, css('solid')).status, 'verified');
 });
 
 test('px lengths with more than six decimals are exact rationals (a script writes 80 / 3 + "px")', () => {

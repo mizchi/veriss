@@ -541,8 +541,9 @@ export function createCssMistakes({ report, facts, tools }) {
         // analysis lays it out that way too).
         {
           // (Declared a non-zero width, yet the used width is 0: the style is none or hidden.)
-          const declaredWidth = side => { const t = String(style.$sources?.[`$bw-${side}`]?.specified ?? '').trim().split(/\s+/); if (t.length < 2) return t[0] ?? ''; return { top: t[0], right: t[1], bottom: t[2] ?? t[0], left: t[3] ?? t[1] }[side] ?? ''; };
-          const sides = ['top', 'right', 'bottom', 'left'].filter(side => style.$sources?.[`$bw-${side}`] && /[1-9]|thin|medium|thick/.test(declaredWidth(side)) && ['0', '0px'].includes(String(style[`border-${side}`])));
+          // (A style written none or hidden says there is no border on purpose: border: none, as a browser serializes it
+          // into border-width: medium; border-style: none, is not a forgotten style.)
+          const sides = ['top', 'right', 'bottom', 'left'].filter(side => style.$borderWidthSet?.includes(side) && !style.$borderNone?.includes(side) && ['0', '0px'].includes(String(style[`border-${side}`])));
           if (sides.length && !layoutWarnings.some(w => w.code === 'W_CSS_BORDER_NO_STYLE' && w.path === box.path))
             layoutWarnings.push({ code: 'W_CSS_BORDER_NO_STYLE', severity: 'warning', box: box.label, path: box.path, sides, css: at(`$bw-${sides[0]}`).map(c => ({ ...c, property: 'border-width' })),
               message: `${box.label} sets a border width (${sides.join(', ')}) but no border style, which is none by default: no border is drawn and its width is 0. Add border-style: solid (or use the border shorthand: border: 2px solid)` });

@@ -153,6 +153,22 @@ test('F14: a border width with no border style draws no border', async ({page}) 
   }
 });
 
+test('F14: a side\'s own border shorthand draws that side; a style written none is no border on purpose', async ({page}) => {
+  // [css, warned, the sides drawn]: border-top / -right / -bottom / -left give their side a style (after border: none
+  // too), a width alone in one leaves its style none, and border: none as a browser serializes it (border-width: medium;
+  // border-style: none) draws nothing and is not a forgotten style.
+  for (const [css, warned, drawn] of [
+    ['.a{border:none}.a{border-top:1px dashed rgb(179, 186, 193)}', false, ['top']], ['.a{border-right:1px solid rgb(226, 232, 234)}', false, ['right']],
+    ['.a{border-left:solid 3px blue}', false, ['left']], ['.a{border:solid}', false, ['top', 'right', 'bottom', 'left']],
+    ['.a{border-width:2px}.a{border-top:1px solid red}', true, ['top']], ['.a{border-top:2px}', true, []],
+    ['.a{border-width:medium;border-style:none;border-color:currentcolor}', false, []], ['.a{border-width:2px;border-style:hidden}', false, []]]) {
+    await load(page, `.a{box-sizing:content-box;width:50px}${css}`);
+    const widths = await page.evaluate(() => { const s = getComputedStyle(document.querySelector('.a')); return {top: s.borderTopWidth, right: s.borderRightWidth, bottom: s.borderBottomWidth, left: s.borderLeftWidth}; });
+    expect(Object.entries(widths).filter(([, w]) => w !== '0px').map(([side]) => side), `${css}: ${JSON.stringify(widths)}`).toEqual(drawn);
+    expect(warns(`.a{box-sizing:content-box;width:50px}${css}`, 'W_CSS_BORDER_NO_STYLE'), css).toBe(warned);
+  }
+});
+
 test('F15, F16: background-size with no image and text-decoration-color with no line paint nothing different', async ({page}) => {
   await page.setViewportSize({width: 400, height: 300});
   const shot = async css => { await page.setContent(`<!doctype html><html lang="en"><head><style>${base}.a{background-color:rgb(200, 220, 240)}${css}</style></head><body><div class="a">text</div></body></html>`); return (await page.screenshot()).toString('base64'); };
