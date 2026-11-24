@@ -142,3 +142,71 @@ test('a prop with a literal default ({ label = "…" }): the default is a state 
   const {states} = expandReact(`export default function B({ label = 'Save changes' }) { return <button type="button">{label}</button>; }`);
   assert.deepEqual(states.map(s => s.html).sort(), ['<button type="button">Save changes</button>', '<button type="button">…</button>']);
 });
+
+test('components wrapped in forwardRef / memo, and a default export written with `as`, are found', () => {
+  const shapes = [
+    `import React from 'react'; const Box = React.forwardRef(function Box(props, ref) { return <div ref={ref} className="a">x</div>; }); export default Box;`,
+    `import { forwardRef } from 'react'; export const Box = forwardRef((props, ref) => <div className="a">x</div>); export default Box;`,
+    `import React from 'react'; const Box = React.memo(function Box() { return <div className="a">x</div>; }); export default Box;`,
+    `import React from 'react'; const Inner = React.forwardRef<HTMLDivElement, {}>((props, ref) => <div className="a">x</div>); export default Inner as unknown as React.FC;`,
+  ];
+  for (const source of shapes) {
+    const {states, unknowns} = expandReact(source);
+    assert.deepEqual(unknowns, [], source);
+    assert.equal(states[0].html, '<div class="a">x</div>', source);
+  }
+});
+
+test('a JSX child expression other than literal text is the caller\'s content: marked as a children boundary', () => {
+  const source = `export default function B({ icon, items }) { return <button className="b">{icon}{items.map(i => i)}<span>x</span></button>; }`;
+  const {states} = expandReact(source);
+  assert.match(states[0].html, /^<button class="b">…<!--isle-boundary:children-->/);
+});
+
+test('checked and selected are written only where React writes them (input, option), like react-dom/server', async () => {
+  const {render} = await import('./ssr.mjs');
+  const source = `export default function C({ on }) {
+  return <div><span checked={on} /><label checked disabled /><input type="checkbox" checked={on} readOnly /><select><option selected={on}>a</option></select><div selected={on} /></div>;
+}`;
+  const {states} = expandReact(source);
+  for (const s of states) {
+    assert.doesNotMatch(s.html, /<(?:span|label|div)[^>]*\s(?:checked|selected)\b/, s.html);
+    const real = await render(source, s.choices);
+    const attrs = html => [...html.matchAll(/<(\w+)([^>]*)>/g)].map(m => `${m[1]}:${[...m[2].matchAll(/\s([\w-]+)/g)].map(x => x[1]).filter(n => ['checked', 'selected', 'disabled', 'readonly', 'readOnly'].includes(n)).map(n => n.toLowerCase()).sort().join(',')}`);
+    assert.deepEqual(attrs(s.html), attrs(real), JSON.stringify(s.choices));
+  }
+});
+
+test('size, span, cols and rows are written only for a positive number, like react-dom/server (values evaluated in the component)', async () => {
+  const {render} = await import('./ssr.mjs');
+  const source = `const DOT = { small: '8px', large: '12px' };
+const PX = { sm: 12, lg: 0 };
+export default function C({ size, dot, icon }: { size: 'small' | 'medium'; dot: 'small' | 'large'; icon: 'sm' | 'lg' }) {
+  return <div><div size={size} /><span size={DOT[dot]} /><span size={PX[icon]} /><span size={18} /><span size="medium" /><td colSpan={2} /><i span="x" /></div>;
+}`;
+  const {states} = expandReact(source);
+  assert.ok(states.length > 1);
+  const attrs = html => [...html.matchAll(/<(\w+)([^>]*)>/g)].map(m => `${m[1]}:${[...m[2].matchAll(/\s(size|span|cols|rows)="([^"]*)"/g)].map(x => `${x[1]}=${x[2]}`).join(',')}`);
+  for (const s of states) {
+    const real = await render(source.replace(/: \{ size[^}]*\}/, ''), s.choices);
+    assert.deepEqual(attrs(s.html), attrs(real), JSON.stringify(s.choices));
+  }
+});
+
+test('package exports: the resolve-node entry the README imports resolves through the package name', async () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  const specifiers = [...readme.matchAll(/from '(@mizchi\/veriss-react[^']*)'/g)].map(m => m[1]);
+  assert.ok(specifiers.includes('@mizchi/veriss-react/resolve-node'), JSON.stringify(specifiers));
+  for (const specifier of specifiers) await import(specifier);
+  const {nodeModuleResolver} = await import('@mizchi/veriss-react/resolve-node');
+  assert.equal(typeof nodeModuleResolver(), 'function');
+});
+
+test('props types: export default forwardRef<Ref, Props>(…) takes its props type from the type arguments', () => {
+  const source = `import { forwardRef } from 'react';
+type Props = { tone: 'a' | 'b' };
+export default forwardRef<HTMLSpanElement, Props>(({ tone }, ref) => <span ref={ref}>{tone}</span>);`;
+  const {states, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.deepEqual(states.map(s => [s.choices.tone, s.html]).sort(), [['a', '<span>a</span>'], ['b', '<span>b</span>']]);
+});

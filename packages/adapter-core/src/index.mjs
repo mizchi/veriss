@@ -233,6 +233,9 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   let assumedTexts = 0, measuredTexts = 0, unmeasured = null;
   // The font files given to the lint are known to be there (the font-family fallback rule does not report them).
   const knownFonts = Object.keys(fonts).length ? { knownFonts: Object.keys(fonts) } : {};
+  // A component's CSS (CSS-in-JS, scoped styles) was not written to the core's shorthand rule
+  // (docs/css-shorthands.md): a shorthand conflict in it is a warning, unless the caller asks for the rule.
+  options = { ...options, shorthandConflicts: options.shorthandConflicts ?? 'warning' };
   const unbounded = new Map(), unmeasurable = new Map();
   // Component scope: the component's own CSS starts on its own line after the page CSS, so the scope check can tell
   // the component's selectors from the page's.
@@ -304,7 +307,7 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   const grouped = new Map();
   for (const r of results) for (const d of [...r.report.diagnostics.filter(d => d.severity !== 'unknown'), ...(r.report.layoutWarnings ?? []), ...(r.report.accessibility?.warnings ?? []), ...(r.report.integrity?.warnings ?? [])]) {
     const key = `${d.code}\u0000${d.box ?? ''}`;
-    if (!grouped.has(key)) grouped.set(key, { code: d.code, box: d.box, path: d.path, severity: d.severity, message: d.message, rule: d.rule, css: d.css, ...(d.layout ? { layout: d.layout } : {}), states: [], html: r.html });
+    if (!grouped.has(key)) grouped.set(key, { code: d.code, box: d.box, path: d.path, severity: d.severity, message: d.message, rule: d.rule, css: d.css, ...(d.related ? { related: d.related } : {}), ...(d.layout ? { layout: d.layout } : {}), states: [], html: r.html });
     const entry = grouped.get(key);
     if (!entry.states.includes(r.choices)) entry.states.push(r.choices);
   }
@@ -377,3 +380,4 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   return out;
 }
 export { lint, formatText, recommended } from './lint.mjs';
+export { lowerNested, relocateSelectorWarnings, relocateFindings } from './nested.mjs';

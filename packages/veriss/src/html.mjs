@@ -123,7 +123,12 @@ export function htmlBoxTree(html) {
       const setByAll=key=>leaves.length>0 && !shapes.some(c=>c.attrs.some(a=>a.name==='style')) && leaves.every(chain=>{ const v=[...chain].reverse().map(c=>c.attrs.find(a=>a.name===key)?.value.trim().toLowerCase()).find(v=>v!==undefined); return v!==undefined && v!=='inherit'; });
       return {...own,...(of('fill')!==undefined ? {shapeFill:of('fill')} : {}),...(of('stroke')!==undefined ? {shapeStroke:of('stroke')} : {}),...(setByAll('fill') ? {fillSet:true} : {}),...(setByAll('stroke') ? {strokeSet:true} : {}),shapes:shapes.length};
     })();
-    if(inlineSvg) { const facts=accessibilityFacts('svg',attrs); facts.svgSize={...(facts.svgSize ?? {}),paint:svgPaint}; return {tag:'svg',attributes:attrs,...(attrs.id!==undefined ? {id:attrs.id} : {}),...facts,...(svgTitle ? {named:true} : {}),classes:(attrs.class ?? '').split(/\s+/).filter(Boolean),text:false,runs:[],children:[]}; }
+    // the svg's own elements, for selector checks only (class and tag selectors on its shapes)
+    // Past the bounds the box tree accepts (64 levels, 2048 elements) it is left out rather than rejecting the page.
+    let svgCount=0;
+    const svgTreeFull=inlineSvg ? (function tree(n,depth){ if(depth>64) return null; const out=[]; for(const c of n.childNodes.filter(c=>c.tagName)){ if(++svgCount>2048) return null; const a=Object.fromEntries(c.attrs.map(x=>[x.name,x.value])); const children=tree(c,depth+1); if(!children) return null; out.push({tag:c.tagName,classes:(a.class ?? '').split(/\s+/).filter(Boolean),...(a.id!==undefined ? {id:a.id} : {}),attributes:a,children}); } return out; })(node,0) : undefined;
+    const svgTree=svgTreeFull ?? [];
+    if(inlineSvg) { const facts=accessibilityFacts('svg',attrs); facts.svgSize={...(facts.svgSize ?? {}),paint:svgPaint}; return {tag:'svg',attributes:attrs,...(attrs.id!==undefined ? {id:attrs.id} : {}),...facts,...(svgTitle ? {named:true} : {}),classes:(attrs.class ?? '').split(/\s+/).filter(Boolean),text:false,runs:[],children:[],...(svgTree.length ? {svgTree} : {})}; }
     // (A table section or row the parser inserted — no start tag in the source — is marked implied: checklist F26.)
     // Checklist F27: the parser changed the structure written in the source — an element with no source location at all
     // (an empty <p> made from a stray </p>, after a block closed the open paragraph), or one whose required end tag the

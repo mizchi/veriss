@@ -272,7 +272,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   const { rules, layers, notes = [], keyframes: keyframeNames = new Set(), dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], keyframeFrames, fontFaces, registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [] } = parseLayoutCSS(styleSources, (code, message, line, file, detail) => {
     if(detail) diagnostics.push({code,message,...detail});
     else unknown(code,message,line,undefined,file);
-  });
+  }, { shorthandConflicts: options.shorthandConflicts });
   // A selector testing the value of an attribute that is dynamic on an element (an adapter's placeholder): whether
   // the rule applies there is not known.
   // Likewise a structural pseudo-class on the root of a component: its siblings in the page are not known.
@@ -538,6 +538,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // A declaration the analysis does not model applies to this box: what is laid out from this style is Unknown. The
       // style checks (readingStyles: the style stage's walk) still read the rest.
       if (style.$unmodeled?.length && !readingStyles) { const u = style.$unmodeled[0]; throw Object.assign(new Error(u.message), { code: u.code, css: { file: u.file, line: u.line }, box }); }
+      // A dynamic value wins here: what is laid out depends on a value nobody declared (an error, not an Unknown: the
+      // author is asked to declare its values).
+      if (style.$dynamic?.length && !readingStyles) { const d = style.$dynamic[0]; throw Object.assign(new Error(`${box.label}: ${d.property} is the dynamic value ${d.dynamic.written} (${d.selector}, ${d.file}:${d.line}), which wins the cascade here; declare the values it may take`), { code: 'E_LAYOUT_DYNAMIC_VALUE', dynamic: { ...d.dynamic, property: d.property, file: d.file, line: d.line, selector: d.selector }, box, region: r }); }
       // reportTextFonts: the computed font of each text leaf (for a caller that measures it with a font file and
       // analyses again with a font contract); 'varied' where it differs across the domain.
       // (A text field's placeholder too: its text and the field's font.)
@@ -3984,6 +3987,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const at = (a, w, h) => add(add(r(a.constant), mul(r(a.coefficient), w)), mul(r(a.heightCoefficient), h));
     for (const target of targets.slice(0, 64)) {
       const hover = analyzeBoxTree(pristine, options, scrollbarProfile, budget, inlineSheets, [], [`hover-at:${target.path}`]);
+      // A dynamic value that wins only while hovered: the hovered layout depends on a value nobody declared.
+      for (const d of hover.diagnostics.filter(d => d.code === 'E_LAYOUT_DYNAMIC_VALUE'))
+        if (!diagnostics.some(x => x.code === d.code && x.path === d.path && (x.message === d.message || x.message === `${d.message} (in its hovered layout)`))) diagnostics.push({ ...d, message: `${d.message} (in its hovered layout)`, hoveredLayout: true });
       if (hover.status === 'unknown') { diagnostics.push({ code: 'U_LAYOUT_HOVER_SHIFT', severity: 'unknown', message: `${target.label}: its hovered layout is not decided (${hover.diagnostics.find(d => d.severity === 'unknown')?.message ?? 'unknown'})`, box: target.label, path: target.path }); continue; }
       // Each base row against each hovered row of the same box, on the intersection of their condition regions.
       const undecided = [...sizes, ...hover.sizes].find(row => !rect(row) || !row.$shown?.region);
@@ -4063,6 +4069,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // Offsets that move nothing (bottom under a set top, an unchanged value): the layout is the box's own.
         if (offsetsOnly) { states.push({ offset: frame.offset, sizes }); continue; }
         const moved = analyzeBoxTree(pristine, { ...options, $animationFrame: { path: entry.box.path, css: frame.layout } }, scrollbarProfile, budget, inlineSheets, [], preferences);
+        // A dynamic value in a keyframe that wins there: the frame's layout depends on a value nobody declared.
+        for (const d of moved.diagnostics.filter(d => d.code === 'E_LAYOUT_DYNAMIC_VALUE'))
+          if (!diagnostics.some(x => x.code === d.code && x.path === d.path && (x.message === d.message || x.message === `${d.message} (at keyframe ${label})`))) diagnostics.push({ ...d, message: `${d.message} (at keyframe ${label})`, animationFrame: { animation: entry.name, offset: frame.offset } });
         if (moved.status === 'unknown') { diagnostics.push({ code: 'U_LAYOUT_ANIMATION_SHIFT', severity: 'unknown', message: `${entry.box.label}: the layout at keyframe ${label} is not decided (${moved.diagnostics.find(d => d.severity === 'unknown')?.message ?? 'unknown'})`, box: entry.box.label, path: entry.box.path }); continue; }
         if (moved.status !== 'unknown') states.push({ offset: frame.offset, sizes: moved.sizes }); else complete = false;
         const undecided = [...sizes, ...moved.sizes].find(row => !rect(row) || !row.$shown?.region);

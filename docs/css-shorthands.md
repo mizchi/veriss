@@ -6,6 +6,8 @@
 
 検査器はビルド時だけ動作し、生成アプリにparser・solver・監視処理を追加しない。
 
+この規則に合わせて書かれていない既存のCSSには、`shorthandConflicts: 'warning'` で警告(`W_CSS_SHORTHAND_CONFLICT`)にできる。そのときルールは捨てず、同じルールの中では後の宣言が勝つものとしてレイアウトも検査する。React・Vue・Svelteのアダプタ(adapter-core)は、コンポーネントのCSS(CSS-in-JS、scoped style)にこれを既定で使う。`shorthandConflicts: 'error'` を渡せば拒否に戻る。`analyzeHTML` / `analyzeLayout` の既定は `'error'` のまま。
+
 ## 拒否する例
 
 ```css

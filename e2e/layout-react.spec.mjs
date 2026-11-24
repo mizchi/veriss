@@ -4,7 +4,8 @@
 import {test, expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {analyzeReact} from '../packages/react-adapter/src/index.mjs';
-import {compileStylex, compileLinaria, render} from '../packages/react-adapter/test/ssr.mjs';
+import {compileStylex, compileLinaria, render, renderStyled, renderStyledFile} from '../packages/react-adapter/test/ssr.mjs';
+import {nodeModuleResolver} from '../packages/react-adapter/src/resolve-node.mjs';
 
 const fixture = name => readFileSync(new URL(`../packages/react-adapter/fixtures/${name}`, import.meta.url), 'utf8');
 const pageCSS = '*{box-sizing:border-box;margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}body{margin:0}';
@@ -62,3 +63,47 @@ test('LinariaSettings.jsx (interpolated constants and class references): the fin
   expect(checked).toBe(8);
 });
 
+
+test('StyledCard.jsx (styled-components): every state\'s boxes agree with Chromium on styled-components\' own CSS', async ({page}) => {
+  const source = fixture('StyledCard.jsx'), theme = {space: {card: '16px'}, colors: {text: '#222'}};
+  const report = analyzeReact(source, {pageCSS, viewport, theme});
+  expect(report.unknowns).toEqual([]);
+  let compared = 0;
+  for (const width of [360, 700]) {
+    await page.setViewportSize({width, height: 700});
+    for (const state of report.states) {
+      const {html, css} = await renderStyled(source, {...propsOf(state.choices), title: '…'}, theme);
+      await page.setContent(`<!doctype html><html lang="en"><head><style>${pageCSS}${css}</style></head><body>${html}</body></html>`);
+      for (const row of state.report.sizes.filter(r => r.rect && r.path.split('/').length > 2)) {
+        const v = x => n(x.constant) + width * n(x.coefficient) + 700 * n(x.heightCoefficient);
+        if (!(width >= row.range.min && width <= row.range.max)) continue;
+        const box = await page.evaluate(path => { let e = document.body; for (const i of path.split('/').slice(2)) e = e.children[Number(i)]; const r = e?.getBoundingClientRect(); return r && [r.x, r.y, r.width, r.height]; }, row.path);
+        expect(box, `StyledCard ${JSON.stringify(state.choices)} ${row.path} at ${width}`).toEqual([v(row.rect.inlineStart), v(row.rect.blockStart), v(row.rect.inlineSize), v(row.rect.blockSize)]);
+        compared++;
+      }
+    }
+  }
+  expect(compared).toBeGreaterThanOrEqual(16);
+});
+
+test('styled-split/Chip.jsx (styled-components over modules): every state\'s boxes agree with Chromium on the bundled build', async ({page}) => {
+  const entry = new URL('../packages/react-adapter/fixtures/styled-split/Chip.jsx', import.meta.url).pathname;
+  const report = analyzeReact(readFileSync(entry, 'utf8'), {pageCSS, viewport, file: entry, resolveModule: nodeModuleResolver()});
+  expect(report.unknowns).toEqual([]);
+  let compared = 0;
+  for (const width of [360, 700]) {
+    await page.setViewportSize({width, height: 700});
+    for (const state of report.states) {
+      const {html, css} = await renderStyledFile(entry, propsOf(state.choices));
+      await page.setContent(`<!doctype html><html lang="en"><head><style>${pageCSS}${css}</style></head><body>${html}</body></html>`);
+      for (const row of state.report.sizes.filter(r => r.rect && r.path.split('/').length > 2)) {
+        const v = x => n(x.constant) + width * n(x.coefficient) + 700 * n(x.heightCoefficient);
+        if (!(width >= row.range.min && width <= row.range.max)) continue;
+        const box = await page.evaluate(path => { let e = document.body; for (const i of path.split('/').slice(2)) e = e.children[Number(i)]; const r = e?.getBoundingClientRect(); return r && [r.x, r.y, r.width, r.height]; }, row.path);
+        expect(box, `Chip ${JSON.stringify(state.choices)} ${row.path} at ${width}`).toEqual([v(row.rect.inlineStart), v(row.rect.blockStart), v(row.rect.inlineSize), v(row.rect.blockSize)]);
+        compared++;
+      }
+    }
+  }
+  expect(compared).toBeGreaterThanOrEqual(4);
+});

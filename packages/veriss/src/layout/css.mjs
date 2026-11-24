@@ -21,6 +21,10 @@ const pointSize = /^(?:\d+(?:\.\d{1,20})?px|0)$/;
 const remLengths = ['top', 'right', 'bottom', 'left'].flatMap(side => [`margin-${side}`, `padding-${side}`, side]).concat(['inline-size', 'block-size', 'min-inline-size', 'max-inline-size', 'min-block-size', 'max-block-size', 'row-gap', 'column-gap', 'flex-basis', 'font-size']);
 // rem resolves against the analysed html root's px font-size once the engine has seen it (setRootFontSize).
 let rootFontSize = null;
+// A logical inline longhand (padding-inline-start, …) is expanded to the ltr physical side; the side it means in an rtl
+// box, or undefined for a longhand that is not one of the inline sides.
+const logicalFlip = (property, name) => /-inline(?:-start|-end)?$/.test(property) && /(?:^|-)(?:left|right)$/.test(name) ? name.replace(/(left|right)$/, side => side === 'left' ? 'right' : 'left') : undefined;
+
 export function setRootFontSize(size) { rootFontSize = size; }
 // The form-control UA profile of the analysis (layout option ua), or null for the historical Chromium defaults.
 let uaProfile = null;
@@ -736,7 +740,7 @@ function flexShorthand(value) {
   return [['flex-grow', factors[0] ?? '1'], ['flex-shrink', factors[1] ?? '1'], ['flex-basis', basis ?? '0%']];
 }
 
-export function parseLayoutCSS(sheets, diagnostic) {
+export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error' } = {}) {
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
   const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
@@ -1075,11 +1079,14 @@ export function parseLayoutCSS(sheets, diagnostic) {
       for(const conflict of conflicts) {
         const location=index=>({file:filename,line:authored[index].source.start.line,column:authored[index].source.start.column});
         const css=location(conflict.later);
+        // 'warning' (CSS this rule was not written for, such as an adapter's CSS-in-JS): reported, and the rule is kept
+        // (within one rule the later declaration wins)
+        if(shorthandConflicts==='warning') { note('W_CSS_SHORTHAND_CONFLICT',{selector:node.selector,properties:conflict.properties,longhands:conflict.longhands,later:css,earlier:location(conflict.earlier)}); continue; }
         diagnostic('E_CSS_SHORTHAND_CONFLICT',cssWriteConflictMessage(conflict),css.line,filename,
           {severity:'error',css,hint:conflict.hint,conflict:{properties:conflict.properties,longhands:conflict.longhands},
             related:[{css:location(conflict.earlier),message:`Earlier ${conflict.properties[0]} declaration`}]});
       }
-      if(conflicts.length) continue;
+      if(conflicts.length && shorthandConflicts!=='warning') continue;
       // F123: isolation: isolate next to mix-blend-mode on the same element isolates its descendants, not the element: it
       // still blends with what is behind it (measured in Chromium, Firefox and WebKit). The parent needs the isolation.
       { const decls = node.nodes.filter(d => d.type === 'decl'), last = prop => decls.findLast(d => d.prop.toLowerCase() === prop);
@@ -1103,6 +1110,15 @@ export function parseLayoutCSS(sheets, diagnostic) {
       for (const declaration of node.nodes) {
         if (declaration.type === 'comment') continue;
         if (declaration.type !== 'decl') { problem('U_LAYOUT_CSS', 'Nested CSS rules are outside the subset', declaration.source.start.line); continue; }
+        // A dynamic value (an adapter's placeholder -veriss-dynamic(id): known only at run time) takes part in the cascade
+        // for each longhand it sets; computeStyle reports where it wins (values.$dynamic).
+        { const dynamic = /^\s*-veriss-dynamic\((\d+)\)\s*$/i.exec(declaration.value);
+          if (dynamic) {
+            const property = declaration.prop.toLowerCase();
+            let names; try { names = expand(property, 'initial').map(([name]) => name); } catch { names = [property]; }
+            for (const name of names) { const flip = logicalFlip(property, name); declarations.push({ property: name, value: 'initial', ...(flip ? { flip } : {}), dynamic: { id: Number(dynamic[1]), written: `${declaration.prop}: ${declaration.value.trim()}` }, important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename }); }
+            continue;
+          } }
         // F86: a "!word" other than !important at the end of a value makes the declaration invalid: the browser drops it
         // (measured in Chromium, Firefox and WebKit). PostCSS keeps it in the value; it is dropped here and reported.
         { const bang = !declaration.prop.startsWith('--') && !declaration.important && /!\s*([a-z][\w-]*)\s*$/i.exec(declaration.value);
@@ -1157,7 +1173,7 @@ export function parseLayoutCSS(sheets, diagnostic) {
           for (const [name, value] of custom ? [[property,declaration.value]] : expand(property,pending ? 'initial' : declaration.value)) {
             // A logical inline side (padding-inline-start, margin-inline, inset-inline-end, …) is stored as its ltr
             // physical side; `flip` is the side it means in an rtl box (computeStyle picks it once the direction is known).
-            const flip = /-inline(?:-start|-end)?$/.test(property) && /(?:^|-)(?:left|right)$/.test(name) ? name.replace(/(left|right)$/, side => side === 'left' ? 'right' : 'left') : undefined;
+            const flip = logicalFlip(property, name);
             declarations.push({ property:name, value, ...(flip ? {flip} : {}), ...(custom ? {expression} : {}), ...(pending ? {pending,specified:declaration.value} : {}), ...(declaration.prop.toLowerCase() === 'text-wrap' ? { wrapShorthand: declaration.value.trim() } : {}), important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename });
           }
         } catch (error) {
@@ -1409,7 +1425,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
         // Scope proximity (Cascade 6 §6.6): after specificity, the nearer scope root wins; unscoped is farthest.
         const rank = [declaration.important, rule.attached ? 1 : 0, layer, ...selector.specificity, selector.scope ? -scopeProximity(selector, box, state) : -Infinity];
-        const origin = { file: declaration.file, line: declaration.line, selector: selector.source, layer: rule.layerName, specified: declaration.specified ?? declaration.value, ...(declaration.wrapShorthand ? { wrapShorthand: declaration.wrapShorthand } : {}), ...conditions(rule), ...(declaration.flip ? { logical: true } : {}) };
+        const origin = { file: declaration.file, line: declaration.line, selector: selector.source, layer: rule.layerName, specified: declaration.specified ?? declaration.value, ...(declaration.dynamic ? { dynamic: declaration.dynamic } : {}), ...(declaration.wrapShorthand ? { wrapShorthand: declaration.wrapShorthand } : {}), ...conditions(rule), ...(declaration.flip ? { logical: true } : {}) };
         // A logical side resolves by the box's direction (an rtl pass when the first one finds rtl; CSS Logical 1).
         if (declaration.flip) flipped = true;
         const property = rtl && declaration.flip ? declaration.flip : declaration.property;
@@ -1621,6 +1637,9 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     }
   }
   values.$sources = sources;
+  // the properties whose winning declaration is a dynamic value
+  const dynamic = Object.entries(sources).filter(([, o]) => o?.dynamic).map(([property, o]) => ({ property, ...o }));
+  if (dynamic.length) values.$dynamic = dynamic;
   if (openDialog) throw Object.assign(openDialog, { $sources: { ...sources } });
   if (layerShadowed.length) values.$layerShadowed = layerShadowed;
   values.$dormant = dormant;

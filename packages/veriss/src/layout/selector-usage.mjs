@@ -1,4 +1,4 @@
-import { compoundMatches as exactMatches, neighbors } from './selectors.mjs';
+import { compoundMatches as exactMatches, neighbors, PARENT } from './selectors.mjs';
 // A match that is not known (a dynamic attribute value) counts as a match: such a selector is never reported.
 const compoundMatches = (selector, box) => { try { return exactMatches(selector, box); } catch { return true; } };
 
@@ -20,8 +20,48 @@ const distance = (a, b) => {
 };
 const relationWords = { '>': ['has a parent matching', 'parents'], ' ': ['is inside an element matching', 'ancestors'], '+': ['directly follows an element matching', 'previous siblings'], '~': ['follows an element matching', 'earlier siblings'] };
 
+// The elements inside an inline svg: not boxes, but elements a selector can style (its shapes). The svg's box stands in
+// as a host copy whose children are its top-level shapes, so the shapes have a parent with siblings to match against
+// (+, ~, :first-child, :has(> …)); the laid-out box itself is left as it is.
+function svgElements(boxes) {
+  const out = [], hosts = new Map();
+  const add = (nodes, parent, path) => nodes.map((n, i) => {
+    const el = { tag: n.tag, classes: [...n.classes], ...(n.id !== undefined ? { id: n.id } : {}), attributes: { ...(n.attributes ?? {}) }, path: `${path}/svg${i}`, label: n.id ? `#${n.id}` : n.classes.length ? n.classes.map(c => `.${c}`).join('') : `${n.tag}@${path}/svg${i}`, children: [] };
+    el[PARENT] = parent;
+    out.push(el);
+    el.children = add(n.children ?? [], el, el.path);
+    return el;
+  });
+  for (const box of boxes) if (box.svgTree?.length) {
+    const host = { ...box }; // keeps the PARENT symbol
+    host.children = [...(box.children ?? []), ...add(box.svgTree, host, box.path)];
+    hosts.set(box, host);
+  }
+  return { shapes: out, hosts };
+}
+
 export function selectorUsage(rules, boxes) {
-  const elements = boxes.filter(box => !box.anonymous && !box.pseudo);
+  const { shapes, hosts } = svgElements(boxes);
+  const elements = [...boxes.filter(box => !box.anonymous && !box.pseudo).map(box => hosts.get(box) ?? box), ...shapes];
+  // Content an adapter could not see (a children slot, a child component) may hold the element a selector styles: the
+  // selector is possible when its other compounds hold with that boundary's element as the subject's parent (>) or
+  // as it or an ancestor of it (descendant), or with one of the boundary element's children as its sibling (+, ~).
+  const holders = elements.filter(box => box.boundaries?.length);
+  const holdsFrom = (selector, box, i) => i >= (selector.chain ?? []).length || neighbors(box, selector.chain[i].combinator).some(n => compoundMatches(selector.chain[i].compound, n) && holdsFrom(selector, n, i + 1));
+  // The subject and any of the compounds next to it (chain[0..k-1]) may be unseen; the first seen compound chain[k]
+  // is the holder (>), it or an ancestor (descendant) or a child of it (+, ~), and the rest holds from there. The leftmost compound is
+  // always a seen element.
+  const behindBoundary = selector => holders.some(holder => {
+    const chain = selector.chain ?? [];
+    // a single compound is the leftmost one: it must be a seen element
+    if (!chain.length) return false;
+    return chain.some(({ compound, combinator }, k) => {
+      // unseen content sits directly in the holder: a seen sibling of it is one of the holder's children
+      if (combinator === '+' || combinator === '~') return (holder.children ?? []).filter(c => !c.anonymous && !c.pseudo).some(c => compoundMatches(compound, c) && holdsFrom(selector, c, k + 1));
+      const anchors = combinator === '>' ? [holder] : [holder, ...neighbors(holder, ' ')];
+      return anchors.some(a => compoundMatches(compound, a) && holdsFrom(selector, a, k + 1));
+    });
+  });
   const classes = new Set(elements.flatMap(box => box.classes));
   const rows = [], warnings = [];
   const seen = new Set();
@@ -41,6 +81,7 @@ export function selectorUsage(rules, boxes) {
     const matched = broken ? 0 : subjects.filter(box => holds(box, 0)).length;
     const row = { selector: selector.source, file: rule.file, line: rule.line, matched };
     rows.push(row);
+    if ((!subjects.length || broken) && behindBoundary(selector)) { row.unknown = 'boundary'; continue; }
     if (!subjects.length) {
       const missing = selector.parts.filter(part => part.kind === 'class' && !classes.has(part.value)).map(part => part.value);
       const near = missing.flatMap(name => [...classes].filter(c => c !== name && distance(c, name) <= (name.length <= 5 ? 1 : 2)).map(c => `.${c}`));

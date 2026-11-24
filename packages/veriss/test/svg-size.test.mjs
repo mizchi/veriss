@@ -49,3 +49,15 @@ test('a link named by its svg is not reported as named only by generated content
   const r = analyzeHTML('<html lang="en"><body><main class="p"><h1 class="t" aria-label="T"></h1><a class="l" href="/"><svg width="24" height="24"><title>Home</title></svg></a></main></body></html>', {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, accessibility: true});
   assert.deepEqual(r.accessibility.warnings.filter(w => w.code === 'W_A11Y_GENERATED_NAME'), []);
 });
+
+test('a deeply nested or very large inline svg is analysed, not rejected as an invalid svg tree', () => {
+  const deep = '<svg width="24" height="24" aria-hidden="true">' + '<g>'.repeat(40) + '<circle class="dot" r="1"></circle>' + '</g>'.repeat(40);
+  const r = run(deep);
+  assert.equal(r.status, 'verified', JSON.stringify(r.diagnostics));
+  // the shapes deep inside are still elements a selector can style
+  const css = `*{box-sizing:border-box;margin:0}html,body{${g}}.p{${g}}svg{display:block}.dot{fill:none}`;
+  const sel = analyzeHTML(`<html lang="en"><body><div class="p">${deep}</svg></div></body></html>`, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  assert.deepEqual(sel.selectors.warnings, []);
+  const large = '<svg width="24" height="24" aria-hidden="true">' + '<rect width="1" height="1"></rect>'.repeat(2100);
+  assert.equal(run(large).status, 'verified');
+});

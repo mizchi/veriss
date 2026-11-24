@@ -46,7 +46,7 @@ error が 1 件でもあれば終了コードは 1 です。
 - **warning**：バグの可能性が高いもの。効かない宣言、inset のない sticky、`100vw` とスクロールバー、固定 line-height、固定高さのテキスト、RTL での物理方向、セレクタとテンプレートの不一致など。
 - **info**：検査しなかったもの（Unknown）と、置いた仮定。Unknown を合格として扱うことはありません。
 - spec 層: WAI-ARIA / HTML の仕様違反のうち、マークアップだけで決まり描画には現れないもの(role の必須属性の欠落、不正な ARIA 属性・値、存在しない id への参照、id の重複、role の親子関係、入れ子の操作要素、ul/dl の子、th の scope など。一覧は `specRules`)。描画からは確かめられないので、recommended の error とは分けて warning にし、`tier: 'spec'` を付ける。メッセージは「spec:」で始まる。
-- CSS の誤り(同じルールの略記と longhand の衝突 `E_CSS_SHORTHAND_CONFLICT`)は error にする。これがあると状態のレイアウトを解析しないので、その状態は「not checked」(`U_LAYOUT_NOT_ANALYZED`)として示す。
+- 同じルールの略記と longhand の衝突は、コンポーネントの CSS では warning(`W_CSS_SHORTHAND_CONFLICT`)にし、レイアウトも解析する(同じルールの中では後の宣言が勝ち、結果は決まる)。`shorthandConflicts: 'error'` を渡すと error(`E_CSS_SHORTHAND_CONFLICT`)になり、その状態のレイアウトは解析しないので「not checked」(`U_LAYOUT_NOT_ANALYZED`)として示す。
 - recommended に含まれないルールの検出も、info として残す(「outside the recommended rules」)。解析が中に入らなかった箱(grid でも flex でもない container の `E_LAYOUT_CONTAINER`)は、「not checked」として、その箱と中身が検査されていないことを示す。検出が黙って消えることはない。
 - ページ全体についてのルール(h1、main ランドマーク、スキップリンク、ランドマーク外のテキスト)は、コンポーネントには当てはまらないので出さない(API の `page: true` で出す)。
 

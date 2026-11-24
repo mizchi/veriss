@@ -7,6 +7,9 @@
   "exports": {
     ".": {
       "import": "./src/index.mjs"
+    },
+    "./resolve-node": {
+      "import": "./src/resolve-node.mjs"
     }
   },
   "dependencies": {
@@ -24,7 +27,8 @@
     "@wyw-in-js/transform": "2.4.0",
     "esbuild": "0.28.2",
     "react": "19.1.10",
-    "react-dom": "19.1.10"
+    "react-dom": "19.1.10",
+    "styled-components": "6.1.19"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"

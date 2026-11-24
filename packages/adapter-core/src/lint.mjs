@@ -16,6 +16,7 @@ export const recommended = {
   W_LAYOUT_FIXED_TRAPPED: ['warning', 'render the fixed box outside the transformed / backdrop-filtered box (a portal to the end of body), or drop that property'],
   // A CSS authoring error the analysis rejects (a shorthand and another declaration writing one longhand in one rule).
   E_CSS_SHORTHAND_CONFLICT: ['error', 'put the shorthand and the longhand in separate rules (the later rule wins), or write only longhands (font: inherit, then font-size in another rule)'],
+  W_CSS_SHORTHAND_CONFLICT: ['warning', 'the later declaration wins within the rule; to make the override explicit, move it to a rule of its own or write only longhands'],
   E_SCOPE_CONTRACT: ['error', 'declare data-noshift inside the child component, or wrap it in an element of this component and mark that'],
   // Layout shift: an element the component marks data-noshift moves or resizes between its states.
   E_LAYOUT_NOSHIFT: ['error', 'reserve the space the changing content needs (a fixed track or min-height), overlay it (position: absolute), or limit the contract to the states it should hold in (data-noshift-on)'],

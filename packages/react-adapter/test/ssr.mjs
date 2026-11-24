@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import {mkdtempSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL, fileURLToPath} from 'node:url';
-import {transform} from 'esbuild';
+import {transform, build} from 'esbuild';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {createElement} from 'react';
 
@@ -36,4 +36,40 @@ export async function render(code, props) {
   writeFileSync(file, js.replace(/from ['"](@linaria\/(?:core|react))['"]/g, (m, name) => `from '${pathToFileURL(require.resolve(name)).href}'`).replace(/from ['"]@stylexjs\/stylex['"]/, `from '${pathToFileURL(require.resolve('@stylexjs/stylex')).href}'`).replace(/from ['"]react(\/jsx-runtime)?['"]/g, (m, sub) => `from '${pathToFileURL(require.resolve(`react${sub ?? ''}`)).href}'`));
   const Component = (await import(pathToFileURL(file).href)).default;
   return renderToStaticMarkup(createElement(Component, props));
+}
+
+// styled-components' own runtime: the component rendered inside a ThemeProvider, its CSS collected by ServerStyleSheet.
+export async function renderStyled(source, props, theme = {}) {
+  const {code: js} = await transform(source, {loader: 'tsx', jsx: 'automatic', format: 'esm'});
+  const file = join(dir, `s${n++}.mjs`);
+  // the ESM build (the package's "module"): its default export is styled
+  const sc = pathToFileURL(join(require.resolve('styled-components'), '..', 'styled-components.esm.js')).href;
+  writeFileSync(file, js.replace(/from ['"]styled-components['"]/g, `from '${sc}'`).replace(/from ['"]react(\/jsx-runtime)?['"]/g, (m, sub) => `from '${pathToFileURL(require.resolve(`react${sub ?? ''}`)).href}'`));
+  const Component = (await import(pathToFileURL(file).href)).default;
+  const {ServerStyleSheet, ThemeProvider} = await import(sc);
+  const sheet = new ServerStyleSheet();
+  try {
+    const html = renderToStaticMarkup(sheet.collectStyles(createElement(ThemeProvider, {theme}, createElement(Component, props))));
+    const css = sheet.getStyleTags().replace(/<\/?style[^>]*>/g, '');
+    return {html, css};
+  } finally { sheet.seal(); }
+}
+
+// A component split over modules (styled.ts, tokens): bundled by esbuild first, react and styled-components external.
+export async function renderStyledFile(entry, props, theme = {}) {
+  const out = await build({entryPoints: [entry], bundle: true, write: false, format: 'esm', jsx: 'automatic', external: ['react', 'react/jsx-runtime', 'styled-components'], logLevel: 'silent'});
+  return renderStyledModule(out.outputFiles[0].text, props, theme);
+}
+
+async function renderStyledModule(js, props, theme) {
+  const file = join(dir, `b${n++}.mjs`);
+  const sc = pathToFileURL(join(require.resolve('styled-components'), '..', 'styled-components.esm.js')).href;
+  writeFileSync(file, js.replace(/from ['"]styled-components['"]/g, `from '${sc}'`).replace(/from ['"]react(\/jsx-runtime)?['"]/g, (m, sub) => `from '${pathToFileURL(require.resolve(`react${sub ?? ''}`)).href}'`));
+  const Component = (await import(pathToFileURL(file).href)).default;
+  const {ServerStyleSheet, ThemeProvider} = await import(sc);
+  const sheet = new ServerStyleSheet();
+  try {
+    const html = renderToStaticMarkup(sheet.collectStyles(createElement(ThemeProvider, {theme}, createElement(Component, props))));
+    return {html, css: sheet.getStyleTags().replace(/<\/?style[^>]*>/g, '')};
+  } finally { sheet.seal(); }
 }

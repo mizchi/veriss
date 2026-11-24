@@ -41,3 +41,51 @@ test('state and pseudo-element selectors are judged on their element; off by def
   assert.deepEqual(codes(run('.item:hover{color:red}.title::before{content:"";color:red}')), []);
   assert.equal(analyzeHTML(html, {name: 'P', css: `*{margin:0}html,body,.page,.list,.card{${g}}.item{height:10px}.nope{color:red}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}}).selectors, undefined);
 });
+
+// Content an adapter could not see (<!--isle-boundary:children-->, a child component) may hold the element a selector
+// styles: such a selector is not reported when its other compounds hold with the boundary's element as the parent or
+// ancestor; it is when they cannot.
+test('selectors that may style content behind a boundary (children, a child component) are not reported', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><button class="btn">…<!--isle-boundary:children--></button><div class="field"><!--isle-boundary:component Input--></div><div class="plain"><i class="x"></i></div></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const warnings = brun('.btn > span{color:red}.btn svg{width:1px}.field > input{color:red}.plain > span{color:red}.page > *:last-child{color:red}.other > input{color:red}').selectors.warnings;
+  const reported = warnings.map(w => w.selector).sort();
+  // .plain has no boundary; .other is not an element of the template at all
+  assert.deepEqual(reported, ['.other > input', '.plain > span']);
+});
+
+test('a selector whose inner compounds may all be unseen content still needs its outer compounds to hold', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><button class="btn">…<!--isle-boundary:children--></button><div class="plain"></div></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const reported = brun('.btn > span:only-child > svg{width:1px}.plain > span > svg{width:1px}.page > .btn > span > svg{width:1px}.nav > .btn > span{width:1px}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, ['.nav > .btn > span', '.plain > span > svg']);
+});
+
+test('selectors on the shapes inside an svg (not laid out as boxes) match them; a misspelt one is still reported', () => {
+  const shtml = '<html lang="en"><body><main class="page"><svg class="icon" viewBox="0 0 10 10" width="10" height="10"><circle class="dot" cx="5" cy="5" r="4"></circle></svg></main></body></html>';
+  const srun = css => analyzeHTML(shtml, {name: 'S', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const reported = srun('.dot{fill:none}.icon > .dot{stroke-width:3}.missing{fill:none}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, ['.missing']);
+});
+
+test('a single-compound selector is judged on the seen elements even when a boundary is present', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><span class="label">x</span><div class="slot">…<!--isle-boundary:children--></div></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  // a span is never :disabled; .lable is a typo of .label
+  const reported = brun('.label:disabled{color:gray}.lable{color:red}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, ['.label:disabled', '.lable']);
+});
+
+test('the top-level shapes of an svg are its children and each other\'s siblings', () => {
+  const shtml = '<html lang="en"><body><main class="page"><svg class="icon" viewBox="0 0 10 10" width="10" height="10"><circle class="a" cx="3" cy="5" r="2"></circle><circle class="b" cx="7" cy="5" r="2"></circle></svg></main></body></html>';
+  const srun = css => analyzeHTML(shtml, {name: 'S', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const reported = srun('.a + .b{fill:none}.a ~ .b{fill:none}.a:first-child{fill:none}.icon:has(> .a){color:red}').selectors.warnings.map(w => w.selector).sort();
+  assert.deepEqual(reported, []);
+});
+
+test('a sibling chain is behind a boundary only when its leftmost seen compound holds from the holder', () => {
+  const bhtml = '<html lang="en"><body><main class="page"><button class="btn"><i class="icon"></i>…<!--isle-boundary:children--></button></main></body></html>';
+  const brun = css => analyzeHTML(bhtml, {name: 'B', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
+  const warnings = brun('.missing + span{color:red}.btn > .icon + span{color:red}').selectors.warnings;
+  assert.deepEqual(warnings.map(w => [w.code, w.selector]), [['W_CSS_SELECTOR_UNMATCHED', '.missing + span']]);
+});
