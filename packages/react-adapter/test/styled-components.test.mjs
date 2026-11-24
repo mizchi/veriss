@@ -575,6 +575,24 @@ const Box = styled.div\`
 \`;
 type P = { variant: 'light' | 'dark' };
 export default function C({ variant }: P) { return <Box $variant={variant} />; }`,
+    // built-ins and reassignment in a helper; JSX expressions evaluated in the component
+    `import styled, { useTheme } from 'styled-components';
+function hexToRgba(hex, alpha = 1) {
+  let c = [0, 0, 0];
+  let r = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (r) { c = r.slice(1, 4).map((x) => parseInt(x, 16)); }
+  r = hex.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+  if (r) { c = r.slice(1, 4).map((x) => 0x11 * parseInt(x, 16)); }
+  return \`rgba(\${c[0]}, \${c[1]}, \${c[2]}, \${alpha})\`;
+}
+const DOT = { small: 4, large: 8 };
+const Box = styled.div\`
+  color: \${({ theme }) => hexToRgba(theme.colors.text, 0.5)};
+  width: \${({ $w }) => (isNaN(+$w) ? $w : \`\${Math.max(+$w, 10)}px\`)};
+  height: \${({ $h }) => $h}px;
+\`;
+type P = { w: '4' | 'auto'; size: 'small' | 'large' };
+export default function C({ w, size }: P) { const dims = { h: DOT[size] * 2 }; return <Box $w={w} $h={dims.h} />; }`,
   ];
   for (const source of corpus) {
     const {states, css, unknowns} = expandReact(source, {theme});
@@ -609,4 +627,39 @@ export default function C({ size, kind }: P) {
   const rule = (size, kind) => { const s = states.find(x => x.choices.size === size && x.choices.kind === kind); const [, cls] = classOf(s.html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
   assert.match(rule('small', 'muted'), /^width:4px;height:8px;color:#222$/);
   assert.match(rule('large', 'alert'), /^width:8px;height:16px;color:#c00$/);
+});
+
+test('styled-components: pure built-ins and reassignment in helpers (regex match, slice, map, parseInt, Math, isNaN, unary +)', () => {
+  const source = `import styled from 'styled-components';
+function hexToRgba(hex, alpha = 1) {
+  let c = [0, 0, 0];
+  let r = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (r) { c = r.slice(1, 4).map((x) => parseInt(x, 16)); }
+  r = hex.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+  if (r) { c = r.slice(1, 4).map((x) => 0x11 * parseInt(x, 16)); }
+  return \`rgba(\${c[0]}, \${c[1]}, \${c[2]}, \${alpha})\`;
+}
+const Box = styled.div\`
+  color: \${({ theme }) => hexToRgba(theme.colors.text, 0.5)};
+  background: \${() => hexToRgba('#336699')};
+  width: \${({ $w }) => (isNaN(+$w) ? $w : \`\${Math.max(+$w, 10)}px\`)};
+\`;
+type P = { w: '4' | 'auto' };
+export default function C({ w }: P) { return <Box $w={w} />; }`;
+  const {states, css, unknowns} = expandReact(source, {theme});
+  assert.deepEqual(unknowns, []);
+  const rule = w => { const [, cls] = classOf(states.find(s => s.choices.w === w).html, 'div'); return new RegExp(`\\.${cls}\\{([^}]*)\\}`).exec(css)?.[1]; };
+  assert.equal(rule('4'), 'color:rgba(34, 34, 34, 0.5);background:rgba(51, 102, 153, 1);width:10px');
+  assert.equal(rule('auto'), 'color:rgba(34, 34, 34, 0.5);background:rgba(51, 102, 153, 1);width:auto');
+});
+
+test('styled-components: a reassignment under a condition that splits states is Unknown (paths would share it)', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  color: \${({ $on }) => { let c = 'blue'; if ($on) { c = 'red'; } return c; }};
+  display: block;
+\`;
+export default function C({ on }) { return <Box $on={on} />; }`;
+  const {unknowns} = expandReact(source);
+  assert.ok(unknowns.some(u => /the statement c = 'red'/.test(u.message)), JSON.stringify(unknowns));
 });

@@ -11,7 +11,13 @@ import postcss from 'postcss';
 import { parse } from '@babel/parser';
 import { merge, choose } from '@mizchi/veriss-adapter-core';
 
-const UNK = Symbol('unknown'), SYM = Symbol('symbol'), PROPS = Symbol('props'), FN = Symbol('function'), NS = Symbol('namespace');
+const UNK = Symbol('unknown'), SYM = Symbol('symbol'), PROPS = Symbol('props'), FN = Symbol('function'), NS = Symbol('namespace'), NATIVE = Symbol('native');
+// pure globals a helper may call (only when the module does not define the name itself)
+const native = f => ({ [NATIVE]: f });
+const GLOBALS = {
+  parseInt: native((s, radix) => parseInt(s, radix)), parseFloat: native(s => parseFloat(s)), Number: native(x => Number(x)), String: native(x => String(x)), isNaN: native(x => isNaN(x)),
+  Math: Object.fromEntries(['max', 'min', 'round', 'floor', 'ceil', 'abs', 'trunc', 'sign', 'sqrt', 'pow'].map(k => [k, native(Math[k])])),
+};
 const unknownValue = (code, message) => ({ [UNK]: { code, message } });
 const isUnknown = v => v !== null && typeof v === 'object' && UNK in v;
 const isSym = v => v !== null && typeof v === 'object' && SYM in v;
@@ -242,6 +248,7 @@ export function evaluateStyled(def, props, ctx) {
     switch (node.type) {
       case 'StringLiteral': case 'NumericLiteral': case 'BooleanLiteral': return one(node.value);
       case 'NullLiteral': return one(null);
+      case 'RegExpLiteral': return one(new RegExp(node.pattern, node.flags));
       case 'ParenthesizedExpression': return ev(node.expression);
       case 'TSAsExpression': case 'TSNonNullExpression': case 'TSSatisfiesExpression': return ev(node.expression);
       case 'TemplateLiteral': return combine(node.expressions.map(e => ev(e).flatMap(r => valueOf(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })).filter(x => x.choices))), vs => {
@@ -251,7 +258,9 @@ export function evaluateStyled(def, props, ctx) {
       case 'Identifier': {
         const bound = lookup(node.name); if (bound) return bound;
         if (node.name === 'undefined') return one(undefined);
-        return fromBinding(binding(cur(), node.name), node.name);
+        const b = binding(cur(), node.name);
+        if (!b && Object.hasOwn(GLOBALS, node.name)) return one(GLOBALS[node.name]);
+        return fromBinding(b, node.name);
       }
       case 'MemberExpression': case 'OptionalMemberExpression':
         return member(node.object, node.computed ? ev(node.property).flatMap(r => valueOf(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) }))) : one(node.property.name), node);
@@ -269,6 +278,7 @@ export function evaluateStyled(def, props, ctx) {
       }));
       case 'UnaryExpression':
         if (node.operator === '!') return ev(node.argument).flatMap(r => isSym(r.v) ? [{ v: { [SYM]: { ...r.v[SYM], negate: !r.v[SYM].negate } }, choices: r.choices }] : truth(r.v).map(b => ({ v: isUnknown(b.v) ? b.v : !b.v, choices: merge(r.choices, b.choices) })).filter(x => x.choices));
+        if (node.operator === '+') return ev(node.argument).flatMap(r => valueOf(r.v).map(x => ({ v: isUnknown(x.v) ? x.v : ['string', 'number', 'boolean'].includes(typeof unwrap(x.v)) ? Number(unwrap(x.v)) : unknownValue('U_STYLED_VALUE', `${src(node)} is not a number`), choices: merge(r.choices, x.choices) })).filter(x => x.choices));
         if (node.operator === '-') return ev(node.argument).map(r => ({ v: typeof unwrap(r.v) === 'number' ? -unwrap(r.v) : unknownValue('U_STYLED_VALUE', `${src(node)} is not a number`), choices: r.choices }));
         break;
       case 'BinaryExpression': {
@@ -345,7 +355,9 @@ export function evaluateStyled(def, props, ctx) {
   // pure methods of strings and arrays whose receiver and arguments are known
   const METHODS = {
     includes: (o, a) => o.includes(a), startsWith: (o, a) => typeof o === 'string' && o.startsWith(a), endsWith: (o, a) => typeof o === 'string' && o.endsWith(a),
-    indexOf: (o, a) => o.indexOf(a), join: (o, a) => Array.isArray(o) ? o.map(unwrap).join(a ?? ',') : undefined,
+    indexOf: (o, a) => o.indexOf(a), slice: (o, a, b) => o.slice(a, b),
+    match: (o, re) => typeof o === 'string' && re instanceof RegExp ? (m => m && [...m])(o.match(re)) : undefined,
+    map: () => undefined, join: (o, a) => Array.isArray(o) ? o.map(unwrap).join(a ?? ',') : undefined,
     toLowerCase: o => typeof o === 'string' ? o.toLowerCase() : undefined, toUpperCase: o => typeof o === 'string' ? o.toUpperCase() : undefined, trim: o => typeof o === 'string' ? o.trim() : undefined,
   };
   const known = v => !isUnknown(v) && !isSym(v);
@@ -357,6 +369,12 @@ export function evaluateStyled(def, props, ctx) {
       const base = unwrap(o);
       const elements = Array.isArray(base) ? base.map(unwrap) : base;
       if (!(typeof base === 'string' || Array.isArray(base))) return one(unknownValue('U_STYLED_VALUE', `${src(node)}: .${name} of a value that is not a string or an array`));
+      // map with a function: the function applied to each element (each may vary)
+      if (name === 'map') {
+        const f = args[0];
+        if (!Array.isArray(base) || !(f && typeof f === 'object' && FN in f)) return one(unknownValue('U_STYLED_VALUE', `${src(node)} is not modeled`));
+        return combine(base.map((el, i) => apply(f, [one(el), one(i)])), vs => one(vs));
+      }
       const r = name === 'join' ? METHODS.join(base, ...args.map(unwrap)) : METHODS[name](elements, ...args.map(unwrap));
       return one(r === undefined ? unknownValue('U_STYLED_VALUE', `${src(node)} is not modeled`) : r);
     });
@@ -367,6 +385,10 @@ export function evaluateStyled(def, props, ctx) {
     // the theme hook (useTheme from styled-components or a wrapper named like it) is the theme
     if (node.callee.type === 'Identifier' && /^use\w*Theme$/.test(node.callee.name) && !node.arguments.length) return propsLookup('theme');
     return ev(node.callee).flatMap(c => {
+      if (c.v && typeof c.v === 'object' && NATIVE in c.v) {
+        const lists = node.arguments.map(a => ev(a).flatMap(r => valueOf(r.v).map(x => ({ v: x.v, choices: merge(r.choices, x.choices) })).filter(x => x.choices)));
+        return thread(c, combine(lists, vs => { const bad = vs.find(v => !known(v)); return one(bad ?? c.v[NATIVE](...vs.map(unwrap))); }));
+      }
       if (!(c.v && typeof c.v === 'object' && FN in c.v)) return [{ v: isUnknown(c.v) ? c.v : unknownValue('U_STYLED_INTERPOLATION', `${src(node)} is not modeled`), choices: c.choices }];
       return thread(c, apply(c.v, node.arguments.map(a => ev(a))));
     });
@@ -376,18 +398,28 @@ export function evaluateStyled(def, props, ctx) {
   // else, blocks, switch on literal cases (fall-through and break), and const / let bindings; any other statement
   // makes the path Unknown.
   const thread = (p, rs) => rs.map(r => { const choices = merge(p.choices, r.choices); return choices && { ...r, choices }; }).filter(Boolean);
-  const run = (stmts, start = [{ done: false, choices: {} }]) => stmts.reduce((paths, st) => paths.flatMap(p => p.done ? [p] : thread(p, step(st))), start);
+  // `outer`: the choices the enclosing branches were taken under (a reassignment is modeled only where there are none)
+  const run = (stmts, outer = {}) => stmts.reduce((paths, st) => paths.flatMap(p => p.done ? [p] : thread(p, step(st, merge(outer, p.choices) ?? outer))), [{ done: false, choices: {} }]);
   const notModeled = st => [{ done: true, v: unknownValue('U_STYLED_INTERPOLATION', `the statement ${src(st).split('\n')[0]} is not modeled`), choices: {} }];
-  const step = st => {
+  const step = (st, outer = {}) => {
     switch (st.type) {
       case 'ReturnStatement': return (st.argument ? ev(st.argument) : one(undefined)).map(r => ({ done: true, v: r.v, choices: r.choices }));
-      case 'BlockStatement': return run(st.body);
+      case 'BlockStatement': return run(st.body, outer);
+      case 'ExpressionStatement': {
+        // x = value, for a binding of this function, on a path no condition split (paths share one scope)
+        const e = st.expression;
+        if (e.type !== 'AssignmentExpression' || e.operator !== '=' || e.left.type !== 'Identifier' || Object.keys(outer).length) return notModeled(st);
+        const holder = [...scopes].reverse().find(sc => sc.has(e.left.name));
+        if (!holder) return notModeled(st);
+        holder.set(e.left.name, ev(e.right));
+        return [{ done: false, choices: {} }];
+      }
       case 'EmptyStatement': return [{ done: false, choices: {} }];
       case 'IfStatement': return ev(st.test).flatMap(t => truth(t.v).flatMap(b => {
         const choices = merge(t.choices, b.choices); if (!choices) return [];
         if (isUnknown(b.v)) return [{ done: true, v: b.v, choices }];
         const branch = b.v ? st.consequent : st.alternate;
-        return thread({ choices }, branch ? step(branch) : [{ done: false, choices: {} }]);
+        return thread({ choices }, branch ? step(branch, merge(outer, choices) ?? outer) : [{ done: false, choices: {} }]);
       }));
       case 'VariableDeclaration': {
         if (st.kind === 'var' || !st.declarations.every(d => d.init)) return notModeled(st);
@@ -406,7 +438,7 @@ export function evaluateStyled(def, props, ctx) {
         const body = [];
         for (const c of st.cases.slice(at)) body.push(...c.consequent);
         // break ends the switch (a path that broke goes on after it)
-        return thread({ choices }, run(body)).map(p => p.broke ? { done: false, choices: p.choices } : p);
+        return thread({ choices }, run(body, merge(outer, choices) ?? outer)).map(p => p.broke ? { done: false, choices: p.choices } : p);
       }));
       case 'BreakStatement': return st.label ? notModeled(st) : [{ done: true, broke: true, choices: {} }];
       default: return notModeled(st);
