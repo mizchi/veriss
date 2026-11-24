@@ -537,7 +537,11 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
 - [x] **I9. 入力の段の Unknown を箱に**: 大きさを持たない要素(hr、br、col)、その要素で効く属性、テキストと子要素の混在は、入力全体の
   diagnostic で、入力に diagnostic があると配置がまったく走らなかった。箱に付けて、配置がその箱に来たところで Unknown にする。
   select の option は箱として配置しないが select の大きさを決めるので、option の Unknown は select のものにする。
-- 残り(Unknown のまま): flex の container の中の absolute / fixed の子の静的位置(inset のない軸)。そのほかは、
+- [x] **I10. flex の container の absolute / fixed の子**: container ごと Unknown にしていた。flex の item ではないので、container の大きさが
+  決まった後に containing block に対して配置する(grid と同じ `solveOutOfFlow`)。inset が両方 auto の軸は、始点に揃える container なら内容の
+  始点に置く(Flexbox §4.1、stretch は flex-start 扱い)。3 ブラウザーで、in-flow の item と absolute / fixed の子の位置が解析と一致した
+  (`e2e/layout-flex.spec.mjs`)。
+- 残り(Unknown のまま): 中身で大きさの決まる flex の item(`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
 
 ## 済み(このチェックリストを作る前に済んだもの)
