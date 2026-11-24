@@ -907,3 +907,16 @@ export default function C({ size }: { size: '' | '4px' }) { return <Box $n={0} $
     assert.equal(ours, real, JSON.stringify(s.choices));
   }
 });
+
+test('styled-components: a const declared in a block does not replace the binding outside it', () => {
+  const source = `import styled from 'styled-components';
+const Box = styled.div\`
+  color: \${({ $active }) => { let color = 'red'; if ($active) { const color = 'blue'; } return color; }};
+  width: \${() => { const w = '1px'; switch (1) { case 1: const w = '2px'; } return w; }};
+\`;
+export default function C({ active }) { return <Box $active={active} />; }`;
+  const {states, css, unknowns} = expandReact(source);
+  assert.deepEqual(unknowns, []);
+  assert.doesNotMatch(css, /color:blue|width:2px/);
+  for (const s of states) assert.match(css, new RegExp(`\\.${classOf(s.html, 'div')[1]}\\{color:red;width:1px\\}`));
+});

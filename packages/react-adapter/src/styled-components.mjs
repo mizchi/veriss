@@ -429,11 +429,13 @@ export function evaluateStyled(def, props, ctx) {
   const thread = (p, rs) => rs.map(r => { const choices = merge(p.choices, r.choices); return choices && { ...r, choices }; }).filter(Boolean);
   // `outer`: the choices the enclosing branches were taken under (a reassignment is modeled only where there are none)
   const run = (stmts, outer = {}) => stmts.reduce((paths, st) => paths.flatMap(p => p.done ? [p] : thread(p, step(st, merge(outer, p.choices) ?? outer))), [{ done: false, choices: {} }]);
+  // a block's own lexical scope (its const / let do not replace bindings outside it)
+  const inBlock = f => { const saved = scopes; scopes = [...scopes, new Map()]; try { return f(); } finally { scopes = saved; } };
   const notModeled = st => [{ done: true, v: unknownValue('U_STYLED_INTERPOLATION', `the statement ${src(st).split('\n')[0]} is not modeled`), choices: {} }];
   const step = (st, outer = {}) => {
     switch (st.type) {
       case 'ReturnStatement': return (st.argument ? ev(st.argument) : one(undefined)).map(r => ({ done: true, v: r.v, choices: r.choices }));
-      case 'BlockStatement': return run(st.body, outer);
+      case 'BlockStatement': return inBlock(() => run(st.body, outer));
       case 'ExpressionStatement': {
         // x = value, for a binding of this function, on a path no condition split (paths share one scope)
         const e = st.expression;
@@ -467,7 +469,7 @@ export function evaluateStyled(def, props, ctx) {
         const body = [];
         for (const c of st.cases.slice(at)) body.push(...c.consequent);
         // break ends the switch (a path that broke goes on after it)
-        return thread({ choices }, run(body, merge(outer, choices) ?? outer)).map(p => p.broke ? { done: false, choices: p.choices } : p);
+        return thread({ choices }, inBlock(() => run(body, merge(outer, choices) ?? outer))).map(p => p.broke ? { done: false, choices: p.choices } : p);
       }));
       case 'BreakStatement': return st.label ? notModeled(st) : [{ done: true, broke: true, choices: {} }];
       default: return notModeled(st);
