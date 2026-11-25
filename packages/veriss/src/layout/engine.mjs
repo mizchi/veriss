@@ -3761,7 +3761,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                     // A block-flow container with an auto height capped by a px max-height: min(content, max-height), its
                     // rows still at the top (the content overflows the clamped box). min-block-size then wins over it.
                     const flowCap = maxBlock && !knownBlock && style.$blockFlow ? diff(maxBlock, blockEdges) : null;
-                    const cappedLayouts = !flowCap ? layouts : layouts.flatMap(rs => minimumOf(rs.region, rs.required, flowCap).map(c => ({ ...rs, region: c.region, ...(c.value !== rs.required ? { raised: c.value } : {}) })));
+                    // (A max-height below the padding and border leaves a content height of 0, not less: measured.)
+                    const cappedLayouts = !flowCap ? layouts : layouts.flatMap(rs => clamp(rs.region, flowCap).flatMap(cap => minimumOf(cap.region, rs.required, cap.value)).map(c => ({ ...rs, region: c.region, ...(c.value !== rs.required ? { raised: c.value } : {}) })));
                     for (const rs of cappedLayouts.flatMap(rs => minBlock && !knownBlock && style.$blockFlow ? minBlock(rs.region).flatMap(m => maximum(m.region, rs.raised ?? rs.required, m.value).map(x => ({ ...rs, region: x.region, raised: x.value }))) : [rs])) {
                       const contentBlock = knownBlock ?? rs.raised ?? rs.required, blockSize = sum(contentBlock, blockEdges);
                       const finalAncestors = [...parents, { ...own, block: contentBlock, paddingBlock:diff(blockSize,scalar(add(px(style['border-top']),px(style['border-bottom'])))) }];

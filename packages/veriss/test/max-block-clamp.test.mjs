@@ -35,6 +35,15 @@ test('border-box: the max-height is the border box', () => {
   assert.deepEqual(heights(r, '.a'), ['0w+100']);
 });
 
+test('border-box: a max-height below the padding and border leaves the content height at 0, not below', () => {
+  for (const max of ['0px', '15px']) {
+    const r = run(`.a{box-sizing:border-box;max-height:${max};padding:10px;border:2px solid;overflow:auto}`, page(two));
+    assert.deepEqual(unknown(r), [], max);
+    assert.deepEqual(heights(r, '.a'), ['0w+24'], max);
+    assert.deepEqual(origins(r, '.n'), ['0w+24'], max);
+  }
+});
+
 test('content that overflows a clamped box with overflow visible is reported', () => {
   const r = run('.a{max-height:100px}', page(two));
   assert.equal(r.status, 'violated', JSON.stringify(unknown(r)));
