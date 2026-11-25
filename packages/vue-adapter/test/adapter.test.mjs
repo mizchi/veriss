@@ -50,7 +50,8 @@ test('what the template does not say statically is Unknown', () => {
     ['<main class="page" :style="{width: w}"></main>', 'U_VUE_DYNAMIC_STYLE'],
     ['<main class="page"><slot /></main>', 'U_VUE_SLOT'],
   ]) {
-    const report = analyzeVue(`<template>${template}</template><style>.page{display:grid;grid-template-columns:minmax(0,1fr)}</style>`, {pageCSS, viewport});
+    // (scoped: a plain <style> is page-wide CSS, reported as E_SCOPE_GLOBAL; this test is about the template.)
+    const report = analyzeVue(`<template>${template}</template><style scoped>.page{display:grid;grid-template-columns:minmax(0,1fr)}</style>`, {pageCSS, viewport});
     assert.equal(report.status, 'unknown', template);
     assert.ok(report.unknowns.some(u => u.code === code), `${template}: ${JSON.stringify(report.unknowns)}`);
   }

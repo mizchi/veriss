@@ -99,6 +99,9 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
 
   // Module-level styles: stylex.create objects, Linaria css`` classes and styled components.
   const stylex = new Map(), linaria = new Map(), styled = new Map(), constants = new Map(), cssText = [];
+  // styled-components: the classes it generates for this component's elements (owned by it; component scope), and the
+  // createGlobalStyle components, whose CSS applies to the whole page (an escape from the component).
+  const scOwned = new Set(), globalStyles = new Map(), globalEscapes = [];
   for (const stmt of ast.program.body) {
     const decls = stmt.type === 'VariableDeclaration' ? stmt.declarations : stmt.type === 'ExportNamedDeclaration' && stmt.declaration?.type === 'VariableDeclaration' ? stmt.declaration.declarations : [];
     for (const d of decls) {
@@ -107,6 +110,7 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       // A module-level constant (a string, number or object of them) that Linaria templates may interpolate.
       if (stmt.kind === 'const' || stmt.declaration?.kind === 'const') { const value = literal(init); if (value !== undefined && value !== null) constants.set(name, value); }
       if (sc.defs.has(name) || sc.fragments.has(name)) continue;
+      if (init.type === 'TaggedTemplateExpression' && sc.names.createGlobalStyle && text(init.tag) === sc.names.createGlobalStyle) { globalStyles.set(name, init.loc?.start.line); continue; }
       if (init.type === 'CallExpression' && text(init.callee) === 'stylex.create') {
         const value = literal(init.arguments[0]);
         if (value === undefined) { unknown('U_STYLEX_DYNAMIC', `stylex.create for ${name} is not a static literal`); continue; }
@@ -312,8 +316,16 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
       if (!r) return [{ html: boundary('component', tag), choices: {} }];
       if (r.html) return r.html;
       ({ tag, baseClasses, scLists } = r);
+      for (const c of baseClasses) scOwned.add(c);
     } else if (styled.has(tag)) { baseClasses = [styled.get(tag).className]; tag = styled.get(tag).tag; }
     else if (tag === 'Fragment' || tag === 'React.Fragment') return children(node.children);
+    // createGlobalStyle renders no element; its CSS applies to the whole page, outside this component (E_SCOPE_ESCAPE).
+    // That CSS is not applied in the analysis (Unknown): it styles the page, not only this component.
+    else if (globalStyles.has(tag)) {
+      if (!globalEscapes.some(e => e.selector === `<${tag}>`)) globalEscapes.push({ selector: `<${tag}>`, message: `<${tag}> is a createGlobalStyle: its CSS applies to the whole page, not only to this component's elements. Put page-wide styles in the page's stylesheet, and style this component's elements through its own styled components` });
+      unknown('U_STYLED_GLOBAL', `<${tag}> (createGlobalStyle) styles the whole page; its CSS is not applied in this analysis`);
+      return [{ html: '', choices: {} }];
+    }
     else if (/^[A-Z]/.test(tag) || tag.includes('.')) { unknown('U_REACT_COMPONENT', `child component <${tag}>: its markup is analysed with that component, not here`); return [{ html: boundary('component', tag, node.openingElement.attributes.some(a => a.type === 'JSXAttribute' && a.name?.name === 'data-noshift') ? 'data-noshift' : undefined), choices: {} }]; }
     let classLists = [{ classes: [], choices: {} }], refLists = null;
     const statics = [], attrLists = [];
@@ -526,8 +538,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   const rendered = new Set(states.flatMap(st => [...st.html.matchAll(/ class="([^"]*)"/g)].flatMap(m => m[1].split(' '))));
   const live = [...scBlocks.entries()].filter(([cls]) => rendered.has(cls)).map(([, b]) => b);
   const lowered = live.length && !inject ? lowerNested(live) : null;
-  const owned = [...linaria.values(), ...[...styled.values()].map(v => v.className)];
-  const scope = owned.length ? { mode: 'global', owned, escapes: scopeEscapes(linariaCSS, ['global']) } : undefined;
+  const owned = [...linaria.values(), ...[...styled.values()].map(v => v.className), ...scBlocks.keys(), ...scOwned];
+  const scope = owned.length || globalEscapes.length ? { mode: 'global', owned, escapes: [...scopeEscapes(linariaCSS, ['global']), ...globalEscapes] } : undefined;
   // styled-components keyframes`` rules (after the lowered rules, so their line map is unchanged)
   const keyframeRules = inject ? [] : [...keyframes].map(([name, text]) => `@keyframes ${name}{${text.replace(/\s*\n\s*/g, ' ').trim()}}`);
   const ownLinaria = linariaCSS.replace(/:global\(([^()]*)\)/g, '$1');
