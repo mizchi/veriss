@@ -142,6 +142,21 @@ test('px margins on an absolute box offset it from its insets', () => {
   assert.deepEqual(rect('top:5px;left:5px;right:15px;height:20px;margin:0 -4px', 'padding:8px;border:3px solid #000'), [4, 8, 382, 20]);
 });
 
+// Over-constrained on the inline axis, the ignored inset follows the containing block's direction, not the box's own
+// (CSS 2 §10.3.7): an rtl box in an ltr containing block keeps left, an ltr box in an rtl one keeps right.
+test('the retained inset of an over-constrained absolute box follows its containing block', () => {
+  assert.deepEqual(rect('direction:rtl;inset:0;width:100px;height:50px;margin:10px 20px 30px 40px'), [40, 10, 100, 50]);
+  assert.deepEqual(rect('direction:rtl;inset:0;width:100px;height:50px'), [0, 0, 100, 50]);
+  assert.deepEqual(rect('direction:ltr;inset:0;width:100px;height:50px;margin:10px 20px 30px 40px', 'direction:rtl'), [280, 10, 100, 50]);
+  // The viewport's direction is body's (else html's): where they differ it is not read, and the over-constrained
+  // fixed box is not placed by a guess.
+  const fixed = html => analyzeHTML('<html lang="en"><body><main class="page"><div class="o"></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${html}.o{position:fixed;inset:0;width:100px;height:50px}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
+  // (A fixed box is Unknown for the layout verdict anyway: modeled for the accessibility and integrity checks only.)
+  const unknowns = html => fixed(html).diagnostics.filter(d => d.severity === 'unknown').map(d => d.message).join(' | ');
+  assert.doesNotMatch(unknowns(''), /containing block's direction/);
+  assert.match(unknowns('html{direction:rtl}body{direction:ltr}'), /\.o: .*containing block's direction/);
+});
+
 test('margins on an absolute box that are not modeled stay Unknown and name the box', () => {
   const run = (overlay, card = '') => analyzeHTML('<html lang="en"><body><main class="page"><div class="card"><div class="o"></div></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page,.card{${g}}.card{position:relative;height:200px;${card}}.o{position:absolute;${overlay}}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
   for (const overlay of [

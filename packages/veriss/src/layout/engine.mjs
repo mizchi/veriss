@@ -639,7 +639,18 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
             style = { ...style, [size]: minus.length ? `calc(100% ${terms})` : '100%', [end]: 'auto' };
           } else style = { ...style, [end]: 'auto' };
         };
-        sized(style.direction === 'rtl' ? 'right' : 'left', style.direction === 'rtl' ? 'left' : 'right', 'inline-size', ['left', 'right']);
+        // Which inline inset is ignored follows the containing block's direction, not the box's own (CSS 2 §10.3.7):
+        // the nearest positioned (or transformed) ancestor for an absolute box, the nearest transformed one for a fixed
+        // box; else the viewport, whose direction is the principal one (CSS Writing Modes 3 §8: body's, else html's),
+        // read only where html and body agree. Not knowing it matters only when the axis is over-constrained.
+        const set = side => style[side] !== undefined && style[side] !== 'auto';
+        const container = ancestors.findLast(a => a.style && (style.$fixed ? containsFixed(a.style) : (a.style.position !== 'static' || containsFixed(a.style))));
+        const top = ancestors.filter(a => a.box?.documentRoot || (a.box?.tag === 'body' && ancestors[ancestors.indexOf(a) - 1]?.box?.documentRoot)).map(a => a.style?.direction);
+        const containerDirection = container ? container.style.direction : top.length && top.every(d => d === top[0]) && ancestors[0]?.box?.documentRoot ? top[0] : undefined;
+        if (!['ltr', 'rtl'].includes(containerDirection) && set('left') && set('right') && style['inline-size'] !== 'auto')
+          throw Object.assign(new Error(`${box.label}: an absolute box with left, right and a width is over-constrained, and which inset is ignored follows its containing block's direction, which is not known here`), { code: 'U_LAYOUT_CSS', box });
+        const rtl = (containerDirection ?? style.direction) === 'rtl';
+        sized(rtl ? 'right' : 'left', rtl ? 'left' : 'right', 'inline-size', ['left', 'right']);
         sized('top', 'bottom', 'block-size', ['top', 'bottom']);
         // An auto width left after the insets shrinks to fit its content; under inline-size containment
         // (container-type: inline-size / size) the content counts for nothing, so it is its padding and border.
