@@ -598,6 +598,8 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
     これまで 300px として判定していた。min-content を使うところ(中身で大きさの決まる item、grid の fr の列の最小)では Unknown にする
     (max-content は 3 ブラウザーとも 300px。幅 100px の `1fr 1fr` の grid で、Chromium・WebKit は列が 300 / 0px、Firefox は 50 / 50px)。
     width 属性だけの svg(100px)は一致するので判定する
+  - 実ページの重み: 16.7% と見えていたのは `tools/blocker-weights.mjs` の数え方の誤り(アダプターのクラス `__ph0` で箱を見つけられず、
+    ページの残りを数えていた)。直すと 0.7%(ロゴの img 41 か所と text input 14 か所)。どちらも上の理由で Unknown のまま
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
