@@ -183,14 +183,15 @@ test('scope (Svelte): :global reaches past the component; an ancestor outside it
   assert.deepEqual(scopeCodes(svelte('.open .list { padding: 4px; }')), []);
 });
 
-test('scope (Vue): :deep/:slotted escape; a plain <style> is global, so a selector can reach a child component', () => {
+test('scope (Vue): :deep/:slotted escape; a plain <style> is global, so its selectors match the whole page', () => {
   const g = 'display: grid; grid-template-columns: minmax(0, 1fr);';
   const vue = (css, attrs = 'scoped') => analyzeVue(`<template><ul class="list"><Item /></ul></template>\n<style ${attrs}>.list { ${g} } ${css}</style>`, scopeOptions);
   assert.deepEqual(scopeCodes(vue(':deep(li) { padding: 4px; }')), [['E_SCOPE_ESCAPE', ':deep(li)']]);
   assert.deepEqual(scopeCodes(vue('.list > li { padding: 4px; }')), []);
   // Vue scopes only the styled element: an ancestor the component does not render comes from the page.
   assert.deepEqual(scopeCodes(vue('.theme-dark .list { padding: 4px; }')), [['E_SCOPE_OUTSIDE', '.theme-dark .list']]);
-  assert.deepEqual(scopeCodes(vue('.list > li { padding: 4px; }', '')), [['E_SCOPE_REACHES', '.list > li']]);
+  // A plain <style> applies to the whole page: with no class the component owns, its selectors match anywhere.
+  assert.deepEqual(scopeCodes(vue('.list > li { padding: 4px; }', '')), [['E_SCOPE_GLOBAL', '.list'], ['E_SCOPE_GLOBAL', '.list > li']]);
 });
 
 test('scope (Linaria): a nested selector may not style the li another component renders; its own li is fine', () => {
@@ -285,4 +286,28 @@ test('lint: a click-catcher is an invisible blocker, and an overlay with no way 
   const trap = run('background:#000').find(m => m.code === 'E_A11Y_CLICK_TRAP');
   assert.ok(trap && trap.severity === 'error' && trap.fix, JSON.stringify(run('background:#000')));
   assert.equal(trap.line, 4);
+});
+
+// A component's CSS stays inside it: CSS that applies to the whole page (a plain Vue <style>, styled-components'
+// createGlobalStyle) may not select elements through anything but a class the component owns.
+test('scope (Vue): a plain <style> selector with no owned class matches the whole page (E_SCOPE_GLOBAL); scoped sheets are judged as scoped', () => {
+  const g = 'display: grid; grid-template-columns: minmax(0, 1fr);';
+  const tpl = '<template><ul class="list"><li class="i">a</li></ul></template>';
+  const global = r => scopeCodes(r).filter(([c]) => c === 'E_SCOPE_GLOBAL').map(([, b]) => b);
+  assert.deepEqual(global(analyzeVue(`${tpl}\n<style>.list { ${g} } li { padding: 4px; }</style>`, scopeOptions)), ['.list', 'li']);
+  assert.deepEqual(global(analyzeVue(`${tpl}\n<style scoped>.list { ${g} } li { padding: 4px; }</style>`, scopeOptions)), []);
+  // A scoped and a plain sheet: only the plain sheet's selectors.
+  assert.deepEqual(global(analyzeVue(`${tpl}\n<style scoped>.list { ${g} } li { padding: 4px; }</style>\n<style>.i { margin: 0; }</style>`, scopeOptions)), ['.i']);
+});
+
+test('scope (styled-components): generated classes are owned; a nested selector may not reach {children}; createGlobalStyle escapes', () => {
+  const g = 'display: grid; grid-template-columns: minmax(0, 1fr);';
+  const sc = (body, extra = '') => analyzeReact(`import styled, { createGlobalStyle } from 'styled-components';\n${extra}const List = styled.ul\`${g} padding: 0; li { padding: 4px; }\`;\nexport default function L({ children }) { return ${body}; }`, scopeOptions);
+  // Its own li only: closed. With {children} under the list, li reaches what the caller renders.
+  assert.deepEqual(scopeCodes(sc('<List><li>a</li></List>')), []);
+  assert.deepEqual(scopeCodes(sc('<List><li>a</li>{children}</List>')).map(([c]) => c), ['E_SCOPE_REACHES']);
+  // createGlobalStyle applies to the whole page: an escape, wherever it is rendered.
+  const global = sc('<><G /><List><li>a</li></List></>', 'const G = createGlobalStyle`li { margin: 0; }`;\n');
+  assert.deepEqual(scopeCodes(global), [['E_SCOPE_ESCAPE', '<G>']]);
+  assert.match(global.findings.find(f => f.code === 'E_SCOPE_ESCAPE').message, /createGlobalStyle/);
 });

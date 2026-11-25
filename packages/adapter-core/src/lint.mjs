@@ -10,6 +10,7 @@ export const recommended = {
   E_LAYOUT_CONTENT: ['error', 'let the content wrap (overflow-wrap: anywhere) or give the box more room'],
   E_LAYOUT_PAGE_OVERFLOW: ['error', 'keep the box inside the viewport width'],
   // Component scope: a component's selectors and the parent-child relations they rely on stay inside it.
+  E_SCOPE_GLOBAL: ['error', 'scope the stylesheet (<style scoped>, a CSS module, a CSS-in-JS class) or select through a class this component owns'],
   E_SCOPE_OUTSIDE: ['error', 'keep the relation inside the component (a class or prop on its own root), or pass the context in as a custom property'],
   E_SCOPE_REACHES: ['error', 'style the child component\'s elements in that component (a class or variant prop it exposes); name this component\'s own class here'],
   E_LAYOUT_ABSOLUTE_CLIPPED: ['error', 'move overflow: hidden off the menu\'s containing block (onto an inner wrapper), render the menu outside it (a portal), or keep it inside'],

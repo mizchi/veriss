@@ -186,7 +186,10 @@ export function expandVue(source, { maxStates = 64, eachCounts = [0, 1, 2], sour
   // <style scoped> hashes the styled element of each selector, not its ancestors; :deep, :slotted and :global reach past
   // the component (E_SCOPE_ESCAPE). A plain <style> is global CSS: its selectors are not pinned to this component.
   const sheets = descriptor.styles.filter(s => !s.module);
-  const scope = { mode: sheets.every(s => s.scoped) ? 'scoped' : 'global', owned: [], escapes: sheets.flatMap(s => scopeEscapes(s.content, ['deep', 'slotted', 'global'])) };
+  // A component may have a scoped and a plain <style>: each sheet is judged by its own mode (lines of the joined CSS).
+  let line = 1;
+  const ranges = sheets.map(s => { const lines = unscopeVueCSS(s.content).split('\n').length, range = { mode: s.scoped ? 'scoped' : 'global', from: line, to: line + lines - 1 }; line += lines; return range; });
+  const scope = { mode: sheets.every(s => s.scoped) ? 'scoped' : 'global', owned: [], escapes: sheets.flatMap(s => scopeEscapes(s.content, ['deep', 'slotted', 'global'])), ...(new Set(ranges.map(r => r.mode)).size > 1 ? { sheets: ranges } : {}) };
   return { states, css, unknowns, assumptions: [...assumptions], scope };
 }
 
