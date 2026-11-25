@@ -2812,7 +2812,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // The min-content contribution of a block-level child: its px width or min-content width, clamped, plus margins.
     const intrinsic = (target, st, at, max = false) => {
       let size;
-      if (st['inline-size'] !== 'auto') size = borderBox(st, length(st['inline-size'], 'width')); else size = minContent(target, st, at, max);
+      // fit-content contributes its min- and max-content widths, as auto does; min-content and max-content the one size
+      // (CSS Sizing 3 §5.2; measured in Chromium, Firefox and WebKit).
+      const keyword = String(st['inline-size']);
+      if (keyword === 'auto' || keyword === 'fit-content') size = minContent(target, st, at, max);
+      else if (keyword === 'min-content' || keyword === 'max-content') size = minContent(target, st, at, keyword === 'max-content');
+      else size = borderBox(st, length(st['inline-size'], 'width'));
       size = clampMax(st, size);
       if (st['min-inline-size'] !== 'auto') { const m = borderBox(st, length(st['min-inline-size'], 'min-width')); if (cmp(m, size) > 0) size = m; }
       return add(size, margins(st));
@@ -3155,6 +3160,25 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const text = decimal(declared);
           if (text === null) throw Object.assign(new Error(`${box.label}: its shrink-to-fit width ${exact(used)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
           style = { ...style, 'inline-size': `${text}px`, 'min-inline-size': 'auto', 'max-inline-size': 'none', $shrinkToFit: true };
+        }
+        // An intrinsic width keyword on a block in block flow (CSS Sizing 3 §3.2): max-content and min-content are that
+        // width; fit-content is min(max-content, max(min-content, available)), which is an auto width clamped to
+        // [min-content, max-content]. With its own min- or max-width the clamps would
+        // nest the other way round, so that stays Unknown. (Measured in Chromium, Firefox and WebKit.)
+        const intrinsicKeyword = String(style['inline-size']);
+        if (['fit-content', 'min-content', 'max-content'].includes(intrinsicKeyword) && !box.pseudo && style.display === 'block' && ['static', 'relative'].includes(style.position)
+          && ['block', 'flow-root'].includes(String(parents.at(-1)?.style.display)) && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && String(style['max-inline-size'] ?? 'none') === 'none') {
+          const sizes = frAutoMinimums(box, style, state.region, parents, true);
+          const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
+          // (Border-box widths; a content-box box declares them less its inline padding and borders.)
+          const declare = value => {
+            const text = decimal(style['box-sizing'] === 'content-box' ? sub(value, edges) : value);
+            if (text === null) throw Object.assign(new Error(`${box.label}: its ${intrinsicKeyword} width ${exact(value)}px is not a finite decimal`), { code: 'U_LAYOUT_GEOMETRY', box: box.label, path: box.path });
+            return `${text}px`;
+          };
+          const max = cmp(sizes.max, sizes.min) > 0 ? sizes.max : sizes.min;
+          style = intrinsicKeyword === 'fit-content' ? { ...style, 'inline-size': 'auto', 'min-inline-size': declare(sizes.min), 'max-inline-size': declare(max) }
+            : { ...style, 'inline-size': declare(intrinsicKeyword === 'min-content' ? sizes.min : max) };
         }
         if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null)) continue;
         // A fieldset's first legend is rendered in its block-start border (HTML §15.3.13): it is not a

@@ -69,3 +69,17 @@ test('a focused position inside an aligned content-sized box moves with the box'
   assert.equal(offscreen(at('transform:translateY(470px)')), false);
   assert.equal(offscreen(at('top:-130px')), true);
 });
+
+// A child with width: fit-content (a button row: each button as wide as its content) contributes its min- and
+// max-content widths to its content-sized parent, as an auto width does (CSS Sizing 3 §5.2); min-content and
+// max-content keywords contribute the one size.
+test('fit-content, min-content and max-content children contribute to a content-sized item', () => {
+  const kids = k => `<div class="a"><div class="f" style="width:${k}">${w}</div></div><div class="b"></div>`;
+  for (const [kw, at500, at150] of [['fit-content', [[0, 190], [200, 300]], [[0, 140], [150, 0]]], ['max-content', [[0, 190], [200, 300]], [[0, 190], [200, 0]]], ['min-content', [[0, 60], [70, 430]], [[0, 60], [70, 80]]]]) {
+    const r = run('.b{flex:1;min-width:0}', kids(kw));
+    assert.notEqual(r.status, 'unknown', `${kw}: ${JSON.stringify(r.diagnostics.map(d => d.message))}`);
+    assert.deepEqual(columns(r, 500), at500, `${kw} at 500px`);
+    assert.deepEqual(columns(r, 150), at150, `${kw} at 150px`);
+  }
+});
+
