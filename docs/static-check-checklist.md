@@ -577,7 +577,16 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   block の流れの中の block は、min-content と max-content がその幅、fit-content が min(max-content, max(min-content, 使える幅))
   (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
   3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
-  (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
+  (clamp の入れ子の順が変わる)は Unknown のまま(auto margins で寄せる場合は I19)。
+- [x] **I19. `width: fit-content` を auto margins で寄せる**: `.f { width: fit-content; margin: 0 auto }` で中央に寄せる書き方を、
+  auto margins は px か % の幅に限っていたので Unknown にしていた。I18 の block の流れの中の block では、auto margins が使った幅の
+  残り(fit-content と max-content は max-content の幅、min-content は min-content の幅を引いたもの)を取り、両方 auto なら半分ずつ、
+  片方なら全部。残りが負(箱が親より広い)ならどちらの margin も 0 で、箱は終わりの側へはみ出す。3 ブラウザーで、fit-content /
+  min-content / max-content を `margin: 0 auto`・`margin-left: auto`・`margin-right: auto` で、800 / 500 / 300 / 209 / 208 / 207 /
+  190 / 150 / 79 / 78 / 77 / 60 / 50 / 30px を実測して一致(content-box も同じ。中身の min 60 / max 190px、padding 0 8px、border 1px
+  で、fit-content の中央寄せは 500px で幅 208・left 146、150px で 150・0、50px で 78・0。min-content は 500px で left 211、
+  max-content は 150px でも幅 208・left 0)。反対側の margin が 0 でも auto でもない場合(`margin-left: auto; margin-right: 10px` は
+  79px で WebKit が left -9、Chromium と Firefox が 0 と分かれる)と rtl は Unknown のまま。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

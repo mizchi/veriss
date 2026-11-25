@@ -3633,7 +3633,19 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                   const autoMargins = item => ['margin-left', 'margin-right'].some(key => item.style[key] === 'auto');
                   // In block flow an auto width fills the area, max-inline-size caps it, and the auto margins center it.
                   const blockFill = item => style.$blockFlow && String(item.style['inline-size']) === 'auto' && /^(?:none|\d+(?:\.\d+)?px)$/.test(String(item.style['max-inline-size']));
-                  for (const item of placed) if (autoMargins(item) && !blockFill(item)) {
+                  // An intrinsic width keyword on a block in block flow (sized by the box itself, see "An intrinsic width
+                  // keyword" above): its auto margins take the free space left of its used width — max-content for
+                  // fit-content and max-content, min-content for min-content — and none of it when that is negative (the box
+                  // overflows at the end). The other margin must be 0 or auto: with a px margin there, WebKit differs once the
+                  // box overflows (measured: margin-left: auto, margin-right: 10px in a 79px container is at -9 in WebKit, 0
+                  // in Chromium and Firefox). ltr only. (Measured in Chromium, Firefox and WebKit, also with content-box.)
+                  const intrinsicAuto = item => {
+                    const st = item.style;
+                    return style.$blockFlow && ['fit-content', 'min-content', 'max-content'].includes(String(st['inline-size'])) && !item.box.pseudo && st.display === 'block'
+                      && ['static', 'relative'].includes(st.position) && ['block', 'flow-root'].includes(String(ancestors.at(-1)?.style.display)) && ['auto', '0', '0px'].includes(String(st['min-inline-size']))
+                      && String(st['max-inline-size'] ?? 'none') === 'none' && ['left', 'right'].every(side => ['auto', '0', '0px'].includes(String(st[`margin-${side}`]))) && style.direction !== 'rtl';
+                  };
+                  for (const item of placed) if (autoMargins(item) && !blockFill(item) && !intrinsicAuto(item)) {
                     const w = String(item.style['inline-size']);
                     if (!/^\d+(?:\.\d+)?(?:px|%)$/.test(w) || (item.style['box-sizing'] === 'content-box' && ['left', 'right'].some(side => !/^(?:0|\d+(?:\.\d+)?px)$/.test(String(item.style[`padding-${side}`])) || !/^(?:0|ua|\d+(?:\.\d+)?px)$/.test(String(item.style[`border-${side}`])))) || style.direction === 'rtl')
                       throw Object.assign(new Error(`${item.box.label}: auto margins on a grid item are modeled only with a px or % width (ltr); with an auto width it shrinks to fit its content`), { code: 'U_LAYOUT_CSS', box: item.box });
@@ -3682,6 +3694,13 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       const max = String(item.style['max-inline-size']);
                       if (max === 'none') return [{ region, offset: scalar(0) }];
                       const free = diff(itemInline(item), scalar(px(max))), share = item.style['margin-left'] === 'auto' ? (item.style['margin-right'] === 'auto' ? div(one, q(2)) : one) : zero;
+                      const split = partition(region, free, '>=');
+                      return [...split.yes.map(r => ({ region: r, offset: times(free, share) })), ...split.no.map(r => ({ region: r, offset: scalar(0) }))];
+                    }
+                    if (intrinsicAuto(item)) {
+                      const sizes = frAutoMinimums(item.box, item.style, region, ancestors, true);
+                      const used = item.style['inline-size'] === 'min-content' ? sizes.min : cmp(sizes.max, sizes.min) > 0 ? sizes.max : sizes.min;
+                      const free = diff(itemInline(item), scalar(used)), share = item.style['margin-left'] === 'auto' ? (item.style['margin-right'] === 'auto' ? div(one, q(2)) : one) : zero;
                       const split = partition(region, free, '>=');
                       return [...split.yes.map(r => ({ region: r, offset: times(free, share) })), ...split.no.map(r => ({ region: r, offset: scalar(0) }))];
                     }
