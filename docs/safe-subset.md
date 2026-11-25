@@ -130,6 +130,7 @@ veriss が判定できる形で書くための規約である。エンジンが�
 | `border-image` | `border` と `background` |
 | 角ごとの `border-*-radius` | `border-radius` の一括指定 |
 | SVG の `stroke-*` を CSS で書く | svg の属性で書く(`stroke-width="2"`) |
+| `pointer-events` の SVG 用の値(`all`、`visiblePainted` など)が inline の svg に届く | `auto` か `none`(SVG でない要素では、これらの値は `auto` として判定する) |
 
 当たる要素がページにない場合、これらのルールは何もしないので、Unknown にはならない。
 

@@ -269,6 +269,36 @@ test('pointer-disabled: a visible target under inherited pointer-events: none', 
   assert.equal(find(run(panel(), panelCSS('.panel { pointer-events: none; }\n.go { pointer-events: auto; }\n.cover { display: none; }')), 'E_A11Y_POINTER_DISABLED').length, 0);
 });
 
+// #46: the SVG-only pointer-events keywords behave as auto on a non-SVG element (CSS UI 4 §5.2.2 / SVG 2 §15.6).
+const svgKeywords = ['all', 'visiblePainted', 'visibleFill', 'visibleStroke', 'visible', 'painted', 'fill', 'stroke'];
+const unsupportedPointer = report => report.diagnostics.filter(d => d.code.startsWith('U_') && /pointer-events/.test(d.message));
+
+test('pointer-events: the SVG-only keywords on a link are auto, not Unknown (#46 repro)', () => {
+  const repro = value => analyzeHTML('<html lang="en"><body><main><a id="a" href="/x">Link</a></main></body></html>',
+    {name: 'Page', css: `html,body{margin:0;padding:0}\n#a{display:block;width:100px;height:44px;pointer-events:${value};color:#00e;background:#fff}`, viewport: domain});
+  for (const value of svgKeywords) assert.deepEqual(unsupportedPointer(repro(value)), [], value);
+});
+
+test('pointer-events: an SVG-only keyword undoes an inherited none like auto', () => {
+  for (const value of svgKeywords) {
+    assert.equal(find(run(panel(), panelCSS(`.panel { pointer-events: none; }\n.go { pointer-events: ${value}; }\n.cover { display: none; }`)), 'E_A11Y_POINTER_DISABLED').length, 0, value);
+    // The cover takes the pointer back, so it covers the button again.
+    const covered = run(panel(), panelCSS(`.panel { pointer-events: none; }\n.cover { pointer-events: ${value}; }`));
+    assert.deepEqual(unsupportedPointer(covered), [], value);
+    assert.equal(find(covered, 'E_A11Y_OCCLUDED').length, 1, value);
+  }
+});
+
+test('pointer-events: an unknown value, or an SVG keyword reaching an svg, stays Unknown', () => {
+  assert.equal(unsupportedPointer(run(panel(), panelCSS('.go { pointer-events: bounding-box; }'))).length, 1);
+  // On an svg the keywords pick which painted parts take the pointer, which is not modeled.
+  const icon = css => analyzeHTML('<html lang="en"><body><main><svg class="i" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg></main></body></html>',
+    {name: 'Page', css: `html,body{margin:0;padding:0}\n${css}`, viewport: domain});
+  assert.equal(unsupportedPointer(icon('.i{pointer-events:visibleFill}')).length, 1);
+  assert.equal(unsupportedPointer(icon('main{pointer-events:all}')).length, 1);
+  assert.deepEqual(unsupportedPointer(icon('.i{pointer-events:none}')), []);
+});
+
 test('small-text: rendered text below 12px is a warning', () => {
   const report = run(card, cardCSS('.card { background: #fff; color: #000; }\n@media (width < 500px) { .t { font-size: 11px; } }'), {boxes: cardBoxes});
   const [warning] = report.accessibility.warnings.filter(w => w.code === 'W_A11Y_SMALL_TEXT');
