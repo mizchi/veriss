@@ -578,6 +578,14 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
   3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
   (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
+- [x] **I21. 中身で高さの決まる block の容器の px の `max-height`**: 開閉するナビゲーションの区画(`max-height: 168.75px` のように
+  開いたときの高さを書いたもの)で、子のある auto の高さの block の `max-height` を Unknown にしていた(引き伸ばされる箱と葉だけを扱っていた)。
+  block の流れの中の block(と、引き伸ばさずに揃える grid の item)は、高さが min(中身の高さ, max-height)、min-height はその後に掛かる
+  (CSS 2 §10.7)。中身は上に詰めたまま、はみ出しは overflow のとおり(visible なら報告、auto ならスクロール)。行の高さと後ろの兄弟は
+  clamp した高さで決まる。3 ブラウザーで、掛からない場合(200px)と掛かる場合(100px)を、content-box と border-box、overflow
+  visible / hidden / auto、下端に置いた absolute の子、max-height より大きい min-height、2 列の grid の行で測って一致
+  (`e2e/layout-max-clamp.spec.mjs`)。最後の子の下の margin が箱を突き抜ける形は、掛かると WebKit だけが margin を外へ出す
+  (Chromium と Firefox は出さない)ので Unknown のまま。% と `calc()` の max-height、flex の item の max-height も Unknown のまま。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
