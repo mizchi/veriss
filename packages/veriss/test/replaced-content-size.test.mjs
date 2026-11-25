@@ -56,6 +56,22 @@ test('an img whose width follows an unknown ratio stays Unknown', () => {
   assert.equal(run('.a{width:300px;display:grid;justify-items:stretch}img{height:24px}', img()).status, 'unknown');
   // A percentage height against a parent without a px height.
   assert.equal(run('img{display:block;height:100%}', img()).status, 'unknown');
+  // A parent whose min- or max-height clamps its px height: the used height differs from the declared one (24px with
+  // min-height 48px → the img is 48px tall and 192px wide; max-height 12px → 48px wide; measured in all three).
+  assert.equal(run('.a{height:24px;min-height:48px}img{display:block;height:100%}', img()).status, 'unknown');
+  assert.equal(run('.a{height:24px;max-height:12px}img{display:block;height:100%}', img()).status, 'unknown');
+});
+
+// srcset: a density descriptor scales the natural size (a 120×30 file as the single 2x candidate is 60×15 CSS px,
+// measured in all three); several candidates without a device pixel ratio leave the loaded one open. The natural-width
+// fallback is not used with a srcset; the width from a px height and the ratio is (96px at 2x too, measured).
+test('an auto-sized img with a srcset keeps its natural width Unknown; a px height still gives it', () => {
+  assert.equal(run('img{display:block}', '<img srcset="/logo.png 2x" alt="Logo">').status, 'unknown');
+  assert.equal(run('img{display:block}', '<img srcset="/logo.png 1x, /logo.png 2x" alt="Logo">', {images: {...logo}}).status, 'unknown');
+  assert.equal(run('img{display:block}', '<img src="/logo.png" srcset="/logo.png 2x" alt="Logo">').status, 'unknown');
+  const r = run('img{display:block;height:24px}', '<img srcset="/logo.png 2x" alt="Logo">');
+  decided(r);
+  assert.deepEqual(size(r, 'img@P/0/0/0/0'), [96, 24]);
 });
 
 test('form controls without a px width stay Unknown (their default widths differ between browsers)', () => {

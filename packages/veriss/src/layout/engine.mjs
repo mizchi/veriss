@@ -497,12 +497,18 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // Left auto (Unknown where the width is needed): no ratio, a file whose ratio differs from the attributes (the width
   // changes when it loads: 96px reserved, 24px loaded for a square file), an explicit aspect-ratio, a min- or max-height,
   // a percentage height against a parent without a px height, or non-px padding and border.
-  function imageWidthFromRatio(style, natural, parentStyle) {
+  // single1x: the file is the img's src alone (no srcset or picture source). A density descriptor scales the natural
+  // size (a 120×30 file as the 2x candidate is 60×15 CSS px, measured), and several candidates leave the loaded one open,
+  // so the natural width is used only then; the width from a height and the ratio does not depend on the density.
+  function imageWidthFromRatio(style, natural, parentStyle, single1x) {
     // Only in block flow: a stretched flex or grid item (column flex, justify-items: stretch) fills its area instead
     // (measured: 300px in a 300px column flex container in all three).
     if (!parentStyle || !['block', 'flow-root', 'list-item'].includes(parentStyle.display) || !['static', 'relative'].includes(style.position)) return style;
     const written = /^auto (\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(String(style['aspect-ratio']));
     if (!written && style['aspect-ratio'] !== 'auto') return style;
+    // Without the file's size, the attributes' ratio is taken as the image's, as everywhere else in the engine (the
+    // height of a width-sized img; E_LAYOUT_IMAGE_RATIO reports a known file that differs): the attributes are the
+    // author's statement of the file's size, and the reserved layout is the one checked.
     const file = natural?.width > 0 && natural?.height > 0 ? [natural.width, natural.height] : null;
     if (written && file && Number(written[1]) * file[1] !== Number(written[2]) * file[0]) return style;
     const ratio = file ? [null, ...file] : written;
@@ -516,15 +522,17 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     let height = pxOf(style['block-size']);
     const percent = /^(\d+(?:\.\d+)?)%$/.exec(String(style['block-size']));
     if (percent) {
+      // The parent's used height, not its declared one: a min- or max-height clamp changes it (24px with min-height
+      // 48px makes the img 48px tall, measured), which is not resolved here.
       const parentHeight = pxOf(parentStyle['block-size']);
-      if (parentHeight === null) return style;
+      if (parentHeight === null || !['auto', '0', '0px'].includes(String(parentStyle['min-block-size'] ?? 'auto')) || (parentStyle['max-block-size'] ?? 'none') !== 'none') return style;
       const parentEdges = ['padding-top', 'padding-bottom', 'border-top', 'border-bottom'].reduce((total, key) => total === null || pxOf(parentStyle[key]) === null ? null : total + pxOf(parentStyle[key]), 0);
       if (parentEdges === null) return style;
       height = Number(percent[1]) / 100 * Math.max(0, parentStyle['box-sizing'] === 'border-box' ? parentHeight - parentEdges : parentHeight);
     }
     let content;
     if (height !== null) content = Math.max(0, borderBox ? height - blockEdges : height) * Number(ratio[1]) / Number(ratio[2]);
-    else if (style['block-size'] === 'auto' && natural && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && style['max-inline-size'] === 'none') content = natural.width;
+    else if (style['block-size'] === 'auto' && natural && single1x && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && style['max-inline-size'] === 'none') content = natural.width;
     else return style;
     const width = +(borderBox ? content + inlineEdges : content).toFixed(6);
     return { ...style, 'inline-size': `${width}px` };
@@ -767,7 +775,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // A box with aspect-ratio auto … and an auto size follows the loaded file, so it cannot stretch it.
         const drawn = natural ?? (Number.isFinite(w) && Number.isFinite(hgt) && w > 0 && hgt > 0 ? { width: w, height: hgt } : null);
         if (box.tag === 'img' && drawn) style = { ...style, $imageRatio: { width: drawn.width, height: drawn.height, basis: natural ? 'file' : 'attributes', follows: /^auto\b/.test(style['aspect-ratio']) && (style['inline-size'] === 'auto' || style['block-size'] === 'auto') } };
-        if (box.tag === 'img' && style['inline-size'] === 'auto') style = imageWidthFromRatio(style, natural, ancestors.at(-1)?.style);
+        if (box.tag === 'img' && style['inline-size'] === 'auto') style = imageWidthFromRatio(style, natural, ancestors.at(-1)?.style, !chosen && box.imageSize?.srcset === undefined);
       }
       // A user-agent checkbox or radio (appearance auto, size and minimum untouched): Chromium draws it 13×13 border-box
       // (measured). Laid out at that size for the accessibility checks; SC 2.5.8/2.5.5 exempt it. Padding and border do

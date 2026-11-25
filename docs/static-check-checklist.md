@@ -598,7 +598,9 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
     高さも auto でファイルの大きさが分かれば 120px。幅 300px の block の親の中でも 96px(block の置換要素は伸びない)
   - Unknown のまま: 比が分からない img(属性もファイルの大きさもない。読み込んだファイルが幅を決める)。属性とファイルで比が違う img
     (属性 120×30 で正方形のファイル: 読み込み前 96px、読み込み後 24px)。min-height / max-height のある img(max-height 12px → 48px で
-    3 ブラウザー一致したが、モデルにしていない)。明示の `aspect-ratio`。px の高さのない親に対する % の高さ。block の流れの外
+    3 ブラウザー一致したが、モデルにしていない)。明示の `aspect-ratio`。px の高さのない親に対する % の高さ。min-height / max-height で高さが変わる親に対する % の高さ(24px で min-height 48px の親 →
+    192px、max-height 12px → 48px。3 ブラウザー一致したが、使われた高さは求めていない)。srcset のある img の自然な幅(1 つだけの
+    2x の候補で 120×30 のファイルは 60px。候補が複数なら読み込むものが決まらない。px の高さからの幅は 2x でも 96px で、判定する)。block の流れの外
     (縦の flex の container と `justify-items: stretch` の grid では、伸びて 300px になる)
   - フォーム部品はブラウザーで違うので Unknown のまま: text input は Chromium 153px / Firefox 189px / WebKit 155.875px
     (`appearance: none`・padding 0・border 0 でも 145 / 181 / 141.875px、`size="10"` で 83 / 105 / 85.938px、14px・padding 0 10px・
