@@ -2960,10 +2960,13 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (cs.direction === 'rtl') return { reason: 'its line in a right-to-left block is not modeled' };
     const align = String(cs['text-align'] ?? 'start'), ml = pxv(st['margin-left']), mr = pxv(st['margin-right']), mt = pxv(st['margin-top']), mb = pxv(st['margin-bottom']);
     if ([ml, mr, mt, mb].includes(null)) return { reason: 'its margins are not px lengths' };
-    const horizontal = ['start', 'left', 'justify', 'ua', 'match-parent'].includes(align) ? {} : ['center', 'right', 'end'].includes(align) && cmp(ml, zero) === 0 && cmp(mr, zero) === 0 ? (align === 'center' ? { 'margin-left': 'auto', 'margin-right': 'auto' } : { 'margin-left': 'auto' }) : null;
+    // (Always both sides, from its own margins: auto is 0 on an inline box (CSS 2 §10.3.1), and what an earlier pass
+    // placed it with is not kept.)
+    const horizontal = ['start', 'left', 'justify', 'ua', 'match-parent'].includes(align) ? { 'margin-left': `${lengthText(ml)}px`, 'margin-right': `${lengthText(mr)}px` } : ['center', 'right', 'end'].includes(align) && cmp(ml, zero) === 0 && cmp(mr, zero) === 0 ? (align === 'center' ? { 'margin-left': 'auto', 'margin-right': 'auto' } : { 'margin-left': 'auto', 'margin-right': '0px' }) : null;
     if (!horizontal) return { reason: `text-align: ${align} with horizontal margins on it is not modeled` };
     // Its outer height (margin box), when its height is a px length.
-    const bs = pxv(st['block-size']), edges = ['top', 'bottom'].map(side => [pxv(st[`padding-${side}`]), pxv(st[`border-${side}`])]).flat();
+    // (auto is not 0 here: the height comes from the box, an aspect-ratio or the image, and is not a px length.)
+    const bs = String(st['block-size'] ?? 'auto') === 'auto' ? null : pxv(st['block-size']), edges = ['top', 'bottom'].map(side => [pxv(st[`padding-${side}`]), pxv(st[`border-${side}`])]).flat();
     const outer = bs === null || edges.includes(null) ? null : add(add(st['box-sizing'] === 'border-box' ? bs : edges.reduce(add, bs), mt), mb);
     const va = String(st['vertical-align'] ?? 'baseline'), size = pxv(cs['font-size']), lh = String(cs['line-height']);
     const font = container.contract?.font;

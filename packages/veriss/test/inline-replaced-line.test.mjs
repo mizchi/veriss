@@ -62,6 +62,26 @@ test('text-align: center centres it on its line', () => {
   assert.deepEqual([r.coefficient, r.constant], ['1/2', '-150']);
 });
 
+test('auto horizontal margins on the inline box are 0: text-align places it, not the margins', () => {
+  // CSS 2 §10.3.1: on an inline replaced box, auto margins are used as 0 (margin: 0 auto does not centre an inline
+  // iframe; a common ad-tag mistake). The placing margins are the box's own, resolved, in every pass: a centring
+  // pass before (another viewport range) leaves nothing behind.
+  const start = (css, slot = 'font-size:0') => { const r = at(run(slot, 'height="250"', {css}), 'iframe').rect.inlineStart; return [r.coefficient, r.constant]; };
+  assert.deepEqual(start('iframe{margin:0 auto}'), ['0', '0']);
+  assert.deepEqual(start('iframe{margin:0 auto}', 'font-size:0;text-align:right'), ['1', '-300']);
+  assert.deepEqual(start('iframe{margin:0 auto}', 'font-size:0;text-align:center'), ['1/2', '-150']);
+  for (const [below, above] of [['center', 'left'], ['left', 'center']]) {
+    const report = run(`font-size:0;text-align:${below}`, 'height="250"', {css: `@media (min-width:600px){.slot{text-align:${above}}}`});
+    assert.deepEqual(unknowns(report), []);
+    const rows = report.sizes.filter(s => s.box.startsWith('iframe'));
+    assert.equal(rows.length, 2);
+    for (const row of rows) {
+      const wide = Number(row.region.vertices[0].width) >= 600, align = wide ? above : below;
+      assert.deepEqual([row.rect.inlineStart.coefficient, row.rect.inlineStart.constant], align === 'left' ? ['0', '0'] : ['1/2', '-150'], `${below}/${above} at ${wide ? '>=' : '<'}600`);
+    }
+  }
+});
+
 test('what stays Unknown says why', () => {
   // On the baseline with no font metrics: the gap is the font's descent.
   const plain = run('font-size:16px', 'height="250"');
@@ -69,6 +89,13 @@ test('what stays Unknown says why', () => {
   assert.ok(unknowns(plain).some(m => m.startsWith('U_LAYOUT_INLINE') && /descent/.test(m) && /vertical-align: top/.test(m)), JSON.stringify(unknowns(plain)));
   // Firefox and WebKit place the baseline with unrounded metrics.
   assert.equal(run('font-family:Roboto;font-size:16px;line-height:20px', 'height="250"', {boxes: {'.slot': {font: roboto(20)}}, ua: 'webkit'}).status, 'unknown');
+  // A height that is not a px length (auto, from an aspect-ratio or the image): whether the strut's ascent reaches above
+  // it is not known (it is not a zero-height box, which would sit the strut's ascent down the line).
+  for (const css of ['iframe{aspect-ratio:2/1}', 'iframe{height:auto;aspect-ratio:2/1}']) {
+    const auto = run('font-family:Roboto;font-size:16px;line-height:20px', '', {css, boxes: {'.slot': {font: roboto(20)}}});
+    assert.equal(auto.status, 'unknown', css);
+    assert.ok(unknowns(auto).some(m => m.startsWith('U_LAYOUT_INLINE') && /height is not a px length/.test(m)), JSON.stringify(unknowns(auto)));
+  }
   // Mixed inline content (text beside it) stays Unknown.
   const mixed = analyzeHTML('<html lang="en"><body><main><div class="slot">Ad <iframe title="ad" src="about:blank" width="300" height="250" frameborder="0"></iframe></div></main></body></html>', {name: 'P', viewport: vp, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: 'body{margin:0}.slot{font-size:0}'});
   assert.equal(mixed.status, 'unknown');
