@@ -46,6 +46,31 @@ test('a later absolutely positioned sibling over an overflow: hidden wrapper occ
   assert.deepEqual(occluded(report), ['P/0/0/2'], JSON.stringify(report.diagnostics.map(d => `${d.code} ${d.path}`)));
 });
 
+test('a wrapper that clips only below 600px: above it the buttons past its edge are still covered', () => {
+  // The clipper's padding box bounds the overlap only where it clips; elsewhere the overlap stays whole.
+  const report = analyzeHTML(`<html lang="en"><body>${wrapped}</body></html>`, {name: 'P', css: base + 'html{overflow:hidden}@media (max-width:599px){.w{overflow:clip}}', viewport: {min: 375, max: 800, height: {min: 667, max: 667}}, accessibility: true});
+  const found = report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED');
+  const seen = JSON.stringify(found.map(d => `${d.path} ${d.range.min}-${d.range.max}`));
+  // The whole-px widths each button is reported at, joined across the pieces (max-width: 599px leaves (599, 600) open).
+  const ints = ({min, max, minInclusive, maxInclusive}) => { const lo = minInclusive ? Math.ceil(min) : Math.floor(min) + 1, hi = maxInclusive ? Math.floor(max) : Math.ceil(max) - 1; return Array.from({length: Math.max(0, hi - lo + 1)}, (_, i) => lo + i); };
+  const widths = path => [...new Set(found.filter(d => d.path === path).flatMap(d => ints(d.range)))].sort((a, b) => a - b);
+  const span = (lo, hi) => Array.from({length: hi - lo + 1}, (_, i) => lo + i);
+  assert.deepEqual(widths('P/0/0/2'), span(375, 800), seen);
+  for (const path of ['P/0/0/3', 'P/0/0/4']) assert.deepEqual(widths(path), span(600, 800), seen);
+});
+
+test('the scrolled-cover Unknown lists only the controls that exist where the cover reaches the scroller', () => {
+  // B1 is shown only from 600px, the sheet only below it: they never meet, so the sheet's Unknown does not name B1.
+  const report = analyzeHTML(`<html lang="en"><body><div class="p w"><button class="go" aria-label="B0"></button><button class="go late" aria-label="B1"></button></div><div class="sh"></div></body></html>`, {
+    name: 'P', css: base + 'html{overflow:hidden}.w{overflow:auto}.late{display:none}@media (min-width:600px){.late{display:block}.sh{display:none}}', viewport: {min: 375, max: 800, height: {min: 667, max: 667}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
+  const u = report.diagnostics.filter(d => d.code === 'U_A11Y_SCROLLED_COVER' && d.cover === 'P/0/1');
+  assert.ok(u.length, JSON.stringify(report.diagnostics.map(d => `${d.code} ${d.path}`)));
+  for (const d of u) {
+    assert.deepEqual(d.targets, ['P/0/0/0'], d.message);
+    assert.doesNotMatch(d.message, /B1|P\/0\/0\/1/);
+  }
+});
+
 test('a target in a scroll container under a cover outside it: decided at the initial scroll offset, other offsets Unknown', () => {
   const report = run(wrapped, 'html{overflow:hidden}.w{overflow:auto}', {scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
   const found = report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED');

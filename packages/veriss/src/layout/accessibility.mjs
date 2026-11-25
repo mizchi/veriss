@@ -421,14 +421,16 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     for (const path of paths) {
       const rows = clippingRows.filter(c => c.path === path);
       if (rows.some(c => !located(c))) return null;
-      pieces = pieces.flatMap(piece => rows.map(c => {
+      // Each row bounds the overlap only in its own region; where the ancestor does not clip (no row: overflow visible
+      // in that viewport range), the piece stays as it was.
+      pieces = pieces.flatMap(piece => [...rows.map(c => {
         const k = paddingBox(located(c)), axes = c.overflowClips;
         let region = intersect(piece.region, c.region);
         for (const axis of ['inline', 'block']) if (axes[axis]) region = below(region, scalar(0), k[axis]);
         region = meetOn(meetOn(region, a, k, axes), b, k, axes);
         for (const other of piece.boxes) region = meetOn(region, other.k, k, { inline: axes.inline && other.axes.inline, block: axes.block && other.axes.block });
         return region ? { region, boxes: [...piece.boxes, { k, axes }] } : null;
-      }).filter(Boolean));
+      }).filter(Boolean), ...rows.reduce((rest, c) => rest.flatMap(r => subtract(r, c.region)), [piece.region]).map(region => ({ region, boxes: piece.boxes }))]);
     }
     return pieces.map(piece => piece.region);
   };
@@ -493,11 +495,14 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       const port = paddingBox(located(s));
       for (const cover of occlusionRows) {
         if (cover.path === s.path || clipsIt(s, cover) || !visible(cover) || cover.paint.pointerEvents === 'none' || inertAt(cover)) continue;
-        const under = inside.filter(target => !related(cover.path, target.path) && paintsAbove(cover, layer(cover), target, layer(target)));
-        if (!under.length) continue;
+        const candidates = inside.filter(target => !related(cover.path, target.path) && paintsAbove(cover, layer(cover), target, layer(target)));
+        if (!candidates.length) continue;
         const pieces = visibleOverlap(port, cover);
-        for (const region of pieces ?? [overlap(port, cover)].filter(Boolean))
-          report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', `${cover.box.label} paints over part of ${s.box.label}, which scrolls (overflow: ${s.overflowValue}) the controls under it (${under.map(t => t.box.label).join(', ')}): whether it covers them is not checked at every scroll offset, as positions there depend on it. Keep the covering box off the scrolling area, or give the content room beside it`, s, region, { rule: 'occluded-target', cover: cover.path, targets: under.map(t => t.path) });
+        for (const region of pieces ?? [overlap(port, cover)].filter(Boolean)) {
+          // Only the controls that exist in this piece's viewport range (one row per range: each path once).
+          const under = [...new Map(candidates.filter(target => intersect(target.region, region)).map(target => [target.path, target])).values()];
+          if (under.length) report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', `${cover.box.label} paints over part of ${s.box.label}, which scrolls (overflow: ${s.overflowValue}) the controls under it (${under.map(t => t.box.label).join(', ')}): whether it covers them is not checked at every scroll offset, as positions there depend on it. Keep the covering box off the scrolling area, or give the content room beside it`, s, region, { rule: 'occluded-target', cover: cover.path, targets: under.map(t => t.path) });
+        }
       }
     }
   }
