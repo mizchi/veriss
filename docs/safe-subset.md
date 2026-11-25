@@ -32,6 +32,13 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - % の `width` の item は、既定の `flex-shrink: 1` と `min-width: auto` のままでよい。ただし、veriss が判定できるのは、行が縮まない(item の合計が container に収まる)ときだけ。縮む行では、中身で決まる最小幅が要るので Unknown になる。縮ませたい item には `min-width: 0` を書く。
   - % の `width` / `flex-basis` に px の `max-width` を組み合わせた item(中央寄せの最大幅の容器 `width: 100%; max-width: 1280px; margin: 0 auto`)は判定できる。`max-width` を % にすると Unknown になる。
   - `flex-basis: auto` で幅も auto の item は、中身の大きさで決まる。veriss がそれを求められるのは、テキストの寸法が分かる葉の箱など一部だけで、それ以外は Unknown になる(`flex-basis: auto with an auto width uses the content size`)。
+- block の中に inline-level の箱(`inline-block` / `inline-flex` のボタン)を置くなら、その block の中身をその箱 1 つにする
+  (チェックリスト I22)。箱は中身の幅になり、block の始点(`text-align: start` / `left`)に載る。
+  - 高さまで判定させるには、箱にテキストを入れ(inline-block は自分のテキスト、inline-flex はテキストを持つ子 1 つ)、
+    `vertical-align: baseline`(既定)、上下の margin 0、親とテキストを同じフォントの family にし、親の `line-height` を px か数値にする。
+    親の line-height は、箱の高さより十分小さくする(テキストの baseline の上下に 1〜2px の余り)。外れると
+    `… is inline-level inside the block container …` の Unknown になる。
+  - 2 つ以上並べる、中央に寄せる、テキストのない箱を置く場合は、親を flex にする(`display: flex; gap; justify-content`)。
 - 意図して重ねる箱は、`position: absolute` か、grid の同じ領域に置いたうえで、重なりを宣言する
   (宣言のない重なりは `E_LAYOUT_OVERLAP`)。
 

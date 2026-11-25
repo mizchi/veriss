@@ -7,7 +7,7 @@ import {analyzeHTML} from '../src/html.mjs';
 // Expected values are Chromium's (measured).
 const g = 'display:grid;grid-template-columns:minmax(0,1fr);align-content:start';
 const w = '<div class="w"><i></i><i></i><i></i></div>'; // min-content 60px, max-content 190px
-const run = (css, html) => analyzeHTML(`<html lang="en"><body><div class="s">${html}</div></body></html>`, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body{${g}}.s{display:flex;column-gap:10px}.a,.b{height:5px}.w{display:flex;flex-wrap:wrap;column-gap:5px}.w i{display:block;width:60px;height:2px}.k{display:block;width:24px;height:2px}${css}`, viewport: {min: 100, max: 800, height: {min: 600, max: 900}}});
+const run = (css, html, options = {}) => analyzeHTML(`<html lang="en"><body><div class="s">${html}</div></body></html>`, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body{${g}}.s{display:flex;column-gap:10px}.a,.b{height:5px}.w{display:flex;flex-wrap:wrap;column-gap:5px}.w i{display:block;width:60px;height:2px}.k{display:block;width:24px;height:2px}${css}`, viewport: {min: 100, max: 800, height: {min: 600, max: 900}}, ...options});
 const columns = (r, vw) => { const v = a => Number(String(a.coefficient).split('/').reduce((p, c) => p / c)) * vw + Number(String(a.constant).split('/').reduce((p, c) => p / c)); return r.sizes.filter(s => /^\.[ab]$/.test(s.box) && s.rect && s.range.min <= vw && vw <= s.range.max).map(s => [Math.round(v(s.rect.inlineStart) * 1000) / 1000, Math.round(v(s.rect.inlineSize) * 1000) / 1000]); };
 const cases = {
   'two content items': ['', `<div class="a">${w}</div><div class="b"><i class="k"></i></div>`, {500: [[0, 190], [200, 24]], 300: [[0, 190], [200, 24]], 150: [[0, 116], [126, 24]]}],
@@ -81,5 +81,24 @@ test('fit-content, min-content and max-content children contribute to a content-
     assert.deepEqual(columns(r, 500), at500, `${kw} at 500px`);
     assert.deepEqual(columns(r, 150), at150, `${kw} at 150px`);
   }
+});
+
+// An inline-level child (inline-flex, inline-block, inline-grid) sizes its content as its block-level display does
+// (measured in Chromium, Firefox and WebKit: padding 0 8px and a 1px border around the wrapping row or a 40px column).
+// (The inline axis only, without heights: the box has no text, so its baseline, and with it where it sits on the line
+// and how tall the line is, is not known.)
+test('inline-level children contribute their content like their block-level display', () => {
+  const kid = d => d === 'inline-grid' ? '<div class="f" style="display:inline-grid;grid-template-columns:40px;padding:0 8px;border:1px solid red"><i class="k"></i></div>' : `<div class="f" style="display:${d};padding:0 8px;border:1px solid red">${w}</div>`;
+  const inlineAxis = '.a,.b,.w i,.k{height:auto}';
+  // (Without the block axis the rows have no rect: the widths, and each item starts after the one before and the gap.)
+  const columns = (r, vw) => { const v = a => Number(String(a.coefficient).split('/').reduce((p, c) => p / c)) * vw + Number(String(a.constant).split('/').reduce((p, c) => p / c)); let x = 0; return r.sizes.filter(s => /^\.[ab]$/.test(s.box) && s.range.min <= vw && vw <= s.range.max).map(s => { const w = Math.round(v(s.inlineSize) * 1000) / 1000, at = [x, w]; x += w + 10; return at; }); };
+  for (const [d, at500, at150] of [['inline-flex', [[0, 208], [218, 282]], [[0, 140], [150, 0]]], ['inline-block', [[0, 208], [218, 282]], [[0, 140], [150, 0]]], ['inline-grid', [[0, 58], [68, 432]], [[0, 58], [68, 82]]]]) {
+    const r = run(`.b{flex:1;min-width:0}${inlineAxis}`, `<div class="a">${kid(d)}</div><div class="b"></div>`, {viewport: {min: 100, max: 800}});
+    assert.notEqual(r.status, 'unknown', `${d}: ${JSON.stringify(r.diagnostics.map(d => d.message))}`);
+    assert.deepEqual(columns(r, 500), at500, `${d} at 500px`);
+    assert.deepEqual(columns(r, 150), at150, `${d} at 150px`);
+  }
+  // With the block axis, where it sits on the line is not known: Unknown.
+  assert.equal(run('.b{flex:1;min-width:0}', `<div class="a">${kid('inline-flex')}</div><div class="b"></div>`).status, 'unknown');
 });
 

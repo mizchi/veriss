@@ -39,7 +39,11 @@ export function validateTextMetrics(metrics) {
     const known = profile.filter(entry => entry.lines !== null);
     if (profile.at(-1).lines === null || known.some((entry, i) => i && entry.lines >= known[i - 1].lines)) throw new Error('A text line profile must have decreasing line counts and end with a known count');
   }
-  if (metrics.baseline !== undefined && (!metrics.baseline || Object.keys(metrics.baseline).some(k => !['ascent', 'descent'].includes(k)) || !['ascent', 'descent'].every(k => Number.isSafeInteger(metrics.baseline[k]) && metrics.baseline[k] >= 0))) throw new Error('Invalid text baseline metrics');
+  // baseline: the rounded ascent and descent at the text's size; optionally the font's units (unitsPerEm, ascender,
+  // descender) and the weights its file serves, from which a strut in another size of the family is derived.
+  const units = b => ['unitsPerEm', 'ascender', 'descender', 'weights'].every(k => b[k] === undefined) || (Number.isSafeInteger(b.unitsPerEm) && b.unitsPerEm >= 16 && b.unitsPerEm <= 16384
+    && ['ascender', 'descender'].every(k => Number.isSafeInteger(b[k]) && b[k] >= 0 && b[k] <= 65535) && Array.isArray(b.weights) && b.weights.length === 2 && b.weights.every(w => finite(w, 1, 1000)) && b.weights[0] <= b.weights[1]);
+  if (metrics.baseline !== undefined && (!metrics.baseline || Object.keys(metrics.baseline).some(k => !['ascent', 'descent', 'unitsPerEm', 'ascender', 'descender', 'weights'].includes(k)) || !['ascent', 'descent'].every(k => Number.isSafeInteger(metrics.baseline[k]) && metrics.baseline[k] >= 0) || !units(metrics.baseline))) throw new Error('Invalid text baseline metrics');
   if (metrics.inlineEdges !== undefined && !(['content', 'lines'].includes(metrics.kind) && metrics.inline && typeof metrics.inlineEdges === 'object' && Object.entries(metrics.inlineEdges).every(([k, e]) => k in metrics.inline && Array.isArray(e) && e.length === 4 && e.every(n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 10_000)))) throw new Error('Invalid inline edges');
   if (metrics.inlineWeights !== undefined && !(['content', 'lines'].includes(metrics.kind) && metrics.inline && typeof metrics.inlineWeights === 'object' && Object.entries(metrics.inlineWeights).every(([k, w]) => k in metrics.inline && finite(w, 1, 1000)))) throw new Error('Invalid inline weights');
   if (metrics.inlineAtomics !== undefined && !(['content', 'lines'].includes(metrics.kind) && metrics.inline && typeof metrics.inlineAtomics === 'object' && Object.entries(metrics.inlineAtomics).every(([k, a]) => k in metrics.inline && Array.isArray(a) && a.length === 2 && a.every(n => finite(n, 0, 10_000))))) throw new Error('Invalid inline atomic boxes');
@@ -95,6 +99,31 @@ export function textFontMismatch(style, font, defaultFontSize) {
   if (spacing === null) return `letter-spacing ${style['letter-spacing']} must resolve to px (an em value needs a px font-size)`;
   if (Math.abs(spacing - (font.letterSpacing ?? 0)) > 1e-6) return `letter-spacing ${style['letter-spacing']} differs from the measured ${font.letterSpacing ?? 0}px`;
   return null;
+}
+
+/**
+ * The strut of a block container (CSS 2.2 §10.8.1: its first available font at its line-height) from the baseline
+ * metrics of a text contract in the same family: {ascent, descent, lineHeight, size, exact}, or {reason} where it is
+ * not known. The file that measured the text serves the container's weight (a variable font's wght axis, or the same
+ * static weight); at the text's own size the ascent and descent are the text's (exact: rounded the same way), at
+ * another size they are derived from the font's units and rounded as Chromium does.
+ */
+export function strutFromText(style, contract, defaultFontSize) {
+  const b = contract?.textMetrics?.baseline, font = contract?.font;
+  if (!b || !font) return {reason: 'no text measured with a font file sets the box\'s baseline'};
+  for (const key of ['font-family', 'font-size', 'line-height', 'font-weight', 'font-style']) if (style[key] === fontShorthand) return {reason: 'the font shorthand is not modeled'};
+  if (['ua-control', 'ua-default'].includes(style['font-family']) || family(String(style['font-family'])) !== font.family.trim().toLowerCase()) return {reason: `its font-family ${style['font-family']} is not the measured ${font.family}`};
+  const size = pxValue(String(style['font-size'])) ?? (style['font-size'] === 'medium' && defaultFontSize ? defaultFontSize : undefined);
+  if (size === undefined) return {reason: `its font-size ${style['font-size']} is not a px length`};
+  const lh = String(style['line-height']), lineHeight = pxValue(lh) ?? (/^\d+(?:\.\d+)?$/.test(lh) ? Number(lh) * size : undefined);
+  if (lineHeight === undefined) return {reason: `its line-height ${lh} is not a px length or a number (normal depends on the font's line gap)`};
+  const weight = weightValue(String(style['font-weight']));
+  const [low, high] = b.weights ?? [font.weight ?? 400, font.weight ?? 400];
+  if (weight === undefined || weight < low || weight > high) return {reason: `its font-weight ${style['font-weight']} is not one the measured font file serves`};
+  if (style['font-style'] !== 'normal' || (style['font-stretch'] ?? 'normal') !== 'normal' || (style['font-variant'] ?? 'normal') !== 'normal') return {reason: 'its font-style, font-stretch and font-variant must be normal'};
+  if (size === font.size) return {ascent: b.ascent, descent: b.descent, lineHeight, size, exact: true};
+  if (b.unitsPerEm === undefined) return {reason: `its font-size ${size}px differs from the measured ${font.size}px, and the contract has no font units`};
+  return {ascent: Math.round(b.ascender / b.unitsPerEm * size), descent: Math.round(b.descender / b.unitsPerEm * size), lineHeight, size, exact: false};
 }
 
 /**

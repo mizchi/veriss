@@ -567,6 +567,18 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
     const ascent = typo ? info.os2.typoAscender : info.ascent, descent = Math.abs(typo ? info.os2.typoDescender : info.descent);
     return {ascent: Math.round(ascent / info.unitsPerEm * font.size), descent: Math.round(descent / info.unitsPerEm * font.size)};
   }
+  /**
+   * The baseline metrics a text contract carries: the rounded ascent and descent at its size, and the font's own
+   * vertical metrics (font units) with the weights the same file serves (a variable font's wght axis, or the one
+   * static weight). The core derives from them the strut of a box in the same family at another px size.
+   */
+  function contractBaseline(font) {
+    const {info, entry} = lookup(font);
+    const typo = info.os2 && (info.os2.fsSelection & 128);
+    const axis = info.axes.find(a => a.tag === 'wght'), weight = entry.weight ?? 400;
+    return {...baselineMetrics(font), unitsPerEm: info.unitsPerEm, ascender: typo ? info.os2.typoAscender : info.ascent, descender: Math.abs(typo ? info.os2.typoDescender : info.descent),
+      weights: axis ? [axis.min, axis.max] : [weight, weight]};
+  }
 
   /** Replace `text` box contracts with the core's derived size contracts. */
   function resolveBoxes(boxes = {}) {
@@ -637,7 +649,7 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
         const oneLine = lines.profile.find(entry => entry.lines === 1)?.atLeastInlineSize;
         out[selector] = {...rest, minInlineSize: lines.minContent, ...(oneLine !== undefined ? {maxInlineSize: Math.max(oneLine, lines.minContent)} : {}), intrinsicBlockSize: lines.profile.map(entry => ({atLeastInlineSize: entry.atLeastInlineSize, blockSize: entry.lines === null ? null : entry.lines * font.lineHeight})),
           font: fontContract, textMetrics: {kind: 'lines', text: lines.text, width: lines.width, minContent: lines.minContent, overflowWrap, ...(wordBreak !== 'normal' ? {wordBreak} : {}), profile: lines.profile, ...(text.lang !== undefined ? {lang: text.lang} : {}),
-            ...(text.inline ? {inline: wrappedInlineBounds({font, text: wrapContent, lang: text.lang, inline: Object.fromEntries(Object.entries(text.inline).filter(([, v]) => v?.atomic === undefined).map(([k, v]) => [k, pieceOf(v)])), lines, extraAt, edges: wrapEdges, weights: wrapWeights, atomics: wrapAtomics}), ...(extraAt ? {inlineEdges: wrapEdges} : {}), ...(weightAt ? {inlineWeights: wrapWeights} : {}), ...(wrapAtomics.length ? {inlineAtomics: Object.fromEntries(wrapAtomics.map(a => [a.k, [a.w, a.h]]))} : {})} : {}), baseline: baselineMetrics(font),
+            ...(text.inline ? {inline: wrappedInlineBounds({font, text: wrapContent, lang: text.lang, inline: Object.fromEntries(Object.entries(text.inline).filter(([, v]) => v?.atomic === undefined).map(([k, v]) => [k, pieceOf(v)])), lines, extraAt, edges: wrapEdges, weights: wrapWeights, atomics: wrapAtomics}), ...(extraAt ? {inlineEdges: wrapEdges} : {}), ...(weightAt ? {inlineWeights: wrapWeights} : {}), ...(wrapAtomics.length ? {inlineAtomics: Object.fromEntries(wrapAtomics.map(a => [a.k, [a.w, a.h]]))} : {})} : {}), baseline: contractBaseline(font),
             // WCAG 1.4.12 text spacing: the same text with letter-spacing 0.12em and word-spacing 0.16em.
             spacedProfile: breakLines({font, text: wrapContent, overflowWrap, wordBreak, lang: text.lang, spacing: {letter: 0.12 * font.size, word: 0.16 * font.size}, extra: extraAt, weightAt}).profile,
             font: provenance(font), allowance: layoutAllowance.rule}};
@@ -707,7 +719,7 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
             return [k, {...b, start: b.start.map(v => v + shift), end: b.end.map(v => v + shift + bl + br)}];
           }));
         }
-        metrics = {kind: 'content', text: measured.text, width: measured.width + extra, baseline: baselineMetrics(font), ...(inline ? {inline, lineWidth: measured.range.map(v => v + extra), ...(Object.keys(edges).length ? {inlineEdges: edges} : {}), ...(runs ? {inlineWeights: weights} : {}), ...(Object.keys(atomics).length ? {inlineAtomics: Object.fromEntries(Object.entries(atomics).map(([k, v]) => [k, v.atomic]))} : {})} : {})};
+        metrics = {kind: 'content', text: measured.text, width: measured.width + extra, baseline: contractBaseline(font), ...(inline ? {inline, lineWidth: measured.range.map(v => v + extra), ...(Object.keys(edges).length ? {inlineEdges: edges} : {}), ...(runs ? {inlineWeights: weights} : {}), ...(Object.keys(atomics).length ? {inlineAtomics: Object.fromEntries(Object.entries(atomics).map(([k, v]) => [k, v.atomic]))} : {})} : {})};
       } else {
         const domain = domainBounds({font, characters: text.characters, maxLength: text.maxLength, lang: text.lang});
         width = domain.bounds.at(-1);

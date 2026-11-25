@@ -578,6 +578,24 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
   3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
   (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
+- [x] **I22. block の中にただ 1 つの inline-level の箱(div の中のボタン)**: `inline-flex` / `inline-block` / `inline-grid` の箱が
+  block の唯一の中身のとき、`Unsupported display` などで Unknown にしていた。箱は 1 行に単独で載る: 中身は block-level の display
+  (inline-flex は flex、inline-block は block、inline-grid は grid)で組み、幅は shrink-to-fit(I18 の fit-content と同じ)、
+  位置は内容の始点(text-align が start / left、ltr)。中身で大きさの決まる親へも block-level の display と同じ幅を渡す。
+  行の高さは、親の strut(親のフォントの ascent と descent を親の line-height で上下に配ったもの)が箱の baseline(中のテキストの
+  baseline。inline-block は自分のテキストの最後の行、inline-flex は 1 つのテキストの item の最初の行)の上下に収まれば箱の高さに
+  なる。親の strut は、テキストの契約が持つフォントの値(丸めた ascent / descent に加えて、フォントの単位の ascender / descender と
+  そのファイルが受け持つ weight の範囲)から求める。親が同じ family で、その weight をそのファイルが受け持つときに限る。
+  3 ブラウザーで、親の font-size(0〜24px)と line-height(1、1.5、16〜40px)、テキストの font-size・line-height・weight、
+  padding を組み合わせた 840 通りを、inline-block / inline-flex(item、中央寄せ、直接のテキスト、アイコンの後)/ inline-grid と
+  ボタンの各形で、Roboto と ascent の高い日本語フォントで測った。strut が 0.5px 以上の余りで収まる組はすべて 3 ブラウザーで
+  親が箱の高さ(34px の箱で 34px)、余りが 0.2px 以下では Firefox だけ 0.5px 高い。解析は 1px の余り(親とテキストの大きさが違い
+  丸めが別になるときは 2px)を求める。収まらない対照(親の line-height 40px)は、箱の位置が 3 / 4 / 3.6875px と 3 ブラウザーで違う。
+  Unknown のまま: 中にテキストのない箱と `overflow` が visible でない inline-block(baseline が下端で、strut の descent が下に
+  はみ出し、親が 41 / 40.5 / 40.53px と違う)、親のフォントが分からないとき(`line-height: normal`、フォントのファイルのない
+  family、別の大きさで単位のない契約)、`vertical-align` が baseline 以外(middle は余りがあってもブラウザーで違う)、
+  text-align が start / left 以外、箱の上下の margin、auto の左右 margin、箱自身の min-width / max-width、inline-grid の
+  block 方向、直接テキストを持つ inline-flex(匿名の flex item)、2 つ以上の inline-level の箱が並ぶ行。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
