@@ -748,14 +748,18 @@ function flexShorthand(value) {
 // rest of the rule applies (CSS Syntax 3 §5.4.6; measured in Chromium, Firefox and WebKit). PostCSS throws "Missed
 // semicolon" for the whole sheet instead; the stray ':' is replaced with STRAY_COLON (same length, so lines and
 // columns stay) and the declaration loop drops the declaration and reports it.
-export function tolerateStrayColons(css) {
+export function tolerateStrayColons(css) { return repairStrayColons(css).css; }
+// The repaired text and the offsets of the colons replaced: a U+E000 the author wrote (in a string) is not a repair.
+export function repairStrayColons(css) {
   let text = String(css);
+  const repaired = [];
+  const done = () => ({ css: text, repaired });
   for (let round = 0; round < 10000; round++) {
-    try { postcss.parse(text); return text; }
+    try { postcss.parse(text); return done(); }
     catch (error) {
-      if (error?.reason !== 'Missed semicolon' || !error.line) return text;
+      if (error?.reason !== 'Missed semicolon' || !error.line) return done();
       let offset = 0;
-      for (let line = 1; line < error.line; line++) { const next = text.indexOf('\n', offset); if (next === -1) return text; offset = next + 1; }
+      for (let line = 1; line < error.line; line++) { const next = text.indexOf('\n', offset); if (next === -1) return done(); offset = next + 1; }
       offset += (error.column ?? 1) - 1;
       let depth = 0, quote = null, at = -1;
       for (let i = offset; i < text.length; i++) {
@@ -767,15 +771,17 @@ export function tolerateStrayColons(css) {
         else if (ch === ';' || ch === '{' || ch === '}') break;
         else if (ch === ':' && depth === 0) { at = i; break; }
       }
-      if (at === -1) return text;
+      if (at === -1) return done();
       text = text.slice(0, at) + STRAY_COLON + text.slice(at + 1);
+      repaired.push(at);
     }
   }
-  return text;
+  return done();
 }
 
 export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error' } = {}) {
-  sheets = sheets.map(sheet => ({ ...sheet, css: tolerateStrayColons(sheet.css) }));
+  sheets = sheets.map(sheet => { const { css, repaired } = repairStrayColons(sheet.css); return { ...sheet, css, repaired }; });
+  let repairedOffsets = [];
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
   const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
@@ -1159,7 +1165,9 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           } }
         // A stray ':' in the value (tolerateStrayColons) or a background-image that is not an <image> (a bare URL without
         // url(), a quoted string): the browser drops the declaration (measured in Chromium, Firefox and WebKit).
-        { const prop = declaration.prop.toLowerCase(), raw = declaration.value.trim(), value = raw.replaceAll(STRAY_COLON, ':');
+        { const start = declaration.source?.start?.offset, end = declaration.source?.end?.offset;
+          const repaired = repairedOffsets.length > 0 && (start === undefined || end === undefined || repairedOffsets.some(o => o >= start && o <= end));
+          const prop = declaration.prop.toLowerCase(), raw = declaration.value.trim(), value = repaired ? raw.replaceAll(STRAY_COLON, ':') : raw;
           const line = declaration.source.start.line;
           if (!prop.startsWith('--') && ['background-image', 'background'].includes(prop)) {
             const problem = prop === 'background-image' ? imageProblem(raw) : (t => t && { token: t })(shorthandImageToken(raw));
@@ -1169,7 +1177,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
               declarations.push({ property: '$droppedImage', droppedImage: { property: prop, value }, file: filename, line });
               continue; }
           }
-          if (!prop.startsWith('--') && raw.includes(STRAY_COLON)) { note('W_CSS_STRAY_COLON', { property: prop, value: value.replace(/\s+/g, ' '), selector: node.selector, file: filename, line }); continue; } }
+          if (!prop.startsWith('--') && repaired && raw.includes(STRAY_COLON)) { note('W_CSS_STRAY_COLON', { property: prop, value: value.replace(/\s+/g, ' '), selector: node.selector, file: filename, line }); continue; } }
         // F86: a "!word" other than !important at the end of a value makes the declaration invalid: the browser drops it
         // (measured in Chromium, Firefox and WebKit). PostCSS keeps it in the value; it is dropped here and reported.
         { const bang = !declaration.prop.startsWith('--') && !declaration.important && /!\s*([a-z][\w-]*)\s*$/i.exec(declaration.value);
@@ -1293,6 +1301,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
     }
     if (rootSizing && !elsewhere && affected) note('W_CSS_BOX_SIZING_NOT_INHERITED', { ...rootSizing, affected }); }
   for (const sheet of sheets) {
+    repairedOffsets = sheet.repaired ?? [];
     try { const root = flattenNesting(postcss.parse(sheet.css, { from: sheet.file })); visit(root.nodes, [], null, sheet.file); }
     catch (error) { diagnostic('U_LAYOUT_CSS', error.reason ?? error.message, error.line, sheet.file); }
   }

@@ -85,3 +85,24 @@ test('a stray colon in any other declaration (a missing semicolon) drops that de
   assert.equal(note.property, 'color');
   assert.equal(note.value, 'red\n background:blue'.replace(/\s+/g, ' '));
 });
+
+test('a "/" glued to the size in the shorthand is the position/size separator, not a bare URL', () => {
+  for (const css of ['.b{background:url(a.png) center /cover no-repeat}', '.b{background:url(a.png) 0 0 /50% auto}', '.b{background:url(a.png) center/contain}', '.b{background:#fff url(a.png) left top /42px 42px no-repeat}']) {
+    const parsed = parse(css);
+    assert.equal(parsed.notes.filter(n => n.code === 'W_CSS_IMAGE_INVALID').length, 0, css);
+    assert.ok(parsed.rules.flatMap(r => r.declarations.map(d => d.property)).includes('background-image'), css);
+  }
+  // A bare absolute path is still not an image.
+  const bare = parse('.b{background:/img/close.png center / cover no-repeat}');
+  assert.equal(bare.notes.filter(n => n.code === 'W_CSS_IMAGE_INVALID').length, 1);
+});
+
+test('an authored U+E000 in a string is not a repaired stray colon', () => {
+  const parsed = parse('.b::before{content:"";width:10px}');
+  assert.equal(parsed.notes.filter(n => n.code === 'W_CSS_STRAY_COLON').length, 0, JSON.stringify(parsed.notes));
+  assert.ok(parsed.rules.flatMap(r => r.declarations.map(d => d.property)).includes('content'));
+  // Both in one sheet: only the repaired declaration is dropped.
+  const both = parse('.b::before{content:"";width:10px}.c{color:red\n background:blue}');
+  assert.deepEqual(both.notes.filter(n => n.code === 'W_CSS_STRAY_COLON').map(n => n.property), ['color']);
+  assert.ok(both.rules.flatMap(r => r.declarations.map(d => d.property)).includes('content'));
+});

@@ -51,6 +51,8 @@ export function shorthandImageToken(value) {
   if (/var\(|env\(|attr\(/i.test(text)) return null;
   for (const layer of split(text, /,/)) for (const token of split(layer, /\s/).filter(Boolean)) {
     if (/^["']/.test(token)) return token;
+    // A "/" glued to the size ("center /cover", "0 0 /50% auto") separates the position from the size: not a path.
+    if (/^\/(?:cover|contain|auto|[+-]?(?:\d+\.?\d*|\.\d+)(?:[a-z]+|%)?|calc\(.*\))$/i.test(token)) continue;
     if (/^[a-z][\w+.-]*:\/\//i.test(token) || /^\.{0,2}\/[^\s/]/.test(token) || /\.(?:png|jpe?g|gif|webp|avif|svg)(?:[?#].*)?$/i.test(token)) return token;
   }
   return null;
