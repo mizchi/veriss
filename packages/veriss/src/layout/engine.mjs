@@ -625,10 +625,15 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           if (none('left') && none('right') && parentStyle.direction === style.direction && /^(?:0|\d+(?:\.\d+)?px)$/.test(padding)) style = { ...style, [start]: padding === '0' ? '0px' : padding, $staticPosition: true, $staticInline: true };
         }
       }
-      if (style.position === 'absolute') {
+      // (A display: none box generates no geometry and is skipped when collected: it is not held to these rules.)
+      if (style.position === 'absolute' && style.display !== 'none') {
+        // A replaced element or form control with an auto size between both insets keeps its own size (CSS 2
+        // §10.3.8 / §10.6.5) instead of filling the containing block; its own size is not resolved here: Unknown.
+        const replacedBox = !box.pseudo && ['img', 'svg', 'iframe', 'video', 'audio', 'canvas', 'input', 'select', 'textarea', 'embed', 'object'].includes(box.tag);
         const sized = (start, end, size, edges) => {
           const set = side => style[side] !== undefined && style[side] !== 'auto';
           if (!set(start) || !set(end)) return;
+          if (style[size] === 'auto' && replacedBox) throw Object.assign(new Error(`${box.label}: a replaced element with ${start} and ${end} and an auto ${size === 'inline-size' ? 'width' : 'height'} keeps its own size, which is not modeled here; give it an explicit ${size === 'inline-size' ? 'width' : 'height'}`), { code: 'U_LAYOUT_CSS', box });
           if (style[size] === 'auto') {
             const own = style['box-sizing'] === 'content-box' ? edges.flatMap(edge => [style[`padding-${edge}`], style[`border-${edge}`]]).filter(v => v && !['0', '0px', 'ua'].includes(v)) : [];
             // px margins (negative too) are taken off the room as well (CSS 2 §10.3.7: auto width = containing block −
@@ -642,13 +647,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // Which inline inset is ignored follows the containing block's direction, not the box's own (CSS 2 §10.3.7):
         // the nearest positioned (or transformed) ancestor for an absolute box, the nearest transformed one for a fixed
         // box; else the viewport, whose direction is the principal one (CSS Writing Modes 3 §8: body's, else html's),
-        // read only where html and body agree. Not knowing it matters only when the axis is over-constrained.
+        // read only where html and body agree. Not knowing it matters only when the axis is over-constrained: an
+        // explicit width, or a max-width or min-width that may clamp the auto width between the insets.
         const set = side => style[side] !== undefined && style[side] !== 'auto';
         const container = ancestors.findLast(a => a.style && (style.$fixed ? containsFixed(a.style) : (a.style.position !== 'static' || containsFixed(a.style))));
         const top = ancestors.filter(a => a.box?.documentRoot || (a.box?.tag === 'body' && ancestors[ancestors.indexOf(a) - 1]?.box?.documentRoot)).map(a => a.style?.direction);
         const containerDirection = container ? container.style.direction : top.length && top.every(d => d === top[0]) && ancestors[0]?.box?.documentRoot ? top[0] : undefined;
-        if (!['ltr', 'rtl'].includes(containerDirection) && set('left') && set('right') && style['inline-size'] !== 'auto')
-          throw Object.assign(new Error(`${box.label}: an absolute box with left, right and a width is over-constrained, and which inset is ignored follows its containing block's direction, which is not known here`), { code: 'U_LAYOUT_CSS', box });
+        if (!['ltr', 'rtl'].includes(containerDirection) && set('left') && set('right') && (style['inline-size'] !== 'auto' || String(style['max-inline-size'] ?? 'none') !== 'none' || !['auto', '0', '0px', 'ua'].includes(String(style['min-inline-size'] ?? 'auto'))))
+          throw Object.assign(new Error(`${box.label}: an absolute box with left, right and a width (or a max-width or min-width) is over-constrained, and which inset is ignored follows its containing block's direction, which is not known here`), { code: 'U_LAYOUT_CSS', box });
         const rtl = (containerDirection ?? style.direction) === 'rtl';
         sized(rtl ? 'right' : 'left', rtl ? 'left' : 'right', 'inline-size', ['left', 'right']);
         sized('top', 'bottom', 'block-size', ['top', 'bottom']);

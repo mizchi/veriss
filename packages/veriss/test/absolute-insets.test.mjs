@@ -177,6 +177,37 @@ test('margins on an absolute box that are not modeled stay Unknown and name the 
   assert.deepEqual([...new Set(run('top:0;left:0;width:50%;height:25%;margin:-10px 0 0 -20px').diagnostics.map(d => d.code))], ['E_LAYOUT_ABSOLUTE_START']);
 });
 
+// A replaced element (an img with width/height attributes) between both insets keeps its own size rather than filling
+// the containing block (CSS 2 §10.3.8 / §10.6.5); that is not modeled, so it is Unknown instead of a filled rectangle.
+// An explicit size keeps the over-constrained rule (end inset ignored).
+test('a replaced element between both insets with an auto size is Unknown, not stretched', () => {
+  const img = overlay => analyzeHTML('<html lang="en"><body><main class="page"><div class="card"><img class="o" alt="" src="a.png" width="100" height="60"></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page,.card{${g}}.card{position:relative;height:200px}.o{display:block;position:absolute;${overlay}}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
+  for (const overlay of ['inset:0;margin:10px', 'inset:0', 'top:0;bottom:0;left:0;width:100px', 'left:0;right:0;top:0;height:60px']) {
+    const report = img(overlay);
+    assert.equal(report.status, 'unknown', overlay);
+    assert.match(report.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message).join(' | '), /\.o: .*replaced/, overlay);
+  }
+  assert.equal(img('inset:0;width:100px;height:60px;margin:10px').status, 'verified');
+});
+
+// When the containing block's direction is not known (html and body disagree), a max-width or min-width can
+// over-constrain an auto width between both inline insets as an explicit width does: Unknown, not the box's own
+// direction. A display: none box is never laid out, so it is not held to that.
+test('an unknown containing-block direction is Unknown for a clamped auto width, and ignored for display: none', () => {
+  const page = (html, overlay) => analyzeHTML('<html lang="en"><body><main class="page"><div class="o"></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${html}.o{position:absolute;${overlay}}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
+  const unknowns = r => r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message).join(' | ');
+  for (const overlay of ['inset:0;max-width:100px;height:50px;margin:0 20px 0 40px', 'left:0;right:0;top:0;min-width:500px;height:50px']) {
+    const mixed = page('body{direction:rtl}', overlay);
+    assert.equal(mixed.status, 'unknown', overlay);
+    assert.match(unknowns(mixed), /\.o: .*containing block's direction/, overlay);
+  }
+  // Both agree: the clamped box keeps the start inset of that direction.
+  assert.equal(page('', 'inset:0;max-width:100px;height:50px;margin:0 20px 0 40px').status, 'verified');
+  const hidden = page('html{direction:rtl}body{direction:ltr}', 'display:none;inset:0;width:100px;height:50px');
+  assert.doesNotMatch(unknowns(hidden), /containing block's direction/);
+  assert.equal(hidden.status, 'verified');
+});
+
 // The ad idiom: a fixed overlay with a box centred in it by negative margins; the accessibility checks see the overlay.
 // (The translate centres the painted box only: its layout box still reaches past the overlay, E_LAYOUT_ABSOLUTE_END,
 // which the margins do not; the accessibility verdicts are the same.)

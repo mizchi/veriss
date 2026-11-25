@@ -582,7 +582,7 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   `top: 50%; left: 50%; margin: -125px 0 0 -150px` で、ページ全体の a11y の判定が消えた。文言も block の margin を消せという見当違いのもの)。
   margin の箱を inset に置く(CSS 2 §10.3.7 / §10.6.4): border の箱は始点の inset + 始点の margin から、終点の inset だけのときは
   終点の inset − 終点の margin で終わる。両側の inset で auto の大きさは、両側の margin も引く。決まりすぎ(大きさも両側の inset もある)の
-  ときは終点の inset と margin を捨てる(終点は箱自身ではなく包含ブロックの direction で決まり、rtl では left 側。viewport の direction が html と body で食い違うなど分からないときは Unknown)。Chromium・Firefox・WebKit で、left/top と負の margin、right/bottom と margin、
+  ときは終点の inset と margin を捨てる(終点は箱自身ではなく包含ブロックの direction で決まり、rtl では left 側。viewport の direction が html と body で食い違うなど分からないときは、幅か max-width・min-width があれば Unknown)。両側の inset で auto の大きさの置換要素(img など)は自分の大きさのままになるので Unknown。Chromium・Firefox・WebKit で、left/top と負の margin、right/bottom と margin、
   % の inset と px の margin、% の大きさの箱、正の margin、`inset: 0` と auto の大きさ、rtl の決まりすぎ、content-box の padding、border と
   padding のある包含ブロック、fixed の箱(中央寄せ、右下、`inset: 0`)の 16 通りを 320px と 400px で照合し、矩形が一致した
   (e2e `px margins offset absolute and fixed boxes`。対照として margin を 0 にすると全組で矩形が変わる)。包含ブロックの外に出る負の margin は
