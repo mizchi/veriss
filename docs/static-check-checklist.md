@@ -588,6 +588,31 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   max-content は 150px でも幅 208・left 0)。反対側の margin が 0 でも auto でもない場合(`margin-left: auto; margin-right: 10px` は
   79px で WebKit が left -9、Chromium と Firefox が 0 と分かれる)と rtl は Unknown のまま。I18 と I19 とも、`container-type:
   inline-size` / `size` の箱は中身を幅に数えない(CSS Containment 3 §3.1)ので Unknown のまま。
+- [x] **I20. 中身で大きさの決まる flex の item の中の img・svg・フォーム部品**(#40): px の幅のない置換要素・フォーム部品があると、
+  item の幅を Unknown にしていた。実ページで当たっていたのは、高さを決めて幅を auto にしたロゴの img(幅は画像ファイルの比で決まる)と、
+  幅 auto の text input だった。3 ブラウザーで、行の幅 2000px(max-content)と 0px(min-content)の item の幅を測った
+  (`packages/veriss/test/replaced-content-size.test.mjs` に同じ形)。
+  - 一致したので判定する: 幅 auto の img は、高さ × 比(画像ファイルの大きさ、なければ width / height 属性の `aspect-ratio: auto w / h`)を
+    content box の幅にする。120×30 の画像で高さ 24px → 96px(min も max も)。border-box で padding 0 4px・border 1px → 98px、
+    content-box で padding 2px → 100px、max-width 50px → 50px(高さは 24px のまま。max-width 48px で 48×24 になり、object-fit: fill で絵がつぶれるので
+    `W_LAYOUT_IMAGE_DISTORTED` を出す)、min-width 150px → 150px、高さ 24px の親の `height: 100%` → 96px、
+    高さも auto でファイルの大きさが分かれば 120px。幅 300px の block の親の中でも 96px(block の置換要素は伸びない)
+  - Unknown のまま: 比が分からない img(属性もファイルの大きさもない。読み込んだファイルが幅を決める)。属性とファイルで比が違う img
+    (属性 120×30 で正方形のファイル: 読み込み前 96px、読み込み後 24px)。min-height / max-height のある img(max-height 12px → 48px で
+    3 ブラウザー一致したが、モデルにしていない)。明示の `aspect-ratio`。px の高さのない親に対する % の高さ。min-height / max-height で高さが変わる親に対する % の高さ(24px で min-height 48px の親 →
+    192px、max-height 12px → 48px。3 ブラウザー一致したが、使われた高さは求めていない)。srcset のある img の自然な幅(1 つだけの
+    2x の候補で 120×30 のファイルは 60px。候補が複数なら読み込むものが決まらない。px の高さからの幅は 2x でも 96px で、判定する)。block の流れの外
+    (縦の flex の container と `justify-items: stretch` の grid では、伸びて 300px になる)
+  - フォーム部品はブラウザーで違うので Unknown のまま: text input は Chromium 153px / Firefox 189px / WebKit 155.875px
+    (`appearance: none`・padding 0・border 0 でも 145 / 181 / 141.875px、`size="10"` で 83 / 105 / 85.938px、14px・padding 0 10px・
+    border 1px の実ページの形で 168 / 190 / 172px)、select は 53 / 65.2 / 63px、textarea は 182 / 164.667 / 152px、
+    checkbox は 13 / 14 / 12px。幅 100% の input の min-content も 8 / 8 / 14px で違う
+  - 健全性の修正: 幅も viewBox の比もない svg(既定の 300px 幅)は、Chromium・WebKit の min-content が 300px、Firefox は 0。
+    これまで 300px として判定していた。min-content を使うところ(中身で大きさの決まる item、grid の fr の列の最小)では Unknown にする
+    (max-content は 3 ブラウザーとも 300px。幅 100px の `1fr 1fr` の grid で、Chromium・WebKit は列が 300 / 0px、Firefox は 50 / 50px)。
+    width 属性だけの svg(100px)は一致するので判定する
+  - 実ページの重み: 16.7% と見えていたのは `tools/blocker-weights.mjs` の数え方の誤り(アダプターのクラス `__ph0` で箱を見つけられず、
+    ページの残りを数えていた)。直すと 0.7%(ロゴの img 41 か所と text input 14 か所)。どちらも上の理由で Unknown のまま
 - [x] **I21. 中身で高さの決まる block の容器の px の `max-height`**: 開閉するナビゲーションの区画(`max-height: 168.75px` のように
   開いたときの高さを書いたもの)で、子のある auto の高さの block の `max-height` を Unknown にしていた(引き伸ばされる箱と葉だけを扱っていた)。
   block の流れの中の block(と、引き伸ばさずに揃える grid の item)は、高さが min(中身の高さ, max-height)、min-height はその後に掛かる
