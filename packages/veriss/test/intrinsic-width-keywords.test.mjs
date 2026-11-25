@@ -47,3 +47,10 @@ test('fit-content with its own max-width, an auto margin against a px margin, or
   assert.equal(run('.f{width:fit-content;margin-left:auto;margin-right:10px}').status, 'unknown');
   assert.equal(run('.s{direction:rtl}.f{width:max-content;margin:0 auto}').status, 'unknown');
 });
+
+// Under inline-size containment (container-type: inline-size / size) the intrinsic widths ignore the content
+// (CSS Containment 3 §3.1), which the content measurement here does not apply: such a box stays Unknown.
+test('an intrinsic width keyword on an inline-size container stays Unknown', () => {
+  for (const css of ['.f{width:max-content;container-type:inline-size}', '.f{width:fit-content;container-type:size;height:10px}', '.f{width:max-content;container-type:inline-size;margin:0 auto}'])
+    assert.equal(run(css).status, 'unknown', css);
+});

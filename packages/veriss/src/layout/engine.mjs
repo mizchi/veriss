@@ -3164,10 +3164,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // An intrinsic width keyword on a block in block flow (CSS Sizing 3 §3.2): max-content and min-content are that
         // width; fit-content is min(max-content, max(min-content, available)), which is an auto width clamped to
         // [min-content, max-content]. With its own min- or max-width the clamps would
-        // nest the other way round, so that stays Unknown. (Measured in Chromium, Firefox and WebKit.)
+        // nest the other way round, so that stays Unknown; so does an inline-size container, whose intrinsic widths ignore
+        // its content (CSS Containment 3 §3.1). (Measured in Chromium, Firefox and WebKit.)
         const intrinsicKeyword = String(style['inline-size']);
         if (['fit-content', 'min-content', 'max-content'].includes(intrinsicKeyword) && !box.pseudo && style.display === 'block' && ['static', 'relative'].includes(style.position)
-          && ['block', 'flow-root'].includes(String(parents.at(-1)?.style.display)) && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && String(style['max-inline-size'] ?? 'none') === 'none') {
+          && ['block', 'flow-root'].includes(String(parents.at(-1)?.style.display)) && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && String(style['max-inline-size'] ?? 'none') === 'none'
+          && !['inline-size', 'size'].includes(String(style['container-type']))) {
           const sizes = frAutoMinimums(box, style, state.region, parents, true);
           const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
           // (Border-box widths; a content-box box declares them less its inline padding and borders.)
@@ -3643,7 +3645,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                     const st = item.style;
                     return style.$blockFlow && ['fit-content', 'min-content', 'max-content'].includes(String(st['inline-size'])) && !item.box.pseudo && st.display === 'block'
                       && ['static', 'relative'].includes(st.position) && ['block', 'flow-root'].includes(String(ancestors.at(-1)?.style.display)) && ['auto', '0', '0px'].includes(String(st['min-inline-size']))
-                      && String(st['max-inline-size'] ?? 'none') === 'none' && ['left', 'right'].every(side => ['auto', '0', '0px'].includes(String(st[`margin-${side}`]))) && style.direction !== 'rtl';
+                      && String(st['max-inline-size'] ?? 'none') === 'none' && !['inline-size', 'size'].includes(String(st['container-type'])) && ['left', 'right'].every(side => ['auto', '0', '0px'].includes(String(st[`margin-${side}`]))) && style.direction !== 'rtl';
                   };
                   for (const item of placed) if (autoMargins(item) && !blockFill(item) && !intrinsicAuto(item)) {
                     const w = String(item.style['inline-size']);

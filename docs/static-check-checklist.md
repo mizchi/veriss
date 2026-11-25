@@ -586,7 +586,8 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   190 / 150 / 79 / 78 / 77 / 60 / 50 / 30px を実測して一致(content-box も同じ。中身の min 60 / max 190px、padding 0 8px、border 1px
   で、fit-content の中央寄せは 500px で幅 208・left 146、150px で 150・0、50px で 78・0。min-content は 500px で left 211、
   max-content は 150px でも幅 208・left 0)。反対側の margin が 0 でも auto でもない場合(`margin-left: auto; margin-right: 10px` は
-  79px で WebKit が left -9、Chromium と Firefox が 0 と分かれる)と rtl は Unknown のまま。
+  79px で WebKit が left -9、Chromium と Firefox が 0 と分かれる)と rtl は Unknown のまま。I18 と I19 とも、`container-type:
+  inline-size` / `size` の箱は中身を幅に数えない(CSS Containment 3 §3.1)ので Unknown のまま。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
