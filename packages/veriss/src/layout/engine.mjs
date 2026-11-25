@@ -490,6 +490,45 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     tools: { matches, compileSelector, dynamicStates, positive: value => cmp(q(value), zero) > 0 } });
   // True while the style stage's walk reads styles: a declaration that is not modeled does not stop it there.
   let readingStyles = false;
+  // Checklist I20: an img with an auto width takes it from its height through its ratio (the file's natural size, else
+  // the width/height attributes as aspect-ratio: auto w / h), on the content box; with an auto height too, a known
+  // file gives its natural width. Measured in Chromium, Firefox and WebKit: a 120×30 picture 24px tall is 96px wide
+  // (border-box padding 0 4px and border 1px: 98px; content-box padding 2px: 100px; height: 100% of a 24px parent: 96px).
+  // Left auto (Unknown where the width is needed): no ratio, a file whose ratio differs from the attributes (the width
+  // changes when it loads: 96px reserved, 24px loaded for a square file), an explicit aspect-ratio, a min- or max-height,
+  // a percentage height against a parent without a px height, or non-px padding and border.
+  function imageWidthFromRatio(style, natural, parentStyle) {
+    // Only in block flow: a stretched flex or grid item (column flex, justify-items: stretch) fills its area instead
+    // (measured: 300px in a 300px column flex container in all three).
+    if (!parentStyle || !['block', 'flow-root', 'list-item'].includes(parentStyle.display) || !['static', 'relative'].includes(style.position)) return style;
+    const written = /^auto (\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(String(style['aspect-ratio']));
+    if (!written && style['aspect-ratio'] !== 'auto') return style;
+    const file = natural?.width > 0 && natural?.height > 0 ? [natural.width, natural.height] : null;
+    if (written && file && Number(written[1]) * file[1] !== Number(written[2]) * file[0]) return style;
+    const ratio = file ? [null, ...file] : written;
+    if (!ratio || Number(ratio[1]) <= 0 || Number(ratio[2]) <= 0) return style;
+    if (!['auto', '0', '0px'].includes(String(style['min-block-size'])) || style['max-block-size'] !== 'none') return style;
+    const pxOf = value => ['0', '0px'].includes(String(value)) ? 0 : /^\d+(?:\.\d+)?px$/.test(String(value)) ? Number(String(value).slice(0, -2)) : null;
+    const sum = keys => keys.reduce((total, key) => total === null || pxOf(style[key]) === null ? null : total + pxOf(style[key]), 0);
+    const inlineEdges = sum(['padding-left', 'padding-right', 'border-left', 'border-right']), blockEdges = sum(['padding-top', 'padding-bottom', 'border-top', 'border-bottom']);
+    if (inlineEdges === null || blockEdges === null) return style;
+    const borderBox = style['box-sizing'] === 'border-box';
+    let height = pxOf(style['block-size']);
+    const percent = /^(\d+(?:\.\d+)?)%$/.exec(String(style['block-size']));
+    if (percent) {
+      const parentHeight = pxOf(parentStyle['block-size']);
+      if (parentHeight === null) return style;
+      const parentEdges = ['padding-top', 'padding-bottom', 'border-top', 'border-bottom'].reduce((total, key) => total === null || pxOf(parentStyle[key]) === null ? null : total + pxOf(parentStyle[key]), 0);
+      if (parentEdges === null) return style;
+      height = Number(percent[1]) / 100 * Math.max(0, parentStyle['box-sizing'] === 'border-box' ? parentHeight - parentEdges : parentHeight);
+    }
+    let content;
+    if (height !== null) content = Math.max(0, borderBox ? height - blockEdges : height) * Number(ratio[1]) / Number(ratio[2]);
+    else if (style['block-size'] === 'auto' && natural && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && style['max-inline-size'] === 'none') content = natural.width;
+    else return style;
+    const width = +(borderBox ? content + inlineEdges : content).toFixed(6);
+    return { ...style, 'inline-size': `${width}px` };
+  }
   function styles(box, region, ancestors, inherited, emit, gridItem = true, state) {
     // What the input could not model on this box (an element with no size adapter, an attribute that renders here,
     // text mixed with elements): Unknown where the layout reaches it.
@@ -700,10 +739,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (w !== 'auto' && h === 'auto') style = ratio && !authored('aspect-ratio') ? { ...style, 'aspect-ratio': ratio } : authored('aspect-ratio') ? style : { ...style, 'block-size': '150px' };
         else if (w === 'auto' && h !== 'auto') {
           if (!/^\d+(?:\.\d+)?px$/.test(h)) throw Object.assign(new Error(`${box.label}: an svg sized by a non-px height alone is not modeled`), { code: 'U_LAYOUT_ELEMENT', box });
-          style = { ...style, 'inline-size': vb ? `${+(parseFloat(h) * vb.width / vb.height).toFixed(6)}px` : '300px' };
+          style = { ...style, 'inline-size': vb ? `${+(parseFloat(h) * vb.width / vb.height).toFixed(6)}px` : '300px', ...(vb ? {} : { $svgDefaultWidth: true }) };
         } else if (w === 'auto' && h === 'auto') {
           if (vb && !['grid', 'inline-grid'].includes(parentDisplay)) throw Object.assign(new Error(`${box.label}: an unsized svg with a viewBox fills its container; outside a grid area that is not modeled`), { code: 'U_LAYOUT_ELEMENT', box });
-          style = { ...(vb ? { ...style, 'inline-size': '100%', 'aspect-ratio': ratio } : { ...style, 'inline-size': '300px', 'block-size': '150px' }), $svgUnsized: vb ? 'fills' : 'default' };
+          style = { ...(vb ? { ...style, 'inline-size': '100%', 'aspect-ratio': ratio } : { ...style, 'inline-size': '300px', 'block-size': '150px', $svgDefaultWidth: true }), $svgUnsized: vb ? 'fills' : 'default' };
         }
       }
       if (['img', 'video'].includes(box.tag) && imageFacts && !box.pseudo) {
@@ -728,6 +767,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // A box with aspect-ratio auto … and an auto size follows the loaded file, so it cannot stretch it.
         const drawn = natural ?? (Number.isFinite(w) && Number.isFinite(hgt) && w > 0 && hgt > 0 ? { width: w, height: hgt } : null);
         if (box.tag === 'img' && drawn) style = { ...style, $imageRatio: { width: drawn.width, height: drawn.height, basis: natural ? 'file' : 'attributes', follows: /^auto\b/.test(style['aspect-ratio']) && (style['inline-size'] === 'auto' || style['block-size'] === 'auto') } };
+        if (box.tag === 'img' && style['inline-size'] === 'auto') style = imageWidthFromRatio(style, natural, ancestors.at(-1)?.style);
       }
       // A user-agent checkbox or radio (appearance auto, size and minimum untouched): Chromium draws it 13×13 border-box
       // (measured). Laid out at that size for the accessibility checks; SC 2.5.8/2.5.5 exempt it. Padding and border do
@@ -2809,6 +2849,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       }
       unknown(`has an item (${target.label}, display: ${st.display}) whose min-content width is not modeled`);
     };
+    // An svg at the 300px default width (no width, no viewBox ratio): its min-content contribution is 0 in Firefox and
+    // 300px in Chromium and WebKit (measured, checklist I20); the max-content one is 300px in all three.
+    const defaultSvg = (target, st) => { if (st.$svgDefaultWidth) unknown(`has an svg (${target.label}) at the 300px default width, whose min-content contribution differs between browsers (0 in Firefox); give it a width`); };
     // The min-content contribution of a block-level child: its px width or min-content width, clamped, plus margins.
     const intrinsic = (target, st, at, max = false) => {
       let size;
@@ -2817,7 +2860,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       const keyword = String(st['inline-size']);
       if (keyword === 'auto' || keyword === 'fit-content') size = minContent(target, st, at, max);
       else if (keyword === 'min-content' || keyword === 'max-content') size = minContent(target, st, at, keyword === 'max-content');
-      else size = borderBox(st, length(st['inline-size'], 'width'));
+      else { if (!max) defaultSvg(target, st); size = borderBox(st, length(st['inline-size'], 'width')); }
       size = clampMax(st, size);
       if (st['min-inline-size'] !== 'auto') { const m = borderBox(st, length(st['min-inline-size'], 'min-width')); if (cmp(m, size) > 0) size = m; }
       return add(size, margins(st));
@@ -2827,7 +2870,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       let size;
       if (st['min-inline-size'] !== 'auto') size = borderBox(st, length(st['min-inline-size'], 'min-width'));
       else if (['hidden', 'auto', 'scroll'].includes(String(st['overflow-x']))) size = zero;
-      else if (st['inline-size'] !== 'auto') size = clampMax(st, borderBox(st, length(st['inline-size'], 'width')));
+      else if (st['inline-size'] !== 'auto') { defaultSvg(item, st); size = clampMax(st, borderBox(st, length(st['inline-size'], 'width'))); }
       else size = clampMax(st, minContent(item, st, ancestors));
       if (cmp(size, edges(st)) < 0) size = edges(st);
       return add(size, margins(st));

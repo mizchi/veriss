@@ -32,6 +32,8 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - % の `width` の item は、既定の `flex-shrink: 1` と `min-width: auto` のままでよい。ただし、veriss が判定できるのは、行が縮まない(item の合計が container に収まる)ときだけ。縮む行では、中身で決まる最小幅が要るので Unknown になる。縮ませたい item には `min-width: 0` を書く。
   - % の `width` / `flex-basis` に px の `max-width` を組み合わせた item(中央寄せの最大幅の容器 `width: 100%; max-width: 1280px; margin: 0 auto`)は判定できる。`max-width` を % にすると Unknown になる。
   - `flex-basis: auto` で幅も auto の item は、中身の大きさで決まる。veriss がそれを求められるのは、テキストの寸法が分かる葉の箱など一部だけで、それ以外は Unknown になる(`flex-basis: auto with an auto width uses the content size`)。
+    - 中の img は、px の幅か、px の高さと比(画像ファイルの大きさか `width` / `height` 属性)を持たせる。svg は `width` 属性か px の幅を書く(幅も viewBox もない svg の 300px は、Firefox で min-content が 0 になる)。
+    - 中の input・select・textarea には px の幅を書く(既定の幅はブラウザーで違うので、幅が auto だと Unknown: `has a replaced or form element … without a px width`)。
 - 意図して重ねる箱は、`position: absolute` か、grid の同じ領域に置いたうえで、重なりを宣言する
   (宣言のない重なりは `E_LAYOUT_OVERLAP`)。
 
