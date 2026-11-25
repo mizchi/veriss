@@ -972,11 +972,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // max-inline-size in px clamps the preferred width (CSS 2 §10.4: max(min, min(preferred, max))); flex items and
       // other max sizes are not modeled.
       // max-block-size in px: it caps an explicit or stretched height, and a leaf's content height; an auto-height
-      // container with children is not modeled.
+      // container with children is modeled only in block flow (flowClamp); a flex item, grid or flex container is not.
       // A vh max-height on an auto height is checked once the height is known (finish): where the height never exceeds
       // it, the clamp does nothing; where it may, Unknown.
       const vhLater = axis === 'block' && block && style['block-size'] === 'auto' && (/^\d+(?:\.\d+)?vh$/.test(String(style['max-block-size'])) || style.position === 'absolute');
-      if (axis === 'block' && !vhLater && style['max-block-size'] !== 'none' && !(/^\d+(?:\.\d+)?px$/.test(style['max-block-size']) && !available.flexItem && style.display !== 'table' && (style['block-size'] !== 'auto' || !(box.children ?? []).length || (available.block && available.alignBlock === undefined && !available.root)))) throw new Error('CSS max size clamping is not modeled');
+      // A block container in block flow with an auto height and children: its rows stay at the top and its height is
+      // min(content, max-height) (flowClamp, applied where its rows are laid out).
+      const flowClamp = axis === 'block' && style['block-size'] === 'auto' && !available.flexItem && style.display === 'block' && !box.text && ['normal', 'start', 'flex-start'].includes(String(style['align-content'] ?? 'normal'));
+      if (axis === 'block' && !vhLater && style['max-block-size'] !== 'none' && !(/^\d+(?:\.\d+)?px$/.test(style['max-block-size']) && !available.flexItem && style.display !== 'table' && (style['block-size'] !== 'auto' || !(box.children ?? []).length || flowClamp || (available.block && available.alignBlock === undefined && !available.root)))) throw new Error('CSS max size clamping is not modeled');
       if (style[`max-${axis}-size`] !== 'none' && axis === 'inline' && !available.flexItem?.maxNeverCaps && !( ((/^\d+(?:\.\d+)?px$/.test(style['max-inline-size'])) || (!/px$/.test(style['max-inline-size']) && available.inline && !available.flexItem)) && (!available.flexItem || available.flexItem.main === 'inline') && style.display !== 'table')) throw new Error('CSS max size clamping is not modeled');
       if (axis === 'inline') {
         if (style['min-inline-size'] !== 'auto') px(style['min-inline-size']);
@@ -3654,7 +3657,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       // (measured: several levels deep). null when that is not known.
                       const outward = (owner, st, at, side, depth) => {
                         const own = gm(st, side);
-                        if (depth > 16 || !plainBlock(st) || owner.text || !(owner.children ?? []).length || !zeroEdge(st, side) || (side === 'bottom' && st['block-size'] !== 'auto')) return own;
+                        if (depth > 16 || !plainBlock(st) || owner.text || !(owner.children ?? []).length || !zeroEdge(st, side) || (side === 'bottom' && (st['block-size'] !== 'auto' || String(st['max-block-size'] ?? 'none') !== 'none'))) return own;
                         const inner = [...at, { box: owner, style: st, inline: null, block: null, type: st['container-type'], names: [] }];
                         const kids = flowOf(owner, st, inner);
                         if (!kids) return null;
@@ -3669,7 +3672,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       if (!grand || grand.some(g => /inline|contents|table/.test(String(g.style.display)))) return;
                       const childOf = [...childAncestors];
                       for (const side of ['top', 'bottom']) {
-                        if (!grand.length || !zeroEdge(child.style, side) || (side === 'bottom' && child.style['block-size'] !== 'auto')) continue;
+                        // (A max-height may clamp the box, and where it does WebKit still collapses the margin through it while
+                        // Chromium and Firefox do not: not moved out here, so the box's own layout leaves it Unknown.)
+                        if (!grand.length || !zeroEdge(child.style, side) || (side === 'bottom' && (child.style['block-size'] !== 'auto' || String(child.style['max-block-size'] ?? 'none') !== 'none'))) continue;
                         const edge = side === 'top' ? grand[0] : grand.at(-1);
                         const theirs = outward(edge.box, edge.style, childOf, side, 1);
                         if (theirs === null) return;
@@ -3883,7 +3888,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       return { region: f.region, values, required: sum(total(values), scalar(gaps)) };
                     });
                     // A block-flow container raised by min-block-size: its rows stay at the top (align-content: start).
-                    for (const rs of layouts.flatMap(rs => minBlock && !knownBlock && style.$blockFlow ? minBlock(rs.region).flatMap(m => maximum(m.region, rs.required, m.value).map(x => ({ ...rs, region: x.region, raised: x.value }))) : [rs])) {
+                    // A block-flow container with an auto height capped by a px max-height: min(content, max-height), its
+                    // rows still at the top (the content overflows the clamped box). min-block-size then wins over it.
+                    const flowCap = maxBlock && !knownBlock && style.$blockFlow ? diff(maxBlock, blockEdges) : null;
+                    // (A max-height below the padding and border leaves a content height of 0, not less: measured.)
+                    const cappedLayouts = !flowCap ? layouts : layouts.flatMap(rs => clamp(rs.region, flowCap).flatMap(cap => minimumOf(cap.region, rs.required, cap.value)).map(c => ({ ...rs, region: c.region, ...(c.value !== rs.required ? { raised: c.value } : {}) })));
+                    for (const rs of cappedLayouts.flatMap(rs => minBlock && !knownBlock && style.$blockFlow ? minBlock(rs.region).flatMap(m => maximum(m.region, rs.raised ?? rs.required, m.value).map(x => ({ ...rs, region: x.region, raised: x.value }))) : [rs])) {
                       const contentBlock = knownBlock ?? rs.raised ?? rs.required, blockSize = sum(contentBlock, blockEdges);
                       const finalAncestors = [...parents, { ...own, block: contentBlock, paddingBlock:diff(blockSize,scalar(add(px(style['border-top']),px(style['border-bottom'])))) }];
                       // A scroll container's automatic minimum size is 0 (CSS Sizing 3 §4.5): in an auto row of a grid whose

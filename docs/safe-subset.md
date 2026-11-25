@@ -47,6 +47,9 @@ veriss が判定できる形で書くための規約である。エンジンが�
 - 長さは px、%、viewport 単位、`rem` / `em`(既定のフォントサイズで解決する)、`calc()`(演算子の両側に空白)。
 - `box-sizing: border-box` を推奨する。content-box の `width: 100%` は、padding と border の分だけはみ出す(`W_LAYOUT_CONTENT_BOX_FULL`)。
 - 画像と動画には、`max-width: 100%` と、`aspect-ratio` か `width` / `height` 属性を付ける。
+- 中身で高さの決まる block の容器(開閉する区画、スクロールする一覧)の `max-height` は px で書く。高さは min(中身, max-height) で判定する。
+  % と `calc()` の `max-height`、flex の item の `max-height` は Unknown になる。最後の子の下の margin が容器を突き抜ける形も Unknown
+  (容器に `padding-bottom` か `overflow: auto` を付けるか、margin を padding にする)。
 
 ## 3. テキスト
 

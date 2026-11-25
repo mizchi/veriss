@@ -588,6 +588,14 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   max-content は 150px でも幅 208・left 0)。反対側の margin が 0 でも auto でもない場合(`margin-left: auto; margin-right: 10px` は
   79px で WebKit が left -9、Chromium と Firefox が 0 と分かれる)と rtl は Unknown のまま。I18 と I19 とも、`container-type:
   inline-size` / `size` の箱は中身を幅に数えない(CSS Containment 3 §3.1)ので Unknown のまま。
+- [x] **I21. 中身で高さの決まる block の容器の px の `max-height`**: 開閉するナビゲーションの区画(`max-height: 168.75px` のように
+  開いたときの高さを書いたもの)で、子のある auto の高さの block の `max-height` を Unknown にしていた(引き伸ばされる箱と葉だけを扱っていた)。
+  block の流れの中の block(と、引き伸ばさずに揃える grid の item)は、高さが min(中身の高さ, max-height)、min-height はその後に掛かる
+  (CSS 2 §10.7)。中身は上に詰めたまま、はみ出しは overflow のとおり(visible なら報告、auto ならスクロール)。行の高さと後ろの兄弟は
+  clamp した高さで決まる。3 ブラウザーで、掛からない場合(200px)と掛かる場合(100px)を、content-box と border-box、overflow
+  visible / hidden / auto、下端に置いた absolute の子、max-height より大きい min-height、2 列の grid の行で測って一致
+  (`e2e/layout-max-clamp.spec.mjs`)。最後の子の下の margin が箱を突き抜ける形は、掛かると WebKit だけが margin を外へ出す
+  (Chromium と Firefox は出さない)ので Unknown のまま。% と `calc()` の max-height、flex の item の max-height も Unknown のまま。
 - [x] **I22. block の中にただ 1 つの inline-level の箱(div の中のボタン)**: `inline-flex` / `inline-block` / `inline-grid` の箱が
   block の唯一の中身のとき、`Unsupported display` などで Unknown にしていた。箱は 1 行に単独で載る: 中身は block-level の display
   (inline-flex は flex、inline-block は block、inline-grid は grid)で組み、幅は shrink-to-fit(I18 の fit-content と同じ)、
