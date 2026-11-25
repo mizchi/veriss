@@ -96,8 +96,9 @@ test('a stuck box showing only an opacity-0 frame over the page links is an invi
 
 test('a painted stuck box over fixed page controls is a trap; over links in the flow scrolling frees them', () => {
   const painted = stuck + '.box{background:#eee}';
-  // In the flow, the links scroll out from under the fixed box: covered (E_A11Y_OCCLUDED), but not a trap.
-  const flow = page(frame, painted);
+  // In the flow of a page that scrolls far enough, the links scroll out from under the fixed box: covered
+  // (E_A11Y_OCCLUDED), but not a trap.
+  const flow = page(frame, painted + '.t{display:block;height:2000px}', {host: '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="t"></div></main>'});
   assert.ok(find(flow, 'E_A11Y_OCCLUDED').some(d => d.box === '.l'));
   assert.equal(find(flow, 'E_A11Y_CLICK_TRAP').length, 0);
   // In a fixed bar under the box, they never move out: a trap.
@@ -292,7 +293,7 @@ test('a transparent overflow: hidden overlay that shows a frame gets the trap an
 // visible and body is hidden / clip (body's overflow goes to the viewport). Measured with the wheel and PageDown in
 // Chromium, Firefox and WebKit (16 combinations; html auto always scrolls).
 const sheetHost = '<main><div class="gap"></div><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>';
-const sheet = root => page('<div class="sh"></div>', `.gap{display:block;height:500px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`, {host: sheetHost});
+const sheet = (root, tail = 0) => page('<div class="sh"></div>', `.gap{display:block;height:500px}.t{display:block;height:${tail}px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`, {host: sheetHost.replace('</main>', '<div class="t"></div></main>')});
 test('a fixed sheet over in-flow controls of a page that does not scroll: scrolling cannot free them (a click trap)', () => {
   for (const root of ['html{overflow:hidden}', 'html{overflow:clip}', 'html{overflow:hidden}body{overflow:visible}']) {
     const r = sheet(root);
@@ -302,10 +303,10 @@ test('a fixed sheet over in-flow controls of a page that does not scroll: scroll
     assert.match(trap.message, /does not scroll/);
     assert.ok(find(r, 'E_A11Y_OCCLUDED').filter(d => d.box === '.l').every(d => /scrolling cannot free it/.test(d.message)), root);
   }
-  // The page scrolls: scrolling frees them. Body hidden or auto under a hidden html is a box that clips (or scrolls) of
-  // its own, which the layout does not model for a fixed box: Unknown, never a trap.
+  // The page scrolls (far enough): scrolling frees them. Body hidden or auto under a hidden html is a box that clips (or
+  // scrolls) of its own, which the layout does not model for a fixed box: Unknown, never a trap.
   for (const root of ['', 'html{overflow:auto}', 'html{overflow:hidden}body{overflow:hidden}', 'html{overflow:hidden}body{overflow:auto}']) {
-    const r = sheet(root);
+    const r = sheet(root, 1000);
     assert.equal(find(r, 'E_A11Y_CLICK_TRAP').length, 0, root);
     assert.ok(find(r, 'E_A11Y_OCCLUDED').filter(d => d.box === '.l').every(d => !/scrolling cannot free it/.test(d.message)), root);
   }
@@ -325,4 +326,40 @@ test('in-flow controls that scroll under a fixed box that paints nothing are inv
   // Controls: no pointer events; a box that paints (scrolling on is the way out); a page that does not scroll.
   for (const css of ['.ad{pointer-events:none}', '.ad{opacity:1}', 'html{overflow:hidden}'])
     assert.equal(find(wipe(css), 'E_A11Y_INVISIBLE_BLOCKER').length, 0, css);
+});
+
+// Review follow-ups (PR #35).
+test('a fixed box with no area takes no click: no invisible blocker as controls scroll past it', () => {
+  for (const css of ['.ad{left:50px;right:auto;width:0}', '.ad{left:0;right:auto;height:0}'])
+    assert.equal(find(wipe(css), 'E_A11Y_INVISIBLE_BLOCKER').length, 0, css);
+});
+
+test('a fixed sheet over in-flow controls of a page too short to scroll is a click trap; a page that scrolls them out is not', () => {
+  // 580px of content in a 600-900px viewport: the page does not scroll, so the links stay under the 60vh sheet.
+  const [trap] = find(sheet(''), 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap);
+  assert.deepEqual(trap.covered, ['.l', '.m']);
+  // A page that scrolls up to 50px: not enough to lift the links (from 500px) above the sheet (from 240px): a trap.
+  const short = sheet('', 50);
+  assert.ok(find(short, 'E_A11Y_CLICK_TRAP').length > 0, JSON.stringify(short.diagnostics.map(d => [d.code, d.box])));
+  // A page that scrolls far enough: scrolling frees them (the other test).
+});
+
+test('a focusable way out covered by a box of its own layer is no way out', () => {
+  // A painted div with tabindex=0 (not a control) under a later sibling that paints over it.
+  const r = page('<div class="ov"><div class="x" tabindex="0" aria-label="Close"></div><div class="c"></div></div>',
+    overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff}.c{position:absolute;top:0;right:0;width:100px;height:100px;background:#333}');
+  const [trap] = find(r, 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap, JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  assert.match(trap.exits.find(e => e.box === '.x')?.why ?? '', /covered by \.c/);
+});
+
+test('a close button clipped away by an overflow: hidden ancestor is no way out', () => {
+  const r = page('<div class="ov"><div class="w"><button class="x" aria-label="Close">x</button></div></div>',
+    overlay + '.w{position:absolute;top:0;right:0;width:100px;height:60px;overflow:hidden;display:block}.x{position:absolute;top:100px;left:0;width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
+  assert.ok(find(r, 'E_A11Y_CLICK_TRAP').length + find(r, 'U_A11Y_CLICK_TRAP').length > 0, JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  // Still a way out where it shows inside the wrapper.
+  const shown = page('<div class="ov"><div class="w"><button class="x" aria-label="Close">x</button></div></div>',
+    overlay + '.w{position:absolute;top:0;right:0;width:100px;height:60px;overflow:hidden;display:block}.x{position:absolute;top:10px;left:0;width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
+  assert.equal(find(shown, 'E_A11Y_CLICK_TRAP').length + find(shown, 'U_A11Y_CLICK_TRAP').length, 0, JSON.stringify(shown.diagnostics.map(d => [d.code, d.box])));
 });

@@ -471,15 +471,19 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   const blockerMessage = (target, cover) => `${target.box.label} shows, but ${cover.box.label} ${invisible(cover) ? 'is invisible (opacity 0)' : 'paints nothing'} and lies over it, painted later: clicks land on ${cover.box.label}, which the user cannot see. Give ${cover.box.label} pointer-events: none, or display: none while it is not shown`;
   // Every (target, cover, region) pair: what the click-trap rule reads.
   const coverPairs = [];
-  for (const target of targets) {
+  // The hit-testable boxes painted over a box, each with the region where it overlaps it.
+  const coversOf = target => {
     const own = layer(target);
+    return hitPlaced.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
+      .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
+  };
+  for (const target of targets) {
     // Every cover counts where it covers: one cover's region is not another's (the first found used to end the
     // search, which lost the region where only a later cover overlaps; found by the occlusion fuzz).
     let reported = [];
     // Paint order: stacking contexts by z-index (paintsAbove), then positioned layers after in-flow content in tree order;
     // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
-    const covers = hitPlaced.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
-      .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
+    const covers = coversOf(target);
     for (const c of covers) coverPairs.push({ target, ...c });
     // Where something that paints covers the target, it is not seen as it is: the covers are occlusions there.
     const seenOver = covers.filter(c => !paintsNothing(c.cover)).map(c => c.region);
@@ -527,6 +531,8 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         if (related(c.path, target.path) || ownStretch(c, target) || !paintsAbove(c, layer(c), target, own)) continue;
         let r = intersect(target.region, c.region);
         r = below(r, c.origin.inline, right(target)); r = below(r, target.origin.inline, right(c));
+        // A box with no area takes no click, and a control with none is not seen (as in overlap()).
+        for (const size of [c.inline, c.block, target.inline, target.block]) r = below(r, scalar(0), size);
         // On screen, and below the control's place at s = 0; reached before the largest scroll offset.
         r = below(r, c.origin.block, viewportBlock); r = below(r, scalar(0), bottom(c));
         r = atMost(r, bottom(c), target.origin.block);
@@ -2275,18 +2281,54 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       r = atMost(r, row.origin.block, scalar(0)); return atMost(r, viewportBlock, bottom(row));
     };
     const pinnedFixed = row => pinnedPieces(row, r => r.fixed);
+    // A fixed layer over a target in the flow: scrolling by s in [0, R] (R the page's scroll range) moves the target up
+    // by s, so it stays under the layer when the page cannot scroll (R <= 0), or when the layer still holds it at s = R
+    // (it does at s = 0: the pair is contained). Only where the page's scroll range is the root's (a body that clips or
+    // scrolls of its own is not modelled: no finding there).
+    const rangeKnown = scrolledPage && viewportBlock && bodyRows.every(row => row.overflowY === 'visible' && row.overflowX === 'visible');
+    const outOfReach = (layerRow, target, region) => {
+      if (!rangeKnown) return [];
+      const range = diff(bottom(scrolledPage), viewportBlock);
+      const still = atMost(region, bottom(scrolledPage), viewportBlock);
+      const short = atMost(below(region, viewportBlock, bottom(scrolledPage)), sum(layerRow.origin.block, range), target.origin.block);
+      return [still, short].filter(Boolean);
+    };
     // Where the target stays under the layer at every scroll position.
     const stuck = (layerRow, target, region) => {
       if (stillPage) return [region];
       const lp = meet([region], pinnedFixed(layerRow)), tp = meet([region], pinnedFixed(target));
       const lf = minus([region], lp), tf = minus([region], tp);
-      return [...meet(lp, tp), ...meet(lf, tf), ...meet(lp, tf).map(r => fillsViewport(layerRow, r)).filter(Boolean)];
+      const caught = r => { const full = fillsViewport(layerRow, r), all = full ? [full] : []; return [...all, ...minus(outOfReach(layerRow, target, r), all)]; };
+      return [...meet(lp, tp), ...meet(lf, tf), ...meet(lp, tf).flatMap(caught)];
     };
     const sized = (row, region) => below(below(region, scalar(0), row.inline), scalar(0), row.block);
     const onScreen = (row, region) => {
       if (!pinnedFixed(row).length) return region;
       let r = below(region, row.origin.inline, domainWidth); r = below(r, scalar(0), right(row)); r = below(r, scalar(0), bottom(row));
       return viewportBlock ? below(r, row.origin.block, viewportBlock) : r;
+    };
+    // Where a candidate is not clipped away by the boxes that hide its overflow (overflow: hidden or clip): it must
+    // reach into each one's padding box. A box clips the descendants whose containing block it is or holds (an absolute
+    // box escapes non-positioned clippers between it and its containing block; a fixed one escapes them all).
+    const unclipped = (row, region) => {
+      const transformed = c => (c.paint?.transform ?? 'none') !== 'none';
+      const escapeOf = c => c.position === 'fixed' ? 'fixed' : c.position === 'absolute' ? 'abs' : null;
+      let r = region, escape = escapeOf(row);
+      for (let p = parentPath(row.path); p && r; p = parentPath(p)) {
+        const c = rowAt(p);
+        if (!c) continue;
+        if (escape === 'fixed') { if (!transformed(c)) continue; escape = null; }
+        else if (escape === 'abs' && (c.position !== 'static' || transformed(c))) escape = null;
+        if (escape) continue;
+        const at = c.origin ?? c.clipOrigin;
+        if (c.overflow === 'clip' && !c.box.documentRoot && c.path !== root.path && c.box.tag !== 'body' && at && c.block) {
+          const both = c.overflowValue !== 'clip', edge = side => scalar(c.borders?.[side] ?? q(0));
+          if (both || c.clipAxes?.inline) { r = below(r, sum(at.inline, edge('left')), right(row)); r = below(r, row.origin.inline, diff(sum(at.inline, c.inline), edge('right'))); }
+          if (both || c.clipAxes?.block) { r = below(r, sum(at.block, edge('top')), bottom(row)); r = below(r, row.origin.block, diff(sum(at.block, c.block), edge('bottom'))); }
+        }
+        escape = escapeOf(c);
+      }
+      return r;
     };
     const ownPointer = row => row.paint.cursor === 'pointer' && row.chain?.at(-2)?.cursor !== 'pointer';
     const takesFocus = row => interactive(row) || row.box.tabIndex >= 0 || row.box.focusable === true || row.box.focusable === 'dynamic';
@@ -2335,8 +2377,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         const hard = staticWhy(row, false), why = staticWhy(row, dark);
         // Every hit-testable cover takes the click where it covers the candidate, whether or not it paints (a
         // transparent link over the close button takes it).
-        const over = coverPairs.filter(p => p.target.path === row.path).map(p => ({ cover: p.cover, region: contains(p.cover, row, p.region) })).filter(p => p.region);
-        const placedAt = (() => { let r = sized(row, row.region); r = r && onScreen(row, r); return r ? [r] : []; })();
+        // (Every candidate, not only the controls: a painted div with tabindex=0 under a box of its own layer is covered too.)
+        const over = coversOf(row).map(p => ({ cover: p.cover, region: contains(p.cover, row, p.region) })).filter(p => p.region);
+        const placedAt = (() => { let r = sized(row, row.region); r = r && onScreen(row, r); r = r && unclipped(row, r); return r ? [r] : []; })();
         const where = meet(minus(placedAt, over.map(p => p.region)), shown);
         if (isFrame(row) && !hard.length) { frames.push({ row, where }); if (!dark) continue; }
         else if (!hard.length && where.length) exits.push({ row, where });
