@@ -573,6 +573,11 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (`e2e/layout-flex.spec.mjs`)。
 - [x] **I17. `border-image: none`**: 初期値のリセット(hr に当てるもの)も Unknown にしていた。`none` と CSS 全体のキーワードは何も変えない
   宣言として捨てる。捨てるので前の宣言を上書きせず、前に画像があればそれが cascade の結果のまま Unknown になる(安全側)。
+- [x] **I18. `width: fit-content` / `min-content` / `max-content`**: ボタンを中身の幅にそろえる書き方で、どの幅も Unknown にしていた。
+  block の流れの中の block は、min-content と max-content がその幅、fit-content が min(max-content, max(min-content, 使える幅))
+  (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
+  3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
+  (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

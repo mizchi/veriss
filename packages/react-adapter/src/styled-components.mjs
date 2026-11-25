@@ -27,13 +27,14 @@ const hash = text => { let h = 5381; for (const c of text) h = ((h * 33) ^ c.cha
 
 /** The names styled-components binds in the module: its default (styled) and css. */
 export function styledImports(ast) {
-  const names = { styled: null, css: null, keyframes: null };
+  const names = { styled: null, css: null, keyframes: null, createGlobalStyle: null };
   for (const stmt of ast.program.body) {
     if (stmt.type !== 'ImportDeclaration' || stmt.source.value !== 'styled-components') continue;
     for (const s of stmt.specifiers) {
       if (s.type === 'ImportDefaultSpecifier') names.styled = s.local.name;
       else if (s.type === 'ImportSpecifier' && (s.imported.name ?? s.imported.value) === 'css') names.css = s.local.name;
       else if (s.type === 'ImportSpecifier' && (s.imported.name ?? s.imported.value) === 'keyframes') names.keyframes = s.local.name;
+      else if (s.type === 'ImportSpecifier' && (s.imported.name ?? s.imported.value) === 'createGlobalStyle') names.createGlobalStyle = s.local.name;
     }
   }
   return names;
