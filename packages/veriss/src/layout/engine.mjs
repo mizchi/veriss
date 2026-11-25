@@ -22,7 +22,7 @@ import { gapSize, trackArea, trackSlice, inheritTracks } from './subgrid.mjs';
 import { scrollbarFrames } from './scrollbars.mjs';
 import {absoluteOrigin, insetLength} from './positioned.mjs';
 import {easedFrames} from './animation-extremes.mjs';
-import {textFontMismatch, textBrowserMismatch, textLinesMismatch, textLangMismatch, fittingLength, fittingLines} from './text-font.mjs';
+import {textFontMismatch, textBrowserMismatch, textLinesMismatch, textLangMismatch, fittingLength, fittingLines, strutFromText} from './text-font.mjs';
 import {validateFlexContainer, flexItem, crossAlignment, distribution, flexUnknown} from './flex.mjs';
 import {judgeIntegrity, intersect } from './integrity.mjs';
 import {judgeAccessibility, judgeContrastUnplaced, accessibilityRules, accessibilityProfiles, ruleTier, paintFacts} from './accessibility.mjs';
@@ -607,7 +607,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const seen = textFonts.get(box.path);
         textFonts.set(box.path, seen && seen !== 'varied' && JSON.stringify(seen) !== JSON.stringify(facts) ? 'varied' : seen === 'varied' ? 'varied' : facts);
       }
-      if (gridItem && inherited && ['inline', 'inline-block'].includes(style.display)) style = { ...style, display: 'block', $inlineLevel: true, $inlineDisplay: style.display };
+      // (An inline-level box in block flow, where block flow is laid out as a grid: its contents are laid out as its
+      // block-level display's, inline-flex as flex and inline-grid as grid. Where it sits on its line is decided by
+      // the block's layout: alone on the line it is admitted (loneInlineLevel), otherwise Unknown.)
+      if (gridItem && inherited && ['inline', 'inline-block', 'inline-flex', 'inline-grid'].includes(style.display)) style = { ...style, display: { 'inline-flex': 'flex', 'inline-grid': 'grid' }[style.display] ?? 'block', $inlineLevel: true, $inlineDisplay: style.display };
       // content-visibility: auto: on screen the box lays out as usual; offscreen it is size-contained. Admitted where
       // its width does not come from its content (block flow, or grid columns that are not content-sized), so that
       // only its height changes offscreen (W_LAYOUT_CONTENT_VISIBILITY_SIZE).
@@ -1019,11 +1022,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // max-inline-size in px clamps the preferred width (CSS 2 §10.4: max(min, min(preferred, max))); flex items and
       // other max sizes are not modeled.
       // max-block-size in px: it caps an explicit or stretched height, and a leaf's content height; an auto-height
-      // container with children is not modeled.
+      // container with children is modeled only in block flow (flowClamp); a flex item, grid or flex container is not.
       // A vh max-height on an auto height is checked once the height is known (finish): where the height never exceeds
       // it, the clamp does nothing; where it may, Unknown.
       const vhLater = axis === 'block' && block && style['block-size'] === 'auto' && (/^\d+(?:\.\d+)?vh$/.test(String(style['max-block-size'])) || style.position === 'absolute');
-      if (axis === 'block' && !vhLater && style['max-block-size'] !== 'none' && !(/^\d+(?:\.\d+)?px$/.test(style['max-block-size']) && !available.flexItem && style.display !== 'table' && (style['block-size'] !== 'auto' || !(box.children ?? []).length || (available.block && available.alignBlock === undefined && !available.root)))) throw new Error('CSS max size clamping is not modeled');
+      // A block container in block flow with an auto height and children: its rows stay at the top and its height is
+      // min(content, max-height) (flowClamp, applied where its rows are laid out).
+      const flowClamp = axis === 'block' && style['block-size'] === 'auto' && !available.flexItem && style.display === 'block' && !box.text && ['normal', 'start', 'flex-start'].includes(String(style['align-content'] ?? 'normal'));
+      if (axis === 'block' && !vhLater && style['max-block-size'] !== 'none' && !(/^\d+(?:\.\d+)?px$/.test(style['max-block-size']) && !available.flexItem && style.display !== 'table' && (style['block-size'] !== 'auto' || !(box.children ?? []).length || flowClamp || (available.block && available.alignBlock === undefined && !available.root)))) throw new Error('CSS max size clamping is not modeled');
       if (style[`max-${axis}-size`] !== 'none' && axis === 'inline' && !available.flexItem?.maxNeverCaps && !( ((/^\d+(?:\.\d+)?px$/.test(style['max-inline-size'])) || (!/px$/.test(style['max-inline-size']) && available.inline && !available.flexItem)) && (!available.flexItem || available.flexItem.main === 'inline') && style.display !== 'table')) throw new Error('CSS max size clamping is not modeled');
       if (axis === 'inline') {
         if (style['min-inline-size'] !== 'auto') px(style['min-inline-size']);
@@ -3020,6 +3026,101 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       containingBlock:{path:containing.box.path,inline:containing.paddingInline,block:containing.paddingBlock,origin:containing.paddingOrigin,...(containing.clips ? { clips: containing.clips } : {})}},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
 
   }
+  // Checklist I22: a block container whose only in-flow content is one inline-level box (inline-block, inline-flex or
+  // inline-grid: a button in a div). The box is alone on one line: it starts at the content edge (text-align start or
+  // left, ltr) and is shrink-to-fit wide (solve lays it out as its block-level display with width: fit-content). The
+  // line is as tall as the box where the block's strut (its font's ascent and descent at its line-height) fits above
+  // and below the box's baseline, the baseline of its text. Measured in Chromium, Firefox and WebKit (840 combinations
+  // of the block's font size and line-height, the text's font size, line-height and weight, and padding, for each of
+  // inline-block, inline-flex and inline-grid shapes, in Roboto and in a Japanese font with a tall ascent): where the
+  // strut fits with 0.5px to spare (unrounded font metrics) the block is the box's height in all three; within 0.2px
+  // Firefox's can be 0.5px taller.
+  // So a 1px margin is required, and 1px more where the strut's metrics are rounded apart from the text's (another
+  // size). A box with no text, or overflow other than visible, has its baseline at its bottom edge, under which the
+  // strut's descent hangs by amounts browsers round differently (38, 39 and 37.891px under a 34px box): Unknown.
+  // Returns why the line is not modeled, or null where it is.
+  function loneInlineLevel(box, style, kid, region, ancestors) {
+    const ks = kid.style, display = ks.$inlineDisplay;
+    const reject = why => { throw Object.assign(new Error(why), { $lone: true }); };
+    try {
+      if (!['inline-block', 'inline-flex', 'inline-grid'].includes(display)) reject('its line layout is not modeled');
+      if (style.direction !== 'ltr' || !['start', 'left'].includes(String(style['text-align']))) reject(`it is placed on its line by text-align: ${style['text-align']}${style.direction !== 'ltr' ? ` (${style.direction})` : ''}, which is not modeled`);
+      if (!['normal', 'nowrap'].includes(String(style['white-space']))) reject(`white-space: ${style['white-space']} keeps the whitespace around it on the line, which is not modeled`);
+      if (['margin-left', 'margin-right'].some(k => String(ks[k]) === 'auto')) reject('its auto inline margins are 0 on a line, which is not modeled');
+      // container-type: inline-size or size contains its inline size: its shrink-to-fit width ignores its content
+      // (CSS Containment 3 §3.1), which is not modeled.
+      if (String(ks['container-type'] ?? 'normal') !== 'normal') reject(`container-type: ${ks['container-type']} contains its size, so its shrink-to-fit width ignores its content, which is not modeled`);
+      if (!block) return null;
+      if (String(ks['vertical-align'] ?? 'baseline') !== 'baseline') reject(`vertical-align: ${ks['vertical-align']} is not modeled`);
+      if (['margin-top', 'margin-bottom'].some(k => !['0', '0px'].includes(String(ks[k])))) reject('its vertical margins are part of its line, which is not modeled');
+      const len = (st, k, label) => { const v = String(st[k] ?? '0'); if (v === '0') return zero; if (!/^\d+(?:\.\d+)?px$/.test(v)) reject(`${label}'s ${k} ${v} is not a px length`); return px(v); };
+      const edge = (st, side, label) => add(len(st, `padding-${side}`, label), len(st, `border-${side}`, label));
+      const autoHeight = st => String(st['block-size']) === 'auto' && ['auto', '0', '0px'].includes(String(st['min-block-size'])) && String(st['max-block-size']) === 'none';
+      // A px height (border box) with no min or max height, or null for an auto one.
+      const fixedHeight = (st, label) => {
+        if (autoHeight(st)) return null;
+        if (!/^\d+(?:\.\d+)?px$/.test(String(st['block-size'])) || !['auto', '0', '0px'].includes(String(st['min-block-size'])) || String(st['max-block-size']) !== 'none') reject(`${label}'s height (${st['block-size']}, min ${st['min-block-size']}, max ${st['max-block-size']}) is not modeled for its baseline`);
+        const h = px(st['block-size']);
+        return st['box-sizing'] === 'content-box' ? add(h, add(edge(st, 'top', label), edge(st, 'bottom', label))) : h;
+      };
+      const oneLine = contract => ['nowrap', 'one-line'].includes(contract?.wrap);
+      // The text that sets the baseline, and from the box's border edges: top, to the top of that text's line box (at
+      // least), and bottom, from the bottom of that line box (at least).
+      let text, top, bottom;
+      if (display === 'inline-grid') reject('the baseline of an inline-grid box is not modeled');
+      if (display === 'inline-block') {
+        // An inline-block's baseline is its last line's: here its own text (the box is a text leaf).
+        if (!kid.box.text || (kid.box.children ?? []).length) reject('its baseline is not the baseline of its own text (an inline-block with text and no child boxes is modeled)');
+        if (ks['overflow-x'] !== 'visible' || ks['overflow-y'] !== 'visible') reject(`with overflow ${ks['overflow-x']} its baseline is its bottom margin edge, under which the strut hangs by amounts browsers round differently`);
+        if (!['normal', 'start', 'flex-start', 'stretch'].includes(String(ks['align-content']))) reject(`align-content: ${ks['align-content']} moves its text`);
+        text = kid.box; top = edge(ks, 'top', kid.box.label);
+        const h = fixedHeight(ks, kid.box.label), L = q(String(text.contract?.font?.lineHeight ?? 0));
+        if (h && !oneLine(text.contract)) reject('in a box of fixed height its last line is known only for text on one line');
+        bottom = h ? sub(sub(h, top), L) : edge(ks, 'bottom', kid.box.label);
+      } else {
+        // An inline-flex box's baseline is its first item's (no item is baseline-aligned): one text item, in a row.
+        if (kid.box.text || (kid.box.children ?? []).length !== 1) reject('its baseline is not that of one text item (an inline-flex box with one child box holding text is modeled)');
+        if (String(ks['flex-direction']) !== 'row' || String(ks['flex-wrap']) !== 'nowrap') reject(`flex-direction: ${ks['flex-direction']}, flex-wrap: ${ks['flex-wrap']} is not modeled for its baseline`);
+        text = kid.box.children[0];
+        const list = styles(text, region, [...ancestors, { box: kid.box, style: ks, names: [] }], ks, false, true);
+        if (new Set(list.map(x => JSON.stringify(x.style))).size !== 1) reject(`${text.label}'s styles change across the viewport range`);
+        const ts = list[0].style;
+        if (!text.text || (text.children ?? []).length || ts.display === 'none' || !['static', 'relative'].includes(ts.position) || ts.float !== 'none') reject(`${text.label} is not a text item in flow`);
+        if (['top', 'right', 'bottom', 'left'].some(side => !['0', '0px'].includes(String(ts[`margin-${side}`])))) reject(`${text.label} has margins, which are not modeled for the baseline`);
+        if (!autoHeight(ts)) reject(`${text.label} has its own height, which is not modeled for the baseline`);
+        const align = crossAlignment(ks['align-items'], ts['align-self']), L = q(String(text.contract?.font?.lineHeight ?? 0));
+        const h = fixedHeight(ks, kid.box.label), cTop = edge(ks, 'top', kid.box.label), tTop = edge(ts, 'top', text.label);
+        if (!h) { top = add(cTop, tTop); bottom = add(edge(ts, 'bottom', text.label), edge(ks, 'bottom', kid.box.label)); }
+        else {
+          // In a px height the item is stretched or aligned in the content box (on one line: its height is known).
+          let offset = zero;
+          if (align !== 'stretch' && cmp(align, zero) !== 0) {
+            if (!oneLine(text.contract)) reject(`${text.label} is aligned (align-items) in a box of fixed height: its height is known only for text on one line`);
+            const cross = sub(sub(h, cTop), edge(ks, 'bottom', kid.box.label)), item = add(add(L, tTop), edge(ts, 'bottom', text.label));
+            offset = mul(align, sub(cross, item));
+          }
+          top = add(add(cTop, offset), tTop); bottom = sub(sub(h, top), L);
+        }
+      }
+      const metrics = text.contract?.textMetrics?.baseline, font = text.contract?.font;
+      if (!metrics || !font) reject(`the baseline of ${text.label}'s text is not known (measure it with a font file)`);
+      // (Its recorded ascent and descent hold only for the weights listed: a variable font whose metrics vary by
+      // instance records its default instance.)
+      if (metrics.weights && ((font.weight ?? 400) < metrics.weights[0] || (font.weight ?? 400) > metrics.weights[1])) reject(`the recorded font metrics of ${text.label}'s text hold for weights ${metrics.weights.join('–')}, not its ${font.weight ?? 400}`);
+      const strut = strutFromText(style, text.contract, options.defaultFontSize);
+      if (strut.reason) reject(`its line's strut (the font of ${box.label}) is not known: ${strut.reason}`);
+      // Above the baseline: ascent + half the leading, (L + A − D) / 2; below: the rest of L.
+      const half = (L, A, D) => div(add(q(String(L)), q(String(A - D))), q(2));
+      const textAbove = half(font.lineHeight, metrics.ascent, metrics.descent), textBelow = sub(q(String(font.lineHeight)), textAbove);
+      const strutAbove = half(strut.lineHeight, strut.ascent, strut.descent), strutBelow = sub(q(String(strut.lineHeight)), strutAbove);
+      const spare = q(strut.exact ? 1 : 2);
+      const roomAbove = sub(add(top, textAbove), strutAbove), roomBelow = sub(add(bottom, textBelow), strutBelow);
+      if (cmp(roomAbove, spare) < 0 || cmp(roomBelow, spare) < 0)
+        reject(`the strut of ${box.label} (its font at line-height ${strut.lineHeight}px) reaches within ${number(spare)}px of ${kid.box.label}'s edges around its baseline (${number(roomAbove)}px to spare above, ${number(roomBelow)}px below): the line may be taller than the box, by amounts browsers round differently`);
+      return null;
+    } catch (error) { if (error.$lone) return error.message; throw error; }
+  }
+
   function solve(box, available, region, parents = [], inherited, emit = true) {
     let results = [];
     if (emit) box.$starts = { geometry: geometry.length, sizes: sizes.length };
@@ -3219,8 +3320,15 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // [min-content, max-content]. With its own min- or max-width the clamps would
         // nest the other way round, so that stays Unknown; so does an inline-size container, whose intrinsic widths ignore
         // its content (CSS Containment 3 §3.1). (Measured in Chromium, Firefox and WebKit.)
+        // An inline-level box alone on its line (its parent admitted it, checklist I22) is laid out as its block-level
+        // display, shrink-to-fit: an auto width is fit-content.
+        if (style.$inlineLevel && available.blockFlowChild && !box.pseudo && String(style['inline-size']) === 'auto') {
+          if (String(style['container-type'] ?? 'normal') !== 'normal') throw Object.assign(new Error(`${box.label}: the shrink-to-fit width of an inline-level box with container-type: ${style['container-type']} (size containment) is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box });
+          if (!['auto', '0', '0px'].includes(String(style['min-inline-size'])) || String(style['max-inline-size'] ?? 'none') !== 'none') throw Object.assign(new Error(`${box.label}: the shrink-to-fit width of an inline-level box with its own min-width or max-width is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box });
+          style = { ...style, 'inline-size': 'fit-content' };
+        }
         const intrinsicKeyword = String(style['inline-size']);
-        if (['fit-content', 'min-content', 'max-content'].includes(intrinsicKeyword) && !box.pseudo && style.display === 'block' && ['static', 'relative'].includes(style.position)
+        if (['fit-content', 'min-content', 'max-content'].includes(intrinsicKeyword) && !box.pseudo && (style.display === 'block' || style.$inlineLevel) && ['static', 'relative'].includes(style.position)
           && ['block', 'flow-root'].includes(String(parents.at(-1)?.style.display)) && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && String(style['max-inline-size'] ?? 'none') === 'none'
           && !['inline-size', 'size'].includes(String(style['container-type']))) {
           const sizes = frAutoMinimums(box, style, state.region, parents, true);
@@ -3550,7 +3658,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       if (!fontless && !layoutWarnings.some(w => w.code === 'W_LAYOUT_IMAGE_BASELINE_GAP' && w.path === img.box.path))
                         layoutWarnings.push({ code: 'W_LAYOUT_IMAGE_BASELINE_GAP', severity: 'warning', box: img.box.label, path: img.box.path, parent: box.label,
                           message: `${img.box.label} is an inline image in ${box.label}: it sits on the text baseline, so ${box.label} is taller than the image by the font's descender (a few pixels of gap under it). Give ${img.box.label} display: block (or vertical-align: top)`, ...ranges(bs.region) });
-                    for (const child of flow) if (child.style.$inlineLevel) throw Object.assign(new Error(`${child.box.label} is inline-level inside the block container ${box.label}: its line layout is not modeled (give it display: block, or make ${box.label} a grid or flex container)`), { code: 'U_LAYOUT_INLINE', box: child.box, region: children.region });
+                    // (One inline-level box alone in the block is laid out on its line: loneInlineLevel, checklist I22.)
+                    for (const child of flow) if (child.style.$inlineLevel) {
+                      const why = flow.length === 1 ? loneInlineLevel(box, style, child, children.region, ancestors) : 'its line layout is not modeled';
+                      if (why) throw Object.assign(new Error(`${child.box.label} is inline-level inside the block container ${box.label}: ${why} (give it display: block, or make ${box.label} a grid or flex container)`), { code: 'U_LAYOUT_INLINE', box: child.box, region: children.region });
+                    }
                     // Grid placement and self-alignment do nothing in block flow: laid out as auto, reported as inert.
                     // (justify-self is not inert: Chromium aligns block-level boxes by it — measured — which is not modeled.)
                     for (const child of flow) if (!['auto', 'normal', 'stretch', 'legacy'].includes(String(child.style['justify-self'] ?? 'auto'))) { alignBrowserDependent(child.box, 'justify-self', child.style['justify-self']); throw Object.assign(new Error(`${child.box.label}: justify-self: ${child.style['justify-self']} aligns a block-level box (CSS Box Alignment), which is not modeled`), { code: 'U_LAYOUT_CSS', box: child.box, region: children.region }); }
@@ -3598,7 +3710,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       // (measured: several levels deep). null when that is not known.
                       const outward = (owner, st, at, side, depth) => {
                         const own = gm(st, side);
-                        if (depth > 16 || !plainBlock(st) || owner.text || !(owner.children ?? []).length || !zeroEdge(st, side) || (side === 'bottom' && st['block-size'] !== 'auto')) return own;
+                        if (depth > 16 || !plainBlock(st) || owner.text || !(owner.children ?? []).length || !zeroEdge(st, side) || (side === 'bottom' && (st['block-size'] !== 'auto' || String(st['max-block-size'] ?? 'none') !== 'none'))) return own;
                         const inner = [...at, { box: owner, style: st, inline: null, block: null, type: st['container-type'], names: [] }];
                         const kids = flowOf(owner, st, inner);
                         if (!kids) return null;
@@ -3613,7 +3725,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       if (!grand || grand.some(g => /inline|contents|table/.test(String(g.style.display)))) return;
                       const childOf = [...childAncestors];
                       for (const side of ['top', 'bottom']) {
-                        if (!grand.length || !zeroEdge(child.style, side) || (side === 'bottom' && child.style['block-size'] !== 'auto')) continue;
+                        // (A max-height may clamp the box, and where it does WebKit still collapses the margin through it while
+                        // Chromium and Firefox do not: not moved out here, so the box's own layout leaves it Unknown.)
+                        if (!grand.length || !zeroEdge(child.style, side) || (side === 'bottom' && (child.style['block-size'] !== 'auto' || String(child.style['max-block-size'] ?? 'none') !== 'none'))) continue;
                         const edge = side === 'top' ? grand[0] : grand.at(-1);
                         const theirs = outward(edge.box, edge.style, childOf, side, 1);
                         if (theirs === null) return;
@@ -3827,7 +3941,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       return { region: f.region, values, required: sum(total(values), scalar(gaps)) };
                     });
                     // A block-flow container raised by min-block-size: its rows stay at the top (align-content: start).
-                    for (const rs of layouts.flatMap(rs => minBlock && !knownBlock && style.$blockFlow ? minBlock(rs.region).flatMap(m => maximum(m.region, rs.required, m.value).map(x => ({ ...rs, region: x.region, raised: x.value }))) : [rs])) {
+                    // A block-flow container with an auto height capped by a px max-height: min(content, max-height), its
+                    // rows still at the top (the content overflows the clamped box). min-block-size then wins over it.
+                    const flowCap = maxBlock && !knownBlock && style.$blockFlow ? diff(maxBlock, blockEdges) : null;
+                    // (A max-height below the padding and border leaves a content height of 0, not less: measured.)
+                    const cappedLayouts = !flowCap ? layouts : layouts.flatMap(rs => clamp(rs.region, flowCap).flatMap(cap => minimumOf(cap.region, rs.required, cap.value)).map(c => ({ ...rs, region: c.region, ...(c.value !== rs.required ? { raised: c.value } : {}) })));
+                    for (const rs of cappedLayouts.flatMap(rs => minBlock && !knownBlock && style.$blockFlow ? minBlock(rs.region).flatMap(m => maximum(m.region, rs.raised ?? rs.required, m.value).map(x => ({ ...rs, region: x.region, raised: x.value }))) : [rs])) {
                       const contentBlock = knownBlock ?? rs.raised ?? rs.required, blockSize = sum(contentBlock, blockEdges);
                       const finalAncestors = [...parents, { ...own, block: contentBlock, paddingBlock:diff(blockSize,scalar(add(px(style['border-top']),px(style['border-bottom'])))) }];
                       // A scroll container's automatic minimum size is 0 (CSS Sizing 3 §4.5): in an auto row of a grid whose
