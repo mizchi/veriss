@@ -774,8 +774,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // The ratio an img's picture is drawn at (its file's size, else its width/height attributes), for object-fit: fill.
         // A box with aspect-ratio auto … and an auto size follows the loaded file, so it cannot stretch it.
         const drawn = natural ?? (Number.isFinite(w) && Number.isFinite(hgt) && w > 0 && hgt > 0 ? { width: w, height: hgt } : null);
-        if (box.tag === 'img' && drawn) style = { ...style, $imageRatio: { width: drawn.width, height: drawn.height, basis: natural ? 'file' : 'attributes', follows: /^auto\b/.test(style['aspect-ratio']) && (style['inline-size'] === 'auto' || style['block-size'] === 'auto') } };
+        // (After the width from the ratio: once that width is fixed, a max-width can cap it while the height stays, so the
+        // box no longer follows the picture and the distortion check compares the drawn box.)
         if (box.tag === 'img' && style['inline-size'] === 'auto') style = imageWidthFromRatio(style, natural, ancestors.at(-1)?.style, !chosen && box.imageSize?.srcset === undefined);
+        if (box.tag === 'img' && drawn) style = { ...style, $imageRatio: { width: drawn.width, height: drawn.height, basis: natural ? 'file' : 'attributes', follows: /^auto\b/.test(style['aspect-ratio']) && (style['inline-size'] === 'auto' || style['block-size'] === 'auto') } };
       }
       // A user-agent checkbox or radio (appearance auto, size and minimum untouched): Chromium draws it 13×13 border-box
       // (measured). Laid out at that size for the accessibility checks; SC 2.5.8/2.5.5 exempt it. Padding and border do

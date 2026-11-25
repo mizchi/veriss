@@ -594,7 +594,8 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (`packages/veriss/test/replaced-content-size.test.mjs` に同じ形)。
   - 一致したので判定する: 幅 auto の img は、高さ × 比(画像ファイルの大きさ、なければ width / height 属性の `aspect-ratio: auto w / h`)を
     content box の幅にする。120×30 の画像で高さ 24px → 96px(min も max も)。border-box で padding 0 4px・border 1px → 98px、
-    content-box で padding 2px → 100px、max-width 50px → 50px、min-width 150px → 150px、高さ 24px の親の `height: 100%` → 96px、
+    content-box で padding 2px → 100px、max-width 50px → 50px(高さは 24px のまま。max-width 48px で 48×24 になり、object-fit: fill で絵がつぶれるので
+    `W_LAYOUT_IMAGE_DISTORTED` を出す)、min-width 150px → 150px、高さ 24px の親の `height: 100%` → 96px、
     高さも auto でファイルの大きさが分かれば 120px。幅 300px の block の親の中でも 96px(block の置換要素は伸びない)
   - Unknown のまま: 比が分からない img(属性もファイルの大きさもない。読み込んだファイルが幅を決める)。属性とファイルで比が違う img
     (属性 120×30 で正方形のファイル: 読み込み前 96px、読み込み後 24px)。min-height / max-height のある img(max-height 12px → 48px で

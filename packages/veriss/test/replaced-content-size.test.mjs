@@ -93,3 +93,15 @@ test('a bare fr column with a default-width svg stays Unknown (its minimum is th
   assert.match(reason(grid('<svg></svg>')), /300px default width/);
   decided(grid('<svg width="100"></svg>'));
 });
+
+// A width from the height and the ratio that a max-width caps: the box is 48×24 for a 120×30 picture (measured in
+// Chromium, Firefox and WebKit), so object-fit: fill squeezes it (W_LAYOUT_IMAGE_DISTORTED). Uncapped it is 96×24, the
+// picture's own ratio: nothing to report.
+test('a max-width that caps the width from the ratio distorts the picture', () => {
+  const distorted = r => (r.layoutWarnings ?? []).filter(w => w.code === 'W_LAYOUT_IMAGE_DISTORTED');
+  const capped = run('img{display:block;height:24px;max-width:48px}', img());
+  decided(capped);
+  assert.equal(distorted(capped).length, 1);
+  assert.equal(distorted(capped)[0].natural, '120/30');
+  assert.deepEqual(distorted(run('img{display:block;height:24px}', img())), []);
+});
