@@ -573,7 +573,12 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (`e2e/layout-flex.spec.mjs`)。
 - [x] **I17. `border-image: none`**: 初期値のリセット(hr に当てるもの)も Unknown にしていた。`none` と CSS 全体のキーワードは何も変えない
   宣言として捨てる。捨てるので前の宣言を上書きせず、前に画像があればそれが cascade の結果のまま Unknown になる(安全側)。
-- [x] **I18. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
+- [x] **I18. `width: fit-content` / `min-content` / `max-content`**: ボタンを中身の幅にそろえる書き方で、どの幅も Unknown にしていた。
+  block の流れの中の block は、min-content と max-content がその幅、fit-content が min(max-content, max(min-content, 使える幅))
+  (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
+  3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
+  (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
+- [x] **I19. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
   `top: 50%; left: 50%; margin: -125px 0 0 -150px` で、ページ全体の a11y の判定が消えた。文言も block の margin を消せという見当違いのもの)。
   margin の箱を inset に置く(CSS 2 §10.3.7 / §10.6.4): border の箱は始点の inset + 始点の margin から、終点の inset だけのときは
   終点の inset − 終点の margin で終わる。両側の inset で auto の大きさは、両側の margin も引く。決まりすぎ(大きさも両側の inset もある)の
