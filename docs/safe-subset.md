@@ -32,6 +32,15 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - % の `width` の item は、既定の `flex-shrink: 1` と `min-width: auto` のままでよい。ただし、veriss が判定できるのは、行が縮まない(item の合計が container に収まる)ときだけ。縮む行では、中身で決まる最小幅が要るので Unknown になる。縮ませたい item には `min-width: 0` を書く。
   - % の `width` / `flex-basis` に px の `max-width` を組み合わせた item(中央寄せの最大幅の容器 `width: 100%; max-width: 1280px; margin: 0 auto`)は判定できる。`max-width` を % にすると Unknown になる。
   - `flex-basis: auto` で幅も auto の item は、中身の大きさで決まる。veriss がそれを求められるのは、テキストの寸法が分かる葉の箱など一部だけで、それ以外は Unknown になる(`flex-basis: auto with an auto width uses the content size`)。
+    - 中の img は、px の幅か、px の高さと比(画像ファイルの大きさか `width` / `height` 属性)を持たせる。svg は `width` 属性か px の幅を書く(幅も viewBox もない svg の 300px は、Firefox で min-content が 0 になる)。
+    - 中の input・select・textarea には px の幅を書く(既定の幅はブラウザーで違うので、幅が auto だと Unknown: `has a replaced or form element … without a px width`)。
+- block の中に inline-level の箱(`inline-block` / `inline-flex` のボタン)を置くなら、その block の中身をその箱 1 つにする
+  (チェックリスト I22)。箱は中身の幅になり、block の始点(`text-align: start` / `left`)に載る。
+  - 高さまで判定させるには、箱にテキストを入れ(inline-block は自分のテキスト、inline-flex はテキストを持つ子 1 つ)、
+    `vertical-align: baseline`(既定)、上下の margin 0、親とテキストを同じフォントの family にし、親の `line-height` を px か数値にする。
+    親の line-height は、箱の高さより十分小さくする(テキストの baseline の上下に 1〜2px の余り)。外れると
+    `… is inline-level inside the block container …` の Unknown になる。
+  - 2 つ以上並べる、中央に寄せる、テキストのない箱を置く場合は、親を flex にする(`display: flex; gap; justify-content`)。
 - 意図して重ねる箱は、`position: absolute` か、grid の同じ領域に置いたうえで、重なりを宣言する
   (宣言のない重なりは `E_LAYOUT_OVERLAP`)。
 
@@ -40,6 +49,9 @@ veriss が判定できる形で書くための規約である。エンジンが�
 - 長さは px、%、viewport 単位、`rem` / `em`(既定のフォントサイズで解決する)、`calc()`(演算子の両側に空白)。
 - `box-sizing: border-box` を推奨する。content-box の `width: 100%` は、padding と border の分だけはみ出す(`W_LAYOUT_CONTENT_BOX_FULL`)。
 - 画像と動画には、`max-width: 100%` と、`aspect-ratio` か `width` / `height` 属性を付ける。
+- 中身で高さの決まる block の容器(開閉する区画、スクロールする一覧)の `max-height` は px で書く。高さは min(中身, max-height) で判定する。
+  % と `calc()` の `max-height`、flex の item の `max-height` は Unknown になる。最後の子の下の margin が容器を突き抜ける形も Unknown
+  (容器に `padding-bottom` か `overflow: auto` を付けるか、margin を padding にする)。
 
 ## 3. テキスト
 

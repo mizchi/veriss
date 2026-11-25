@@ -60,9 +60,10 @@ for (const file of files) {
     const tree = parse(wrap(body));
     let node = elementsOf(tree).find(n => n.tagName === 'html');
     for (const i of d.path.split('/').slice(1).map(Number)) node = node && elementsOf(node)[i];
-    // The located element must be the reported box (its tag, or every class of its label).
+    // The located element must be the reported box (its tag, or every class of its label). The adapter marks text
+    // leaves and placeholders with classes of its own (__text0, __ph0), which the snapshot's element does not have.
     const label = String(d.box ?? ''), classes = new Set((node?.attrs?.find(a => a.name === 'class')?.value ?? '').split(/\s+/).filter(Boolean));
-    const same = node && (label.includes('@') ? node.tagName === label.split('@')[0] : label.split(/[.#]/).filter(Boolean).every(c => classes.has(c) || node.attrs?.some(a => a.name === 'id' && a.value === c)));
+    const same = node && (label.includes('@') ? node.tagName === label.split('@')[0] : label.split(/[.#]/).filter(c => c && !/^__(?:text|ph)\d+$/.test(c)).every(c => classes.has(c) || node.attrs?.some(a => a.name === 'id' && a.value === c)));
     if (!same || ['html', 'body'].includes(node.tagName)) { note = `cannot remove ${label} (${d.path})`; chain.push({reason: reasonOf(d), boxes: total - charged(), rest: true}); break; }
     chain.push({reason: reasonOf(d), boxes: count(node)});
     node.parentNode.childNodes.splice(node.parentNode.childNodes.indexOf(node), 1);

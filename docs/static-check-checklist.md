@@ -577,8 +577,73 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   block の流れの中の block は、min-content と max-content がその幅、fit-content が min(max-content, max(min-content, 使える幅))
   (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
   3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
-  (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
-- [x] **I19. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
+  (clamp の入れ子の順が変わる)は Unknown のまま(auto margins で寄せる場合は I19)。
+- [x] **I19. `width: fit-content` を auto margins で寄せる**: `.f { width: fit-content; margin: 0 auto }` で中央に寄せる書き方を、
+  auto margins は px か % の幅に限っていたので Unknown にしていた。I18 の block の流れの中の block では、auto margins が使った幅の
+  残り(fit-content と max-content は max-content の幅、min-content は min-content の幅を引いたもの)を取り、両方 auto なら半分ずつ、
+  片方なら全部。残りが負(箱が親より広い)ならどちらの margin も 0 で、箱は終わりの側へはみ出す。3 ブラウザーで、fit-content /
+  min-content / max-content を `margin: 0 auto`・`margin-left: auto`・`margin-right: auto` で、800 / 500 / 300 / 209 / 208 / 207 /
+  190 / 150 / 79 / 78 / 77 / 60 / 50 / 30px を実測して一致(content-box も同じ。中身の min 60 / max 190px、padding 0 8px、border 1px
+  で、fit-content の中央寄せは 500px で幅 208・left 146、150px で 150・0、50px で 78・0。min-content は 500px で left 211、
+  max-content は 150px でも幅 208・left 0)。反対側の margin が 0 でも auto でもない場合(`margin-left: auto; margin-right: 10px` は
+  79px で WebKit が left -9、Chromium と Firefox が 0 と分かれる)と rtl は Unknown のまま。I18 と I19 とも、`container-type:
+  inline-size` / `size` の箱は中身を幅に数えない(CSS Containment 3 §3.1)ので Unknown のまま。
+- [x] **I20. 中身で大きさの決まる flex の item の中の img・svg・フォーム部品**(#40): px の幅のない置換要素・フォーム部品があると、
+  item の幅を Unknown にしていた。実ページで当たっていたのは、高さを決めて幅を auto にしたロゴの img(幅は画像ファイルの比で決まる)と、
+  幅 auto の text input だった。3 ブラウザーで、行の幅 2000px(max-content)と 0px(min-content)の item の幅を測った
+  (`packages/veriss/test/replaced-content-size.test.mjs` に同じ形)。
+  - 一致したので判定する: 幅 auto の img は、高さ × 比(画像ファイルの大きさ、なければ width / height 属性の `aspect-ratio: auto w / h`)を
+    content box の幅にする。120×30 の画像で高さ 24px → 96px(min も max も)。border-box で padding 0 4px・border 1px → 98px、
+    content-box で padding 2px → 100px、max-width 50px → 50px(高さは 24px のまま。max-width 48px で 48×24 になり、object-fit: fill で絵がつぶれるので
+    `W_LAYOUT_IMAGE_DISTORTED` を出す)、min-width 150px → 150px、高さ 24px の親の `height: 100%` → 96px、
+    高さも auto でファイルの大きさが分かれば 120px。幅 300px の block の親の中でも 96px(block の置換要素は伸びない)
+  - Unknown のまま: 比が分からない img(属性もファイルの大きさもない。読み込んだファイルが幅を決める)。属性とファイルで比が違う img
+    (属性 120×30 で正方形のファイル: 読み込み前 96px、読み込み後 24px)。min-height / max-height のある img(max-height 12px → 48px で
+    3 ブラウザー一致したが、モデルにしていない)。明示の `aspect-ratio`。px の高さのない親に対する % の高さ。min-height / max-height で高さが変わる親に対する % の高さ(24px で min-height 48px の親 →
+    192px、max-height 12px → 48px。3 ブラウザー一致したが、使われた高さは求めていない)。srcset のある img の自然な幅(1 つだけの
+    2x の候補で 120×30 のファイルは 60px。候補が複数なら読み込むものが決まらない。px の高さからの幅は 2x でも 96px で、判定する)。block の流れの外
+    (縦の flex の container と `justify-items: stretch` の grid では、伸びて 300px になる)
+  - フォーム部品はブラウザーで違うので Unknown のまま: text input は Chromium 153px / Firefox 189px / WebKit 155.875px
+    (`appearance: none`・padding 0・border 0 でも 145 / 181 / 141.875px、`size="10"` で 83 / 105 / 85.938px、14px・padding 0 10px・
+    border 1px の実ページの形で 168 / 190 / 172px)、select は 53 / 65.2 / 63px、textarea は 182 / 164.667 / 152px、
+    checkbox は 13 / 14 / 12px。幅 100% の input の min-content も 8 / 8 / 14px で違う
+  - 健全性の修正: 幅も viewBox の比もない svg(既定の 300px 幅)は、Chromium・WebKit の min-content が 300px、Firefox は 0。
+    これまで 300px として判定していた。min-content を使うところ(中身で大きさの決まる item、grid の fr の列の最小)では Unknown にする
+    (max-content は 3 ブラウザーとも 300px。幅 100px の `1fr 1fr` の grid で、Chromium・WebKit は列が 300 / 0px、Firefox は 50 / 50px)。
+    width 属性だけの svg(100px)は一致するので判定する
+  - 実ページの重み: 16.7% と見えていたのは `tools/blocker-weights.mjs` の数え方の誤り(アダプターのクラス `__ph0` で箱を見つけられず、
+    ページの残りを数えていた)。直すと 0.7%(ロゴの img 41 か所と text input 14 か所)。どちらも上の理由で Unknown のまま
+- [x] **I21. 中身で高さの決まる block の容器の px の `max-height`**: 開閉するナビゲーションの区画(`max-height: 168.75px` のように
+  開いたときの高さを書いたもの)で、子のある auto の高さの block の `max-height` を Unknown にしていた(引き伸ばされる箱と葉だけを扱っていた)。
+  block の流れの中の block(と、引き伸ばさずに揃える grid の item)は、高さが min(中身の高さ, max-height)、min-height はその後に掛かる
+  (CSS 2 §10.7)。中身は上に詰めたまま、はみ出しは overflow のとおり(visible なら報告、auto ならスクロール)。行の高さと後ろの兄弟は
+  clamp した高さで決まる。3 ブラウザーで、掛からない場合(200px)と掛かる場合(100px)を、content-box と border-box、overflow
+  visible / hidden / auto、下端に置いた absolute の子、max-height より大きい min-height、2 列の grid の行で測って一致
+  (`e2e/layout-max-clamp.spec.mjs`)。最後の子の下の margin が箱を突き抜ける形は、掛かると WebKit だけが margin を外へ出す
+  (Chromium と Firefox は出さない)ので Unknown のまま。% と `calc()` の max-height、flex の item の max-height も Unknown のまま。
+- [x] **I22. block の中にただ 1 つの inline-level の箱(div の中のボタン)**: `inline-flex` / `inline-block` / `inline-grid` の箱が
+  block の唯一の中身のとき、`Unsupported display` などで Unknown にしていた。箱は 1 行に単独で載る: 中身は block-level の display
+  (inline-flex は flex、inline-block は block、inline-grid は grid)で組み、幅は shrink-to-fit(I18 の fit-content と同じ)、
+  位置は内容の始点(text-align が start / left、ltr)。中身で大きさの決まる親へも block-level の display と同じ幅を渡す。
+  行の高さは、親の strut(親のフォントの ascent と descent を親の line-height で上下に配ったもの)が箱の baseline(中のテキストの
+  baseline。inline-block は自分のテキストの最後の行、inline-flex は 1 つのテキストの item の最初の行)の上下に収まれば箱の高さに
+  なる。親の strut は、テキストの契約が持つフォントの値(丸めた ascent / descent に加えて、フォントの単位の ascender / descender と
+  その値が成り立つ weight の範囲)から求める。親が同じ family で、その weight で値が成り立つときに限る。可変フォントは wght の
+  範囲すべてで成り立つが、typo の値(USE_TYPO_METRICS)を使い MVAR の hasc / hdsc で instance ごとに変わるフォントは、既定の
+  instance の weight だけにする(テキスト自身の weight も同じ。fixture の Roboto と日本語フォントは hhea の値を使い MVAR もないので
+  400 以外の weight でも決まる)。
+  3 ブラウザーで、親の font-size(0〜24px)と line-height(1、1.5、16〜40px)、テキストの font-size・line-height・weight、
+  padding を組み合わせた 840 通りを、inline-block / inline-flex(item、中央寄せ、直接のテキスト、アイコンの後)/ inline-grid と
+  ボタンの各形で、Roboto と ascent の高い日本語フォントで測った。strut が 0.5px 以上の余りで収まる組はすべて 3 ブラウザーで
+  親が箱の高さ(34px の箱で 34px)、余りが 0.2px 以下では Firefox だけ 0.5px 高い。解析は 1px の余り(親とテキストの大きさが違い
+  丸めが別になるときは 2px)を求める。収まらない対照(親の line-height 40px)は、箱の位置が 3 / 4 / 3.6875px と 3 ブラウザーで違う。
+  Unknown のまま: 中にテキストのない箱と `overflow` が visible でない inline-block(baseline が下端で、strut の descent が下に
+  はみ出し、親が 41 / 40.5 / 40.53px と違う)、親のフォントが分からないとき(`line-height: normal`、フォントのファイルのない
+  family、別の大きさで単位のない契約)、`vertical-align` が baseline 以外(middle は余りがあってもブラウザーで違う)、
+  text-align が start / left 以外、箱の上下の margin、auto の左右 margin、箱自身の min-width / max-width、
+  `container-type: inline-size | size` の箱(size containment で shrink-to-fit の幅が中身を見ない)、inline-grid の
+  block 方向、直接テキストを持つ inline-flex(匿名の flex item)、2 つ以上の inline-level の箱が並ぶ行。
+- [x] **I23. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
   `top: 50%; left: 50%; margin: -125px 0 0 -150px` で、ページ全体の a11y の判定が消えた。文言も block の margin を消せという見当違いのもの)。
   margin の箱を inset に置く(CSS 2 §10.3.7 / §10.6.4): border の箱は始点の inset + 始点の margin から、終点の inset だけのときは
   終点の inset − 終点の margin で終わる。両側の inset で auto の大きさは、両側の margin も引く。決まりすぎ(大きさも両側の inset もある)の

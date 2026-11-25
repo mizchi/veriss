@@ -6,12 +6,12 @@ isle から切り出した CSS 検証器(veriss)を、別のマシンで続け�
 
 - `main` に全部入っている(このセッションの作業も)。isle は veriss を git 依存で使う利用者になった(isle の `package.json` の `@mizchi/veriss` が commit を指す)
 - **実ページの Unknown を減らす(2026-11-24〜25、PR #19〜#37)**: CSS-in-JS の管理画面の実ページ(44 ページ)に veriss を当て、
-  止まりどころを 1 つずつ潰した。チェックリストの I1〜I19。自分で書く側の規約は [安全なサブセット](safe-subset.md)
+  止まりどころを 1 つずつ潰した。チェックリストの I1〜I23。自分で書く側の規約は [安全なサブセット](safe-subset.md)
   - 誤検出を直した: keyframes 名の大文字・小文字、辺ごとの border の一括指定、caret、`*` の擬似要素のリセット(1 万 7 千件 → 0)
   - Unknown を箱ごとにした: 未対応の宣言・セレクター・入力の段の問題が当たる箱だけを Unknown にし、ページ全体を止めない
   - 判定できるようにした: flex の container の absolute の子、% の幅の flex item と px の max-width(中央寄せの容器)、clip する祖先の中の
     containing block、折り返すテキストの `word-break: break-all`(Chromium の組の表)、配置を変える `:active`(押した状態で配置し直す)、
-    `:has()` の中の `>` と子孫の結合子、`border-image: none`、block の流れの中の `width: fit-content` / `min-content` / `max-content`
+    `:has()` の中の `>` と子孫の結合子、`border-image: none`、block の流れの中の `width: fit-content` / `min-content` / `max-content`(auto margins で寄せる形も、#39)
   - mizchi/css の border の幅の誤りを見つけて直した(0.8.3)。オラクルは 0.8.3 を使い、border の全形式を比べる
   - 止まりどころの重みは `tools/blocker-weights.mjs` で測る(下の「次にやること」)
 - **コンポーネントの CSS を中に閉じる(PR #33)**: コンポーネントの CSS がコンポーネントの外の要素に当たらないこと(外向き)を、
@@ -102,7 +102,12 @@ tools/gate.sh                                     # push の前に毎回。20〜
 
   - 外していくと 44 ページ中 19 ページが判定まで進み、25 ページは外せない Unknown(ページ全体のものなど)で止まった
   - 表は #37(fit-content)の前に測った。#37 で減った分は測り直していない
-  - 続き: `width: fit-content; margin: 0 auto` の中央寄せ(#39)。各 issue に 3 ブラウザーの実測値と止まる文言を書いてある
+  - **この表は数え方の誤りで歪んでいた**(I20 で直した): アダプターが付けるクラス(`__text0`・`__ph0`)のせいで外す箱を見つけられず、
+    ページの残り全部をその理由に数えていた。直した数え方で測り直すと(2026-11-26、I20 の branch)、44 ページ中 41 ページが判定まで
+    進み、上位は max size clamping 19.9%・inline-flex の内容幅 16.3%・作業量の上限 14.2%・0 でない inline margin 11.2%・
+    `border-collapse` 8.4%。#40 の理由は 0.7%(ロゴの img 41 か所。高さ % で幅が画像ファイルの比で決まる。それと幅 auto の
+    text input 14 か所。どちらも Unknown が正しい。チェックリスト I20)
+  - `width: fit-content; margin: 0 auto` の中央寄せ(#39)は判定できるようにした(I19)。残りの各 issue に 3 ブラウザーの実測値と止まる文言を書いてある
   - 自分で書く側の規約は [安全なサブセット](safe-subset.md)。Unknown の原因を潰すたびに、サブセットの「書いてよい形」へ移す
 
 - **eval の基準**: `evals/results/component-lint/` は Chromium 156(Playwright 1.64.1)で記録した。結果の `browser` が記録した版。別の版では文字の組み方の差で狭い幅の判定が動くので、gate で eval が変わったら、まず `browser` の行(gate が並べて出す)を見る
