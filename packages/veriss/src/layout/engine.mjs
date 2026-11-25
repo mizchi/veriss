@@ -2991,6 +2991,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (style.direction !== 'ltr' || !['start', 'left'].includes(String(style['text-align']))) reject(`it is placed on its line by text-align: ${style['text-align']}${style.direction !== 'ltr' ? ` (${style.direction})` : ''}, which is not modeled`);
       if (!['normal', 'nowrap'].includes(String(style['white-space']))) reject(`white-space: ${style['white-space']} keeps the whitespace around it on the line, which is not modeled`);
       if (['margin-left', 'margin-right'].some(k => String(ks[k]) === 'auto')) reject('its auto inline margins are 0 on a line, which is not modeled');
+      // container-type: inline-size or size contains its inline size: its shrink-to-fit width ignores its content
+      // (CSS Containment 3 §3.1), which is not modeled.
+      if (String(ks['container-type'] ?? 'normal') !== 'normal') reject(`container-type: ${ks['container-type']} contains its size, so its shrink-to-fit width ignores its content, which is not modeled`);
       if (!block) return null;
       if (String(ks['vertical-align'] ?? 'baseline') !== 'baseline') reject(`vertical-align: ${ks['vertical-align']} is not modeled`);
       if (['margin-top', 'margin-bottom'].some(k => !['0', '0px'].includes(String(ks[k])))) reject('its vertical margins are part of its line, which is not modeled');
@@ -3045,6 +3048,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       }
       const metrics = text.contract?.textMetrics?.baseline, font = text.contract?.font;
       if (!metrics || !font) reject(`the baseline of ${text.label}'s text is not known (measure it with a font file)`);
+      // (Its recorded ascent and descent hold only for the weights listed: a variable font whose metrics vary by
+      // instance records its default instance.)
+      if (metrics.weights && ((font.weight ?? 400) < metrics.weights[0] || (font.weight ?? 400) > metrics.weights[1])) reject(`the recorded font metrics of ${text.label}'s text hold for weights ${metrics.weights.join('–')}, not its ${font.weight ?? 400}`);
       const strut = strutFromText(style, text.contract, options.defaultFontSize);
       if (strut.reason) reject(`its line's strut (the font of ${box.label}) is not known: ${strut.reason}`);
       // Above the baseline: ascent + half the leading, (L + A − D) / 2; below: the rest of L.
@@ -3260,6 +3266,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // An inline-level box alone on its line (its parent admitted it, checklist I22) is laid out as its block-level
         // display, shrink-to-fit: an auto width is fit-content.
         if (style.$inlineLevel && available.blockFlowChild && !box.pseudo && String(style['inline-size']) === 'auto') {
+          if (String(style['container-type'] ?? 'normal') !== 'normal') throw Object.assign(new Error(`${box.label}: the shrink-to-fit width of an inline-level box with container-type: ${style['container-type']} (size containment) is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box });
           if (!['auto', '0', '0px'].includes(String(style['min-inline-size'])) || String(style['max-inline-size'] ?? 'none') !== 'none') throw Object.assign(new Error(`${box.label}: the shrink-to-fit width of an inline-level box with its own min-width or max-width is not modeled`), { code: 'U_LAYOUT_GEOMETRY', box });
           style = { ...style, 'inline-size': 'fit-content' };
         }

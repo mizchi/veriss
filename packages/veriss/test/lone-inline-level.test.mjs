@@ -81,6 +81,49 @@ test('alignments and neighbours that are not modeled stay Unknown', () => {
   assert.equal(run('.c{display:inline-block}', '<div class="c">Save</div><div class="c">Save</div>').status, 'unknown');
 });
 
+// container-type: inline-size (or size) contains the box's inline size: its intrinsic width ignores its content (CSS
+// Containment 3 §3.1), which the shrink-to-fit width here does not model. Unknown, on either axis.
+test('a size-contained inline-level box stays Unknown', () => {
+  for (const type of ['inline-size', 'size']) {
+    assert.equal(run(`.c{display:inline-block;container-type:${type}}`).status, 'unknown', type);
+    assert.equal(run(`.c{display:inline-block;container-type:${type}}`, undefined, undefined, {viewport: {min: 320, max: 800}}).status, 'unknown', `${type}, inline axis`);
+  }
+});
+
+// A variable font whose typo metrics (USE_TYPO_METRICS) vary by instance (MVAR hasc / hdsc): the recorded ascent and
+// descent hold for the default instance only. A strut or a text at another weight is not known.
+const injectMvar = (bytes, tags) => {
+  const n = bytes.readUInt16BE(4), head = 12 + 16 * n, entries = [];
+  for (let i = 0; i < n; i++) { const o = 12 + 16 * i; entries.push({tag: bytes.toString('latin1', o, o + 4), sum: bytes.readUInt32BE(o + 4), offset: bytes.readUInt32BE(o + 8), length: bytes.readUInt32BE(o + 12)}); }
+  const mvar = Buffer.alloc(12 + 8 * tags.length);
+  mvar.writeUInt16BE(1, 0); mvar.writeUInt16BE(0, 2); mvar.writeUInt16BE(0, 4); mvar.writeUInt16BE(8, 6); mvar.writeUInt16BE(tags.length, 8); mvar.writeUInt16BE(0, 10);
+  tags.forEach((t, i) => mvar.write(t, 12 + 8 * i, 'latin1'));
+  const body = bytes.subarray(head), shift = 16, end = bytes.length + shift;
+  const out = Buffer.alloc(end + mvar.length + 4);
+  bytes.copy(out, 0, 0, 12); out.writeUInt16BE(n + 1, 4);
+  const all = [...entries.map(e => ({...e, offset: e.offset + shift})), {tag: 'MVAR', sum: 0, offset: end + (4 - end % 4) % 4, length: mvar.length}].sort((a, b) => a.tag < b.tag ? -1 : 1);
+  all.forEach((e, i) => { const o = 12 + 16 * i; out.write(e.tag, o, 'latin1'); out.writeUInt32BE(e.sum, o + 4); out.writeUInt32BE(e.offset, o + 8); out.writeUInt32BE(e.length, o + 12); });
+  body.copy(out, head + shift); mvar.copy(out, all.find(e => e.tag === 'MVAR').offset);
+  return out;
+};
+test('a variable font whose ascent varies by instance records only its default weight', async () => {
+  const {readFileSync} = await import('node:fs');
+  const hebrew = readFileSync(fileURLToPath(new URL('../text-metrics/fixtures/hebrew-variable.ttf', import.meta.url)));
+  const weights = async data => (await loadTextMetrics({fonts: {H: {data: new Uint8Array(data)}}})).resolveBoxes({x: {text: {font: {family: 'H', size: 14, lineHeight: 20, weight: 400}, content: 'שלום'}, wrap: 'one-line'}}).x.textMetrics.baseline.weights;
+  assert.deepEqual(await weights(hebrew), [100, 900]);
+  // The fixture uses its typo metrics (fsSelection bit 7) and has no MVAR: with hasc it varies; xhgt alone does not.
+  assert.deepEqual(await weights(injectMvar(hebrew, ['hasc'])), [100, 100]);
+  assert.deepEqual(await weights(injectMvar(hebrew, ['xhgt'])), [100, 900]);
+  // The strut and the text are known only at the weights the metrics hold for.
+  const resolved = metrics.resolveBoxes({'.c': {text: {font: font(14, 20), content: 'Save'}, wrap: 'one-line'}})['.c'];
+  const narrow = w => ({'.c': {...resolved, textMetrics: {...resolved.textMetrics, baseline: {...resolved.textMetrics.baseline, weights: [w, w]}}}});
+  assert.equal(run('.c{display:inline-block}', undefined, narrow(400)).status, 'verified');
+  const parent = run('.p{font-weight:700}.c{display:inline-block;font-weight:400}', undefined, narrow(400));
+  assert.ok(unknowns(parent).some(m => /font-weight 700/.test(m)), JSON.stringify(unknowns(parent)));
+  const text = run('.c{display:inline-block}', undefined, narrow(700));
+  assert.ok(unknowns(text).some(m => /metrics/.test(m)), JSON.stringify(unknowns(text)));
+});
+
 // The inline axis alone needs no strut.
 test('without the block axis, an inline-grid box is shrink-to-fit too', () => {
   const r = run('.c{display:inline-grid;grid-template-columns:40px;padding:0 8px}.k{display:block}', '<div class="c"><i class="k"></i></div>', {}, {viewport: {min: 320, max: 800}});

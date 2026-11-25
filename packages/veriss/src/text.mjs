@@ -180,6 +180,28 @@ const codepoints = text => [...text];
  * @param {{fonts: Record<string, {data: Uint8Array, weight?: number, sha256?: string, file?: string}>,
  *   shaper: {load(data: Uint8Array): number, info(handle: number): object, shape(handle: number, text: string, size: number, axes: object): object}}} input
  */
+/**
+ * The value tags of a font's MVAR table (OpenType: metrics that vary by instance), or [] without one. A table the
+ * file does not hold in full counts as varying everything (unreadable: not assumed constant).
+ */
+export function mvarTags(data) {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data ?? []);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), tag = o => String.fromCharCode(...bytes.subarray(o, o + 4));
+  if (bytes.length < 12) return [];
+  const tables = view.getUint16(4);
+  for (let i = 0; i < tables; i++) {
+    const at = 12 + 16 * i;
+    if (at + 16 > bytes.length) return ['hasc', 'hdsc'];
+    if (tag(at) !== 'MVAR') continue;
+    const o = view.getUint32(at + 8);
+    if (o + 12 > bytes.length) return ['hasc', 'hdsc'];
+    const size = view.getUint16(o + 6), count = view.getUint16(o + 8);
+    if (size < 4 || o + 12 + size * count > bytes.length) return ['hasc', 'hdsc'];
+    return Array.from({length: count}, (_, k) => tag(o + 12 + size * k));
+  }
+  return [];
+}
+
 export function createTextMetrics({fonts, shaper, limits = {}}) {
   const maxCharacters = limits.characters ?? 128, maxLength = limits.maxLength ?? 1024;
   const loaded = new Map();
@@ -569,15 +591,19 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
   }
   /**
    * The baseline metrics a text contract carries: the rounded ascent and descent at its size, and the font's own
-   * vertical metrics (font units) with the weights the same file serves (a variable font's wght axis, or the one
-   * static weight). The core derives from them the strut of a box in the same family at another px size.
+   * vertical metrics (font units) with the weights they hold for. The core derives from them the strut of a box in the
+   * same family at another px size. A variable font's wght axis serves every weight in its range, and its ascender and
+   * descender (read at the default instance) hold for all of them unless they vary by instance: on the typo metrics
+   * path (USE_TYPO_METRICS) an MVAR hasc or hdsc record moves them, and then only the default instance is covered.
+   * (hhea's ascender and descender have no MVAR tags.) A static file covers its one weight.
    */
   function contractBaseline(font) {
     const {info, entry} = lookup(font);
     const typo = info.os2 && (info.os2.fsSelection & 128);
     const axis = info.axes.find(a => a.tag === 'wght'), weight = entry.weight ?? 400;
+    const varies = typo && axis && mvarTags(entry.data).some(tag => tag === 'hasc' || tag === 'hdsc');
     return {...baselineMetrics(font), unitsPerEm: info.unitsPerEm, ascender: typo ? info.os2.typoAscender : info.ascent, descender: Math.abs(typo ? info.os2.typoDescender : info.descent),
-      weights: axis ? [axis.min, axis.max] : [weight, weight]};
+      weights: !axis ? [weight, weight] : varies ? [axis.default, axis.default] : [axis.min, axis.max]};
   }
 
   /** Replace `text` box contracts with the core's derived size contracts. */

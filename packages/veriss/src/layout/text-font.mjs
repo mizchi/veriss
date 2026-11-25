@@ -104,8 +104,9 @@ export function textFontMismatch(style, font, defaultFontSize) {
 /**
  * The strut of a block container (CSS 2.2 §10.8.1: its first available font at its line-height) from the baseline
  * metrics of a text contract in the same family: {ascent, descent, lineHeight, size, exact}, or {reason} where it is
- * not known. The file that measured the text serves the container's weight (a variable font's wght axis, or the same
- * static weight); at the text's own size the ascent and descent are the text's (exact: rounded the same way), at
+ * not known. The recorded metrics must hold for the container's weight (baseline.weights: a variable font's wght
+ * axis, only its default instance where MVAR varies the typo ascender or descender, or the one static weight); at the
+ * text's own size the ascent and descent are the text's (exact: rounded the same way), at
  * another size they are derived from the font's units and rounded as Chromium does.
  */
 export function strutFromText(style, contract, defaultFontSize) {
@@ -119,7 +120,7 @@ export function strutFromText(style, contract, defaultFontSize) {
   if (lineHeight === undefined) return {reason: `its line-height ${lh} is not a px length or a number (normal depends on the font's line gap)`};
   const weight = weightValue(String(style['font-weight']));
   const [low, high] = b.weights ?? [font.weight ?? 400, font.weight ?? 400];
-  if (weight === undefined || weight < low || weight > high) return {reason: `its font-weight ${style['font-weight']} is not one the measured font file serves`};
+  if (weight === undefined || weight < low || weight > high) return {reason: `its font-weight ${style['font-weight']} is not one the recorded font metrics hold for (${low === high ? low : `${low}–${high}`})`};
   if (style['font-style'] !== 'normal' || (style['font-stretch'] ?? 'normal') !== 'normal' || (style['font-variant'] ?? 'normal') !== 'normal') return {reason: 'its font-style, font-stretch and font-variant must be normal'};
   if (size === font.size) return {ascent: b.ascent, descent: b.descent, lineHeight, size, exact: true};
   if (b.unitsPerEm === undefined) return {reason: `its font-size ${size}px differs from the measured ${font.size}px, and the contract has no font units`};

@@ -585,7 +585,10 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   行の高さは、親の strut(親のフォントの ascent と descent を親の line-height で上下に配ったもの)が箱の baseline(中のテキストの
   baseline。inline-block は自分のテキストの最後の行、inline-flex は 1 つのテキストの item の最初の行)の上下に収まれば箱の高さに
   なる。親の strut は、テキストの契約が持つフォントの値(丸めた ascent / descent に加えて、フォントの単位の ascender / descender と
-  そのファイルが受け持つ weight の範囲)から求める。親が同じ family で、その weight をそのファイルが受け持つときに限る。
+  その値が成り立つ weight の範囲)から求める。親が同じ family で、その weight で値が成り立つときに限る。可変フォントは wght の
+  範囲すべてで成り立つが、typo の値(USE_TYPO_METRICS)を使い MVAR の hasc / hdsc で instance ごとに変わるフォントは、既定の
+  instance の weight だけにする(テキスト自身の weight も同じ。fixture の Roboto と日本語フォントは hhea の値を使い MVAR もないので
+  400 以外の weight でも決まる)。
   3 ブラウザーで、親の font-size(0〜24px)と line-height(1、1.5、16〜40px)、テキストの font-size・line-height・weight、
   padding を組み合わせた 840 通りを、inline-block / inline-flex(item、中央寄せ、直接のテキスト、アイコンの後)/ inline-grid と
   ボタンの各形で、Roboto と ascent の高い日本語フォントで測った。strut が 0.5px 以上の余りで収まる組はすべて 3 ブラウザーで
@@ -594,7 +597,8 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   Unknown のまま: 中にテキストのない箱と `overflow` が visible でない inline-block(baseline が下端で、strut の descent が下に
   はみ出し、親が 41 / 40.5 / 40.53px と違う)、親のフォントが分からないとき(`line-height: normal`、フォントのファイルのない
   family、別の大きさで単位のない契約)、`vertical-align` が baseline 以外(middle は余りがあってもブラウザーで違う)、
-  text-align が start / left 以外、箱の上下の margin、auto の左右 margin、箱自身の min-width / max-width、inline-grid の
+  text-align が start / left 以外、箱の上下の margin、auto の左右 margin、箱自身の min-width / max-width、
+  `container-type: inline-size | size` の箱(size containment で shrink-to-fit の幅が中身を見ない)、inline-grid の
   block 方向、直接テキストを持つ inline-flex(匿名の flex item)、2 つ以上の inline-level の箱が並ぶ行。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
