@@ -633,7 +633,6 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const sized = (start, end, size, edges) => {
           const set = side => style[side] !== undefined && style[side] !== 'auto';
           if (!set(start) || !set(end)) return;
-          if (style[size] === 'auto' && replacedBox) throw Object.assign(new Error(`${box.label}: a replaced element with ${start} and ${end} and an auto ${size === 'inline-size' ? 'width' : 'height'} keeps its own size, which is not modeled here; give it an explicit ${size === 'inline-size' ? 'width' : 'height'}`), { code: 'U_LAYOUT_CSS', box });
           if (style[size] === 'auto') {
             const own = style['box-sizing'] === 'content-box' ? edges.flatMap(edge => [style[`padding-${edge}`], style[`border-${edge}`]]).filter(v => v && !['0', '0px', 'ua'].includes(v)) : [];
             // px margins (negative too) are taken off the room as well (CSS 2 §10.3.7: auto width = containing block −
@@ -653,11 +652,18 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const container = ancestors.findLast(a => a.style && (style.$fixed ? containsFixed(a.style) : (a.style.position !== 'static' || containsFixed(a.style))));
         const top = ancestors.filter(a => a.box?.documentRoot || (a.box?.tag === 'body' && ancestors[ancestors.indexOf(a) - 1]?.box?.documentRoot)).map(a => a.style?.direction);
         const containerDirection = container ? container.style.direction : top.length && top.every(d => d === top[0]) && ancestors[0]?.box?.documentRoot ? top[0] : undefined;
-        if (!['ltr', 'rtl'].includes(containerDirection) && set('left') && set('right') && (style['inline-size'] !== 'auto' || String(style['max-inline-size'] ?? 'none') !== 'none' || !['auto', '0', '0px', 'ua'].includes(String(style['min-inline-size'] ?? 'auto'))))
-          throw Object.assign(new Error(`${box.label}: an absolute box with left, right and a width (or a max-width or min-width) is over-constrained, and which inset is ignored follows its containing block's direction, which is not known here`), { code: 'U_LAYOUT_CSS', box });
-        const rtl = (containerDirection ?? style.direction) === 'rtl';
-        sized(rtl ? 'right' : 'left', rtl ? 'left' : 'right', 'inline-size', ['left', 'right']);
-        sized('top', 'bottom', 'block-size', ['top', 'bottom']);
+        const replacedAxis = [['left', 'right', 'inline-size', 'width'], ['top', 'bottom', 'block-size', 'height']].find(([a, b, size]) => replacedBox && set(a) && set(b) && style[size] === 'auto');
+        const undecided = replacedAxis ? `${box.label}: a replaced element with ${replacedAxis[0]} and ${replacedAxis[1]} and an auto ${replacedAxis[3]} keeps its own size, which is not modeled here; give it an explicit ${replacedAxis[3]}`
+          : !['ltr', 'rtl'].includes(containerDirection) && set('left') && set('right') && (style['inline-size'] !== 'auto' || String(style['max-inline-size'] ?? 'none') !== 'none' || !['auto', '0', '0px', 'ua'].includes(String(style['min-inline-size'] ?? 'auto')))
+            ? `${box.label}: an absolute box with left, right and a width (or a max-width or min-width) is over-constrained, and which inset is ignored follows its containing block's direction, which is not known here` : null;
+        // The layout is Unknown there; the style-only walk (readingStyles) still reads the box and its descendants, with
+        // its declared insets and sizes (no inset-derived size it does not model).
+        if (undecided && !readingStyles) throw Object.assign(new Error(undecided), { code: 'U_LAYOUT_CSS', box });
+        if (!undecided) {
+          const rtl = (containerDirection ?? style.direction) === 'rtl';
+          sized(rtl ? 'right' : 'left', rtl ? 'left' : 'right', 'inline-size', ['left', 'right']);
+          sized('top', 'bottom', 'block-size', ['top', 'bottom']);
+        }
         // An auto width left after the insets shrinks to fit its content; under inline-size containment
         // (container-type: inline-size / size) the content counts for nothing, so it is its padding and border.
         if (style['inline-size'] === 'auto' && ['inline-size', 'size'].includes(style['container-type'])) {

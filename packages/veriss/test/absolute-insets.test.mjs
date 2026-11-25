@@ -208,6 +208,17 @@ test('an unknown containing-block direction is Unknown for a clamped auto width,
   assert.equal(hidden.status, 'verified');
 });
 
+// A box whose inset geometry is left undecided (Unknown) by the layout is still read by the style-only walk: the
+// contrast rule warns on low-contrast text inside it, and the walk does not stop at it.
+test('an undecided absolute box keeps its style checks', () => {
+  const run = (html, overlay) => analyzeHTML('<html lang="en"><body><main class="page"><div class="o"><p class="t">Low contrast text</p></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}${html}.page{background:#fff}.o{position:absolute;background:#fff;${overlay}}.t{color:#777;font-size:16px}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}, accessibility: true});
+  const unplaced = r => (r.accessibility?.warnings ?? []).filter(w => w.code === 'W_A11Y_CONTRAST_UNPLACED').map(w => w.box);
+  const mixed = run('body{direction:rtl}', 'inset:0;max-width:100px;height:50px');
+  assert.equal(mixed.status, 'unknown');
+  assert.match(mixed.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message).join(' | '), /\.o: .*containing block's direction/);
+  assert.ok(unplaced(mixed).some(b => /\.t/.test(b)), JSON.stringify(mixed.accessibility?.warnings?.map(w => w.code)));
+});
+
 // The ad idiom: a fixed overlay with a box centred in it by negative margins; the accessibility checks see the overlay.
 // (The translate centres the painted box only: its layout box still reaches past the overlay, E_LAYOUT_ABSOLUTE_END,
 // which the margins do not; the accessibility verdicts are the same.)
