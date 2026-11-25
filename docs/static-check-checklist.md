@@ -573,6 +573,16 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (`e2e/layout-flex.spec.mjs`)。
 - [x] **I17. `border-image: none`**: 初期値のリセット(hr に当てるもの)も Unknown にしていた。`none` と CSS 全体のキーワードは何も変えない
   宣言として捨てる。捨てるので前の宣言を上書きせず、前に画像があればそれが cascade の結果のまま Unknown になる(安全側)。
+- [x] **I18. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
+  `top: 50%; left: 50%; margin: -125px 0 0 -150px` で、ページ全体の a11y の判定が消えた。文言も block の margin を消せという見当違いのもの)。
+  margin の箱を inset に置く(CSS 2 §10.3.7 / §10.6.4): border の箱は始点の inset + 始点の margin から、終点の inset だけのときは
+  終点の inset − 終点の margin で終わる。両側の inset で auto の大きさは、両側の margin も引く。決まりすぎ(大きさも両側の inset もある)の
+  ときは終点の inset と margin を捨てる(rtl では left 側)。Chromium・Firefox・WebKit で、left/top と負の margin、right/bottom と margin、
+  % の inset と px の margin、% の大きさの箱、正の margin、`inset: 0` と auto の大きさ、rtl の決まりすぎ、content-box の padding、border と
+  padding のある包含ブロック、fixed の箱(中央寄せ、右下、`inset: 0`)の 16 通りを 320px と 400px で照合し、矩形が一致した
+  (e2e `px margins offset absolute and fixed boxes`。対照として margin を 0 にすると全組で矩形が変わる)。包含ブロックの外に出る負の margin は
+  inset と同じく `E_LAYOUT_ABSOLUTE_START`。`auto` と % の margin、静的位置の軸(両側の inset が auto)の margin、shrink-to-fit の幅の箱の
+  横の margin は Unknown のまま(文言は箱の名前と margin を出す)
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

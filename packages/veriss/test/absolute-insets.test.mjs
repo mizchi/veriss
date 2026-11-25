@@ -124,3 +124,51 @@ test('a shrink-to-fit width that is an exact decimal beyond a double is kept, no
   assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message)));
   assert.equal(r.sizes.find(s => s.box === '.o' && s.rect).rect.inlineSize.constant, '2030000000000000001/100000000000000000');
 });
+
+// px margins (negative too) on an absolute box move its margin box off the inset: the border box starts at the inset
+// plus the start margin, ends at the inset less the end margin, and an auto size between both insets loses both
+// margins (CSS 2 §10.3.7 / §10.6.4). The centring idiom top: 50%; left: 50%; margin: -h/2 0 0 -w/2. Measured in
+// Chromium, Firefox and WebKit (the same rectangles in all three).
+test('px margins on an absolute box offset it from its insets', () => {
+  assert.deepEqual(rect('top:50%;left:50%;width:100px;height:60px;margin:-30px 0 0 -50px'), [150, 70, 100, 60]);
+  assert.deepEqual(rect('right:10px;bottom:20px;width:100px;height:60px;margin:5px 7px 11px 13px'), [283, 109, 100, 60]);
+  assert.deepEqual(rect('top:10%;left:25%;width:100px;height:60px;margin:4px 0 0 6px'), [106, 24, 100, 60]);
+  assert.deepEqual(rect('top:20px;left:30px;width:50%;height:25%;margin:-10px 0 0 -20px'), [10, 10, 200, 50]);
+  assert.deepEqual(rect('top:10px;left:10px;width:100px;height:60px;margin:10px 20px 30px 40px'), [50, 20, 100, 60]);
+  assert.deepEqual(rect('inset:0;margin:10px 20px 30px 40px'), [40, 10, 340, 160]);
+  assert.deepEqual(rect('inset:0;width:100px;height:50px;margin:10px 20px 30px 40px'), [40, 10, 100, 50]);
+  assert.deepEqual(rect('inset:0;width:100px;height:50px;margin:10px 20px 30px 40px', 'direction:rtl'), [280, 10, 100, 50]);
+  assert.deepEqual(rect('inset:0;margin:10px 20px;padding:5px;box-sizing:content-box'), [20, 10, 360, 180]);
+  assert.deepEqual(rect('top:5px;left:5px;right:15px;height:20px;margin:0 -4px', 'padding:8px;border:3px solid #000'), [4, 8, 382, 20]);
+});
+
+test('margins on an absolute box that are not modeled stay Unknown and name the box', () => {
+  const run = (overlay, card = '') => analyzeHTML('<html lang="en"><body><main class="page"><div class="card"><div class="o"></div></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page,.card{${g}}.card{position:relative;height:200px;${card}}.o{position:absolute;${overlay}}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
+  for (const overlay of [
+    'top:0;left:0;width:100px;height:60px;margin:auto', // auto margins (centring between both insets) are not modeled
+    'inset:0;width:100px;height:60px;margin:auto',
+    'top:0;width:100px;height:60px;margin-left:5px', // the static position on the inline axis
+    'top:0;left:0;height:60px;margin-left:5px', // a shrink-to-fit width
+  ]) {
+    const report = run(overlay);
+    assert.equal(report.status, 'unknown', overlay);
+    const messages = report.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message).join(' | ');
+    assert.doesNotMatch(messages, /Reset native block margins|Only known zero inline margins/, overlay);
+    assert.match(messages, /\.o/, overlay);
+  }
+  // A % margin (of the containing block's width) is not read at all (Unknown before the box is laid out).
+  assert.equal(run('top:0;left:0;width:100px;height:60px;margin-left:10%').status, 'unknown');
+  // A margin that pulls the box out of its containing block is reported like an inset that does.
+  assert.deepEqual([...new Set(run('top:0;left:0;width:50%;height:25%;margin:-10px 0 0 -20px').diagnostics.map(d => d.code))], ['E_LAYOUT_ABSOLUTE_START']);
+});
+
+// The ad idiom: a fixed overlay with a box centred in it by negative margins; the accessibility checks see the overlay.
+// (The translate centres the painted box only: its layout box still reaches past the overlay, E_LAYOUT_ABSOLUTE_END,
+// which the margins do not; the accessibility verdicts are the same.)
+test('a box centred by negative margins in a fixed overlay keeps the accessibility verdicts', () => {
+  const css = m => `body{margin:0} .p{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:44px} .go{display:block;width:44px;height:44px;background:#246;border:0;padding:0} .ov{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9;background:#000} .bx{position:absolute;top:50%;left:50%;width:300px;height:250px;${m};background:#ffe}`;
+  const codes = m => { const r = analyzeHTML('<body><div class=p><button class=go aria-label=Go></button></div><div class=ov><div class=bx></div></div></body>', {name: 'P', css: css(m), viewport: {min: 375, max: 375, height: {min: 667, max: 667}}, accessibility: true}); return [r.status, [...new Set([...r.diagnostics, ...(r.accessibility?.warnings ?? [])].filter(d => d.severity !== 'info' && /_A11Y_/.test(d.code)).map(d => d.code))].sort()]; };
+  const transformed = codes('transform:translate(-50%,-50%)');
+  assert.equal(transformed[0], 'violated');
+  assert.deepEqual(codes('margin:-125px 0 0 -150px'), transformed);
+});

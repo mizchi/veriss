@@ -20,7 +20,7 @@ import { selectorScope } from './selector-scope.mjs';
 import { viewportFont, zoomShortfall } from './zoom-font.mjs';
 import { gapSize, trackArea, trackSlice, inheritTracks } from './subgrid.mjs';
 import { scrollbarFrames } from './scrollbars.mjs';
-import {absoluteOrigin, insetLength} from './positioned.mjs';
+import {absoluteOrigin, absoluteMarginText, insetLength} from './positioned.mjs';
 import {easedFrames} from './animation-extremes.mjs';
 import {textFontMismatch, textBrowserMismatch, textLinesMismatch, textLangMismatch, fittingLength, fittingLines} from './text-font.mjs';
 import {validateFlexContainer, flexItem, crossAlignment, distribution, flexUnknown} from './flex.mjs';
@@ -598,21 +598,21 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const html = ancestors.at(-1).style, none = side => style[side] === undefined || style[side] === 'auto';
         const zero = v => ['0', '0px', undefined].includes(v === undefined ? undefined : String(v)), pxOr0 = v => /^(?:0|\d+(?:\.\d+)?px)$/.test(String(v ?? '0'));
         const plain = ['top', 'right', 'bottom', 'left'].every(side => zero(html[`margin-${side}`]) && zero(html[`border-${side}`])) && html.direction !== 'rtl' && style.direction !== 'rtl';
-        if (plain && none('left') && none('right') && pxOr0(html['padding-left'])) style = { ...style, left: String(html['padding-left'] ?? '0') === '0' ? '0px' : html['padding-left'], $staticPosition: true };
-        if (plain && none('top') && none('bottom') && pxOr0(html['padding-top'])) style = { ...style, top: String(html['padding-top'] ?? '0') === '0' ? '0px' : html['padding-top'], $staticPosition: true };
+        if (plain && none('left') && none('right') && pxOr0(html['padding-left'])) style = { ...style, left: String(html['padding-left'] ?? '0') === '0' ? '0px' : html['padding-left'], $staticPosition: true, $staticInline: true };
+        if (plain && none('top') && none('bottom') && pxOr0(html['padding-top'])) style = { ...style, top: String(html['padding-top'] ?? '0') === '0' ? '0px' : html['padding-top'], $staticPosition: true, $staticBlock: true };
       }
       if (style.position === 'absolute' && !style.$fixed && !box.pseudo) {
         const parentStyle = ancestors.at(-1)?.style;
         if (parentStyle && ['grid', 'inline-grid'].includes(parentStyle.display) && parentStyle.position !== 'static') {
           const none = side => style[side] === undefined || style[side] === 'auto';
           const inlineStart = style.direction === 'rtl' ? 'right' : 'left';
-          if (none('left') && none('right')) style = { ...style, [inlineStart]: '0px', $staticPosition: true };
+          if (none('left') && none('right')) style = { ...style, [inlineStart]: '0px', $staticPosition: true, $staticInline: true };
           // That edge is where the box sits only when it is not aligned: its align-self, or the grid's align-items, moves
           // the static position (measured: align-items: flex-end on an 80px grid puts a 20px absolute child at 60).
           const aligned = value => !['auto', 'normal', 'stretch', 'start', 'flex-start', 'self-start'].includes(String(value ?? 'auto'));
           const blockAlign = String(style['align-self'] ?? 'auto') === 'auto' ? parentStyle['align-items'] : style['align-self'];
           if (none('top') && none('bottom') && aligned(blockAlign)) throw Object.assign(new Error(`${box.label}: an absolute box with auto top and bottom aligned by ${String(style['align-self'] ?? 'auto') === 'auto' ? `its grid's align-items: ${blockAlign}` : `align-self: ${blockAlign}`} has a static position that is not modeled`), { code: 'U_LAYOUT_CSS', box });
-          if (none('top') && none('bottom')) style = { ...style, top: '0px', $staticPosition: true };
+          if (none('top') && none('bottom')) style = { ...style, top: '0px', $staticPosition: true, $staticBlock: true };
         }
         // In a block container that is also the containing block, a block-level box with both inline insets auto starts
         // at the container's content edge: its inline-start padding inside the padding box (measured in Chromium,
@@ -622,7 +622,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           const none = side => style[side] === undefined || style[side] === 'auto';
           const rtl = parentStyle.direction === 'rtl', start = rtl ? 'right' : 'left';
           const padding = String(parentStyle[`padding-${start}`] ?? '0');
-          if (none('left') && none('right') && parentStyle.direction === style.direction && /^(?:0|\d+(?:\.\d+)?px)$/.test(padding)) style = { ...style, [start]: padding === '0' ? '0px' : padding, $staticPosition: true };
+          if (none('left') && none('right') && parentStyle.direction === style.direction && /^(?:0|\d+(?:\.\d+)?px)$/.test(padding)) style = { ...style, [start]: padding === '0' ? '0px' : padding, $staticPosition: true, $staticInline: true };
         }
       }
       if (style.position === 'absolute') {
@@ -631,8 +631,12 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           if (!set(start) || !set(end)) return;
           if (style[size] === 'auto') {
             const own = style['box-sizing'] === 'content-box' ? edges.flatMap(edge => [style[`padding-${edge}`], style[`border-${edge}`]]).filter(v => v && !['0', '0px', 'ua'].includes(v)) : [];
-            const minus = [style[start], style[end], ...own].filter(v => !['0', '0px'].includes(v));
-            style = { ...style, [size]: minus.length ? `calc(100% - ${minus.join(' - ')})` : '100%', [end]: 'auto' };
+            // px margins (negative too) are taken off the room as well (CSS 2 §10.3.7: auto width = containing block −
+            // insets − margins − padding and border); other margins stay in the style and are Unknown in validate.
+            const margins = edges.map(edge => style[`margin-${edge}`]).filter(v => v !== undefined && absoluteMarginText(v));
+            const minus = [style[start], style[end], ...own, ...margins].filter(v => !['0', '0px'].includes(String(v)));
+            const terms = minus.map(v => String(v).startsWith('-') ? `+ ${String(v).slice(1)}` : `- ${v}`).join(' ');
+            style = { ...style, [size]: minus.length ? `calc(100% ${terms})` : '100%', [end]: 'auto' };
           } else style = { ...style, [end]: 'auto' };
         };
         sized(style.direction === 'rtl' ? 'right' : 'left', style.direction === 'rtl' ? 'left' : 'right', 'inline-size', ['left', 'right']);
@@ -922,7 +926,23 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // A grid item may also have px margins: its grid area less the margins is what it is laid out in (margins of grid
     // and flex items never collapse).
     // A negative px margin on a flex row item's main axis (an overlapping avatar stack): its outer size shrinks by it.
-    const marginOk = (key, axis) => (available.flexItem?.main === 'inline' && axis === 'inline' && /^-\d+(?:\.\d+)?px$/.test(String(style[key]))) || style[key] === '0' || (style[key] === 'auto' && available.flexItem?.main === axis) || ((available.gridItem || available.flexItem) && /^\d+(?:\.\d+)?px$/.test(String(style[key]))) || (available.gridItem && axis === 'inline' && style[key] === 'auto' && available.autoMargins);
+    // An absolutely positioned (or fixed) box: px margins, negative too, offset it from an inset (absoluteOrigin) and
+    // shrink an auto size between both insets (measured in Chromium, Firefox and WebKit). auto and % margins, and margins
+    // on an axis at its static position or of a shrink-to-fit width, are not modeled.
+    if (style.position === 'absolute') {
+      const auto = side => [undefined, 'auto'].includes(style[side]);
+      const what = style.$fixed ? 'position: fixed' : 'position: absolute';
+      for (const [keys, staticAxis, shrunk] of [[['margin-left', 'margin-right'], style.$staticInline || (auto('left') && auto('right')), style.$shrinkToFit], [['margin-top', 'margin-bottom'], style.$staticBlock || (auto('top') && auto('bottom')), false]]) {
+        for (const key of keys) {
+          const value = String(style[key] ?? '0');
+          if (['0', '0px'].includes(value) || (!block && keys[0] === 'margin-top')) continue;
+          if (!absoluteMarginText(value)) throw new Error(`${box.label} is ${what} with ${key}: ${value}; only px margins are modeled on an absolutely positioned box (auto and percentage margins are not)`);
+          if (staticAxis) throw new Error(`${box.label} is ${what} with ${key}: ${value} on an axis with both insets auto (its static position); a margin there is not modeled`);
+          if (shrunk) throw new Error(`${box.label} is ${what} with ${key}: ${value} and a shrink-to-fit width; a margin there is not modeled`);
+        }
+      }
+    }
+    const marginOk = (key, axis) => style.position === 'absolute' || (available.flexItem?.main === 'inline' && axis === 'inline' && /^-\d+(?:\.\d+)?px$/.test(String(style[key]))) || style[key] === '0' || (style[key] === 'auto' && available.flexItem?.main === axis) || ((available.gridItem || available.flexItem) && /^\d+(?:\.\d+)?px$/.test(String(style[key]))) || (available.gridItem && axis === 'inline' && style[key] === 'auto' && available.autoMargins);
     // px margins on items of a row flex container are modeled (layoutFlex adds them to the outer sizes); a column's not.
     // px margins on flex items are modeled (layoutFlex adds them to the outer sizes on both axes).
     if (['margin-left', 'margin-right'].some(key => !marginOk(key, 'inline'))) throw new Error(available.flexItem && ['margin-left', 'margin-right'].some(key => style[key] === 'auto') ? 'Cross-axis auto margins of a flex item are outside the subset' : 'Only known zero inline margins are supported');
