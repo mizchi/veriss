@@ -1997,7 +1997,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         overflow: ['hidden','clip'].includes(overflowValue) ? 'clip' : ['auto','scroll'].includes(overflowValue) ? 'scroll' : 'visible', overflowValue,
         // Where a single line of text starts inside the box (font-derived text extents).
         content: { left: add(px(style['border-left']), px(style['padding-left'])), top: add(px(style['border-top']), px(style['padding-top'])), inline: contentInline },
-        textAlign: style['text-align'], lineHeight: style['line-height'], direction: style.direction, overflowX: style['overflow-x'], painted: paints(style),
+        textAlign: style['text-align'], lineHeight: style['line-height'], direction: style.direction, overflowX: style['overflow-x'], overflowY: style['overflow-y'], painted: paints(style),
         // z-index applies to positioned boxes and to grid/flex items.
         zIndex: style['z-index'] !== 'auto' && (style.position !== 'static' || ['grid', 'flex'].includes(parents.at(-1)?.style.display)) ? Number(style['z-index']) : null,
         paint: paintFacts(style), chain: [...ancestorPaint, ...parents.map((parent, i) => captionBackdrop(parent, parents[i + 1]?.box ?? box, paintFacts(parent.style))), paintFacts(style)],
@@ -2926,7 +2926,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (trap && !layoutWarnings.some(w => w.code === 'W_LAYOUT_FIXED_TRAPPED' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_FIXED_TRAPPED', severity: 'warning', box: item.box.label, path: item.box.path, ancestor: trap.box.label,
         message: `${item.box.label} is position: fixed, but ${trap.box.label} (${fixedContainer(trap.style)}) becomes its containing block: it is placed against ${trap.box.label} and moves with it instead of staying on the viewport. Render it outside that box (a portal to the end of body), or drop the property`, ...ranges(r) });
       if (trap) throw Object.assign(new Error(`${item.box.label} is position: fixed, but its ancestor ${trap.box.label} has ${fixedContainer(trap.style)}, which makes it the containing block: ${item.box.label} is placed against ${trap.box.label} and scrolls with it, not with the viewport. Move it outside that box (for example to the end of body), or drop the property`), { code: 'U_LAYOUT_FIXED_CONTAINED', box: item.box, region: r, ancestor: trap.box.label, ancestorPath: trap.box.path, property: 'transform' });
-      if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible'))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
+      // (overflow: hidden / clip on the root element goes to the viewport, which neither clips nor moves a fixed box:
+      // measured in Chromium, Firefox and WebKit, the fixed box stays where it is and the page does not scroll.)
+      const rootToViewport = ancestor => ancestor.box?.documentRoot && ['overflow-x','overflow-y'].every(key=>['hidden','clip'].includes(ancestor.style[key]));
+      if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || (!rootToViewport(ancestor) && ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible')))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
       const viewport = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
       return solve(item.box,{inline:viewport.inline,block:viewport.block,containingBlock:{path:'viewport',...viewport},...(staticOrigin !== undefined ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
     }

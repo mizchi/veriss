@@ -2472,3 +2472,50 @@ test('click traps and invisible blockers match hit testing and what the browser 
     }
   }
 });
+
+// Scrolling and fixed covers: a fixed box that paints nothing catches clicks on the in-flow controls that scroll under
+// it (E_A11Y_INVISIBLE_BLOCKER with the scroll offsets), and a fixed sheet over in-flow controls of a page whose root is
+// overflow: hidden is a click trap (the user cannot scroll them free).
+test('fixed covers and scrolling: the offsets where a transparent fixed box takes the click, and a page that does not scroll', async ({page}) => {
+  const viewport = {min: 375, max: 375, height: {min: 667, max: 667}};
+  const line = {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20};
+  const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#fff;color:#000}main{display:block}.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px;font-family:sans-serif}';
+  const run = (html, css) => analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', viewport, accessibility: true, boxes: {'.l': line, '.m': line}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: base + css});
+  await page.setViewportSize({width: 375, height: 667});
+  const open = async (html, css) => page.setContent(`<!doctype html><html lang="en"><head><style>${base}${css}</style></head><body>${html}</body></html>`);
+  // The element hit at the point of the control nearest to the fixed box's middle (the part that may be under it).
+  const hitAt = (sel, y) => page.evaluate(([sel, y]) => {
+    scrollTo(0, y); const r = document.querySelector(sel).getBoundingClientRect(), ad = document.querySelector('.ad, .sh').getBoundingClientRect();
+    const py = Math.min(Math.max((ad.top + ad.bottom) / 2, r.top + 1), r.bottom - 1);
+    const px = Math.min(Math.max((ad.left + ad.right) / 2, r.left + 1), r.right - 1);
+    const e = document.elementFromPoint(px, py); return e ? e.className : null;
+  }, [sel, y]);
+
+  const wipeHTML = '<main><a class="l" href="/a">First</a><div class="gap"></div><a class="m" href="/b">Second</a><div class="tail"></div></main><div class="ad"></div>';
+  const wipeCSS = extra => `.gap{display:block;height:960px}.tail{display:block;height:400px}.ad{position:fixed;right:0;bottom:120px;width:320px;height:180px;z-index:2147483000;opacity:0;background:#fff}${extra}`;
+  const blockers = run(wipeHTML, wipeCSS('')).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER');
+  expect(blockers.map(d => d.box)).toEqual(['.m']);
+  const {from, to} = blockers[0].scrolled;
+  await open(wipeHTML, wipeCSS(''));
+  expect(await hitAt('.m', from - 10), 'before the offsets').toBe('m');
+  for (const y of [from + 2, (from + to) / 2, to - 2]) expect(await hitAt('.m', y), `scrolled ${y}`).toBe('ad');
+  for (const y of [0, (from + to) / 2, to]) expect(await hitAt('.l', y) ?? 'off', `.l at ${y}`).not.toBe('ad');
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.ad')).opacity)).toBe('0');
+  // pointer-events: none: nothing reported, and the click reaches the link.
+  expect(run(wipeHTML, wipeCSS('.ad{pointer-events:none}')).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER')).toEqual([]);
+  await open(wipeHTML, wipeCSS('.ad{pointer-events:none}'));
+  expect(await hitAt('.m', (from + to) / 2)).toBe('m');
+
+  const sheetHTML = '<main><div class="gap"></div><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="tail"></div></main><div class="sh"></div>';
+  const sheetCSS = root => `.gap{display:block;height:500px}.tail{display:block;height:800px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`;
+  for (const [root, trapped] of [['html{overflow:hidden}', true], ['html{overflow:clip}', true], ['', false]]) {
+    const report = run(sheetHTML, sheetCSS(root));
+    expect(report.diagnostics.some(d => d.code === 'E_A11Y_CLICK_TRAP'), root || 'scrolls').toBe(trapped);
+    await open(sheetHTML, sheetCSS(root));
+    expect(await hitAt('.l', 0), root || 'scrolls').toBe('sh');
+    await page.mouse.move(100, 100); await page.mouse.wheel(0, 300); await page.waitForTimeout(300);
+    const scrolled = await page.evaluate(() => scrollY);
+    expect(scrolled > 0, `${root || 'scrolls'}: the wheel scrolls the page`).toBe(!trapped);
+    if (!trapped) expect(await page.evaluate(() => { const r = document.querySelector('.l').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; })).toBe('l');
+  }
+});

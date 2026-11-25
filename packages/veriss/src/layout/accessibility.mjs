@@ -107,7 +107,7 @@ import { parseColor, over, luminance, contrastRatio, opaqueValue, backdrop as ba
 export { parseColor, contrastRatio } from '../color/index.mjs';
 import { animationsOf, transitionsOf } from './css.mjs';
 import { exact, number } from './linear.mjs';
-import { scalar, sum, diff, times, sample, clip, serialize, width as domainWidth, height } from './region.mjs';
+import { scalar, sum, diff, times, sample, clip, serialize, evaluate, width as domainWidth, height } from './region.mjs';
 import { languageTag } from './text-font.mjs';
 import { q, add, mul, cmp, div } from './linear.mjs';
 import { intersect } from './integrity.mjs';
@@ -361,6 +361,15 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // there; inside one layer the tree-order rules below apply.
   const rowAt = path => everything.find(g => g.path === path);
   const parentPath = p => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+  // The page does not scroll for the user: overflow hidden / clip on html (both axes; it goes to the viewport) with a
+  // body that does not clip. Measured with the wheel and PageDown in Chromium, Firefox and WebKit (html hidden or clip
+  // never scrolls; a body that clips under a visible html does not either, but the layout leaves that Unknown).
+  const rootRows = geometry.filter(row => row.path === root.path && row.box.documentRoot);
+  const bodyRows = geometry.filter(row => row.box.tag === 'body' && parentPath(row.path) === root.path);
+  const stillPage = rootRows.length > 0 && rootRows.every(row => ['hidden', 'clip'].includes(row.overflowY) && ['hidden', 'clip'].includes(row.overflowX))
+    && bodyRows.every(row => row.overflowY === 'visible' && row.overflowX === 'visible');
+  const stillWhy = stillPage ? `the page does not scroll (overflow: ${rootRows[0].overflowY} on ${rootRows[0].box.label})` : '';
+  const inFixed = row => { for (let p = row.path; p; p = parentPath(p)) { const r = rowAt(p); if (r?.fixed || r?.sticky) return true; } return false; };
   // Also (measured in Chromium) position: fixed and sticky with z-index auto, a backdrop filter, and will-change naming
   // a property that would make one: a descendant's z-index does not escape them.
   const willStack = /(?:^|,\s*)(?:transform|translate|rotate|scale|opacity|filter|backdrop-filter|perspective|isolation|mix-blend-mode|clip-path|mask|contain)(?:\s*,|$)/;
@@ -494,10 +503,39 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
           // The other boxes over the target in the same viewport range: removing this cover alone does not free it.
           const others = covers.filter(c => c.cover !== cover && intersect(c.region, piece)).map(c => c.cover);
           const also = others.length ? `; ${others.map(c => c.box.label).join(', ')} ${others.length > 1 ? 'are' : 'is'} over it there too` : '';
-          report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover) + also, target, piece, { rule: 'occluded-target', cover: cover.path, ...(others.length ? { alsoCoveredBy: others.map(c => c.path) } : {}) });
+          const still = stillPage && inFixed(cover) && !inFixed(target) ? `; ${stillWhy}, so scrolling cannot free it` : '';
+          report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover) + also + still, target, piece, { rule: 'occluded-target', cover: cover.path, ...(others.length ? { alsoCoveredBy: others.map(c => c.path) } : {}) });
         }
       }
       reported.push(region);
+    }
+  }
+
+  // invisible-blocker, scrolled: a fixed box that paints nothing (an ad left at opacity 0) does not move as the page
+  // scrolls, so controls in the flow pass under it: at those scroll offsets a click on them lands on the box, which the
+  // user cannot see (a box that paints is seen, and scrolling on frees the control). Scroll offsets s run over
+  // [0, page height − viewport height]; at s the control's viewport top is its top − s. Only controls below the box at
+  // s = 0 (the pair at s = 0 is judged above), and only on a page the user can scroll. Measured in Chromium, Firefox and
+  // WebKit with elementFromPoint at several scroll offsets (pointer-events: none on the box as the control).
+  const scrolledPage = geometry.find(row => row.path === root.path && row.origin && row.block);
+  if (!stillPage && block && viewportBlock && scrolledPage) {
+    const ghostsFixed = hitPlaced.filter(c => c.fixed && visible(c) && c.paint.pointerEvents !== 'none' && !inertAt(c) && !unplacedPaint(c)
+      && [c, ...everything.filter(d => isAncestor(c.path, d.path))].every(d => paintsNothing(d)));
+    for (const target of ghostsFixed.length ? targets.filter(t => !inFixed(t) && !t.box.pseudo && !invisible(t)) : []) {
+      const own = layer(target);
+      for (const c of ghostsFixed) {
+        if (related(c.path, target.path) || ownStretch(c, target) || !paintsAbove(c, layer(c), target, own)) continue;
+        let r = intersect(target.region, c.region);
+        r = below(r, c.origin.inline, right(target)); r = below(r, target.origin.inline, right(c));
+        // On screen, and below the control's place at s = 0; reached before the largest scroll offset.
+        r = below(r, c.origin.block, viewportBlock); r = below(r, scalar(0), bottom(c));
+        r = atMost(r, bottom(c), target.origin.block);
+        r = below(r, target.origin.block, sum(bottom(c), diff(bottom(scrolledPage), viewportBlock)));
+        if (!r) continue;
+        const p = sample(r), from = number(evaluate(diff(target.origin.block, bottom(c)), p)), to = Math.min(number(evaluate(diff(bottom(target), c.origin.block), p)), number(evaluate(diff(bottom(scrolledPage), viewportBlock), p)));
+        report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', `${target.box.label} scrolls under the fixed ${c.box.label}, which ${invisible(c) ? 'is invisible (opacity 0)' : 'paints nothing'} but takes the pointer: once the page is scrolled past ${Math.round(from)}px (to ${Math.round(to)}px, at the witness viewport), clicks on ${target.box.label} land on ${c.box.label}, which the user cannot see. Give ${c.box.label} pointer-events: none, or display: none while it is not shown`,
+          target, r, { rule: 'invisible-blocker', cover: c.path, why: paintsNothing(c), scrolled: { from, to } });
+      }
     }
   }
 
@@ -2239,6 +2277,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const pinnedFixed = row => pinnedPieces(row, r => r.fixed);
     // Where the target stays under the layer at every scroll position.
     const stuck = (layerRow, target, region) => {
+      if (stillPage) return [region];
       const lp = meet([region], pinnedFixed(layerRow)), tp = meet([region], pinnedFixed(target));
       const lf = minus([region], lp), tf = minus([region], tp);
       return [...meet(lp, tp), ...meet(lf, tf), ...meet(lp, tf).map(r => fillsViewport(layerRow, r)).filter(Boolean)];
@@ -2332,7 +2371,8 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       const unplaced = geometry.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path) && !hitPaths.has(row.path) && row.region);
       const above = hitPlaced.filter(row => candidate(row, layerRow) && !related(row.path, layerRow.path) && !covered.has(row.path) && paintsAbove(row, layer(row), layerRow, layer(layerRow)) && overlap(row, layerRow))
         .map(row => ({ ...row, region: overlap(row, layerRow) }));
-      judge(entry, [...inside, ...above], unplaced, { lead: named => `${layerRow.box.label} covers ${named}`, scope: 'in it', none: 'it has no control, and none is painted above it', extra: {} });
+      const inFlow = [...covered.values()].some(t => !pinnedFixed(t).length);
+      judge(entry, [...inside, ...above], unplaced, { lead: named => `${layerRow.box.label} covers ${named}${stillPage && inFlow ? ` (${stillWhy}: scrolling cannot free them)` : ''}`, scope: 'in it', none: 'it has no control, and none is painted above it', extra: {} });
     }
     // An inert page under a shown layer: the inert controls take no click or focus (as if covered), so the way out must
     // be a control outside the inert part (in the layer, or anywhere else on the page). The layers are the outermost

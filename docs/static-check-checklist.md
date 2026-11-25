@@ -512,6 +512,17 @@
   `inert` でない層(`role="dialog"` の広告)に出口がないときも trap(`inert` の部品はクリックもフォーカスも受けない)。出口の候補の子孫が描くのが
   一部の幅だけなら、その幅だけ出口にする。Chromium・Firefox・WebKit で `elementFromPoint` と `focus()` を照合(e2e `click traps and invisible blockers`
   に 4 通り、stretched link は `OCCLUDED` のままで `INVISIBLE_BLOCKER` にならないことを確かめる)
+- [x] **H22. スクロールと fixed の覆い**(`E_A11Y_INVISIBLE_BLOCKER` の `scrolled`、`E_A11Y_CLICK_TRAP`): 何も描かない fixed の箱(opacity 0 のまま
+  残った広告)は、ページをスクロールすると流れの中のリンクがその下を通り、そのあいだクリックは見えない箱に届く(375×667 で 3 ブラウザーとも、
+  スクロール位置 0 では当たらず 300 で当たる。`pointer-events: none` の対照では当たらない)。位置 0 で箱より下にあり、スクロールの範囲
+  (0〜ページの高さ − viewport の高さ)の中で箱に重なる部品を報告し、重なり始めと終わりのスクロール位置を `scrolled` に書く。描く fixed の箱は
+  見えているので、スクロールを続ければ抜けられる(報告しない)。ページがスクロールしないとき: html と body の overflow の 16 通りを、ホイールと
+  PageDown で 3 ブラウザーで測った。html が hidden / clip ならスクロールしない(body が visible・hidden・clip のとき。body が auto だと body が
+  スクロールする箱になる)。html が visible で body が hidden / clip でもしない(body の値が viewport に移る)。html が auto ならいつもする。
+  html の overflow が両方の軸で hidden / clip のとき、fixed の層の下の流れの中の部品はスクロールで抜けられないので trap に数え、
+  `E_A11Y_OCCLUDED` の文言に「スクロールでは抜けられない」と書く。あわせて、html の hidden / clip は viewport に移るので fixed の箱を
+  閉じ込めない(以前は Unknown)。body の hidden / clip(html が visible のとき、または html も hidden のとき)は解析が Unknown のまま。
+  e2e `fixed covers and scrolling` で 3 ブラウザー
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
