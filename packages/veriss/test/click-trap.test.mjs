@@ -211,3 +211,79 @@ test('a transparent wrapper that scrolls (overflow: auto) around a painting fram
   assert.equal(find(r, 'E_A11Y_INVISIBLE_BLOCKER').length, 0, JSON.stringify(find(r, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.message)));
   assert.ok(find(r, 'E_A11Y_OCCLUDED').some(d => d.box === '.l'));
 });
+
+// A transparent link over the whole viewport (an ad's click hijack): the user sees the page's controls, every click
+// lands on the ad link. A link is a control, but the covered controls are not its own (unlike a stretched link's
+// ::after over the buttons of its own card): an invisible blocker, like a <div>.
+test('a transparent full-viewport link over the page is an invisible blocker; a stretched link over its own card stays an occlusion', () => {
+  const r = page('<a class="catch" href="https://adv.example/"></a>', '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5;display:block}');
+  const blockers = find(r, 'E_A11Y_INVISIBLE_BLOCKER');
+  assert.deepEqual([...new Set(blockers.map(d => d.box))], ['.l', '.m'], JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  assert.equal(find(r, 'E_A11Y_OCCLUDED').filter(d => ['.l', '.m'].includes(d.box)).length, 0);
+  // Absolutely positioned against the whole page (body is its containing block): the same.
+  const abs = page('<a class="catch" href="https://adv.example/"></a>', 'body{position:relative}.catch{position:absolute;top:0;left:0;right:0;bottom:0;z-index:5;display:block}');
+  assert.deepEqual([...new Set(find(abs, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.box))], ['.l', '.m']);
+  // A stretched link: its ::after covers the button of its own card (the card is the ::after's containing block).
+  const card = page('', '.card{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:40px;position:relative;background:#fff}.s{display:block;height:40px}.s::after{content:"";position:absolute;inset:0}.b{display:block;width:100px;height:40px;background:#246}',
+    {host: '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><article class="card"><a class="s" href="/item" aria-label="Item"></a><button class="b" aria-label="Save"></button></article></main>'});
+  assert.ok(find(card, 'E_A11Y_OCCLUDED').some(d => d.box === '.b'), JSON.stringify(card.diagnostics.map(d => [d.code, d.box])));
+  assert.equal(find(card, 'E_A11Y_INVISIBLE_BLOCKER').filter(d => d.box === '.b').length, 0);
+});
+
+// A visible close button under a transparent link that fills the same overlay: the click lands on the link.
+test('a close button under a transparent link of the same overlay is no way out: a click trap naming the link', () => {
+  const r = page('<div class="ov"><button class="x" aria-label="Close"></button><a class="lp" href="https://adv.example/"></a></div>',
+    overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff}.lp{position:absolute;top:0;left:0;right:0;bottom:0;display:block}');
+  const [trap] = find(r, 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap, JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  assert.equal(trap.box, '.ov');
+  const x = trap.exits.find(e => e.box === '.x');
+  assert.ok(x, JSON.stringify(trap.exits));
+  assert.match(x.why, /covered by \.lp, which paints nothing/);
+  assert.match(trap.message, /\.x is covered by \.lp, which paints nothing/);
+  // Control: the link under the button (or not taking the pointer), the button is the way out.
+  for (const css of ['.lp{pointer-events:none}', '.x{z-index:1}']) {
+    const ok = page('<div class="ov"><button class="x" aria-label="Close"></button><a class="lp" href="https://adv.example/"></a></div>',
+      overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff}.lp{position:absolute;top:0;left:0;right:0;bottom:0;display:block}' + css);
+    assert.equal(find(ok, 'E_A11Y_CLICK_TRAP').length, 0, css);
+  }
+});
+
+// inert: the page's controls take no click or focus. A shown layer that is not inert must offer the way out.
+test('an inert page under a painted layer with no way out is a click trap; a named visible close button frees it', () => {
+  const host = '<main class="w" inert><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>';
+  const ad = '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}';
+  const r = page('<div class="ad" role="dialog" aria-label="Ad"></div>', ad, {host});
+  const [trap] = find(r, 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap, JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  assert.equal(trap.box, '.ad');
+  assert.deepEqual(trap.covered, ['.l', '.m']);
+  assert.match(trap.message, /inert/);
+  // A visible, named close button in the dialog: no trap.
+  const ok = page('<div class="ad" role="dialog" aria-label="Ad"><button class="x" aria-label="Close">x</button></div>', ad + '.x{width:44px;height:44px;background:#fff;color:#000}', {host, boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
+  assert.equal(find(ok, 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(ok, 'E_A11Y_CLICK_TRAP').map(d => d.message)));
+  // A control of the page that is not inert is a way out too.
+  const free = page('<div class="ad" role="dialog" aria-label="Ad"></div><a class="k" href="/k">Home</a>', ad + '.k{display:block;width:100px;height:40px;color:#000}', {host, boxes: {'.k': {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20}}});
+  assert.equal(find(free, 'E_A11Y_CLICK_TRAP').length, 0);
+  // Nothing inert: no trap (the layer covers nothing).
+  assert.equal(find(page('<div class="ad" role="dialog" aria-label="Ad"></div>', ad), 'E_A11Y_CLICK_TRAP').length, 0);
+});
+
+// A close button that paints nothing itself, whose icon shows only at 600px and wider: below, it is no way out.
+test('a way out that paints only through a child shown at some widths frees the layer only there', () => {
+  const r = page('<div class="ov"><button class="x" aria-label="Close"><span class="i"></span></button></div>',
+    overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:transparent}.i{display:block;width:44px;height:44px;background:#fff}@media (width < 600px){.i{display:none}}');
+  const traps = find(r, 'E_A11Y_CLICK_TRAP');
+  assert.ok(traps.length > 0, JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  assert.ok(traps.every(t => t.range.max <= 600), JSON.stringify(traps.map(t => t.range)));
+  assert.match(traps[0].message, /\.x paints nothing/);
+});
+
+// A transparent clipping layer whose only paint is a frame without a position in the first pass: the layer gets the
+// trap analysis (the frame may hold the way out: Unknown), not only the occlusion of the controls under it.
+test('a transparent overflow: hidden overlay that shows a frame gets the trap analysis (Unknown)', () => {
+  const r = page('<div class="w"><iframe class="f" title="Advertisement" width="300" height="250"></iframe></div>',
+    '.w{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;overflow:hidden;display:block}.f{display:block;width:300px;height:250px;border:0}');
+  assert.ok(find(r, 'U_A11Y_CLICK_TRAP').length > 0, JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  assert.equal(find(r, 'E_A11Y_CLICK_TRAP').length, 0);
+});

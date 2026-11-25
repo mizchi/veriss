@@ -437,6 +437,26 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // it may fill the box, so the box is not known to be invisible (it stays an occlusion).
   const unplacedPaint = row => { const hit = new Set(hitPlaced.map(r => r.path)); return everything.some(d => isAncestor(row.path, d.path) && !hit.has(d.path) && !paintsNothing(d)); };
   const inControl = row => { for (let p = row.box.pseudo ? parentPath(row.path) : row.path; p; p = parentPath(p)) { const b = treeBoxes.get(p); if (b && interactive({ box: b })) return true; } return false; };
+  // A cover that is part of a control and is stretched over the box that holds the target (a stretched link's ::after
+  // over the buttons of its own card): the click reaches the control the card stands for, so the pair stays an occlusion.
+  // The stretched box is the outermost positioned one between the cover and its control; it is stretched over the target
+  // when its containing block (the nearest positioned ancestor) holds the target and is not the page itself. A fixed
+  // box, or one placed against the page (an ad's transparent link over the viewport), is no part of the target's card.
+  const ownStretch = (cover, target) => {
+    let control = null;
+    for (let p = cover.box.pseudo ? parentPath(cover.path) : cover.path; p; p = parentPath(p)) { const b = treeBoxes.get(p); if (b && interactive({ box: b })) { control = p; break; } }
+    if (!control) return false;
+    let stretched = null;
+    for (let p = cover.path; p && (p === control || isAncestor(control, p)); p = parentPath(p)) { const r = rowAt(p); if (r && ['absolute', 'fixed'].includes(r.position)) stretched = r; }
+    if (!stretched) return true;
+    if (stretched.position === 'fixed') return false;
+    for (let p = parentPath(stretched.path); p; p = parentPath(p)) {
+      const r = rowAt(p);
+      if (!r || r.position === 'static') continue;
+      return !r.box.documentRoot && !['html', 'body'].includes(r.box.tag) && isAncestor(p, target.path);
+    }
+    return false;
+  };
   // The topmost of boxes that all cover one target (paint order, as hit testing goes).
   const topmost = rows => rows.reduce((a, b) => paintsAbove(b, layer(b), a, layer(a)) ? b : a);
   const blockerMessage = (target, cover) => `${target.box.label} shows, but ${cover.box.label} ${invisible(cover) ? 'is invisible (opacity 0)' : 'paints nothing'} and lies over it, painted later: clicks land on ${cover.box.label}, which the user cannot see. Give ${cover.box.label} pointer-events: none, or display: none while it is not shown`;
@@ -467,7 +487,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         for (const piece of ghost) {
           const over = covers.filter(c => intersect(c.region, piece)).map(c => c.cover);
           const top = topmost(over);
-          if (!inControl(top) && !unplacedPaint(top)) { report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', blockerMessage(target, top), target, piece, { rule: 'invisible-blocker', cover: top.path, why: paintsNothing(top) }); continue; }
+          if (!ownStretch(top, target) && !unplacedPaint(top)) { report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', blockerMessage(target, top), target, piece, { rule: 'invisible-blocker', cover: top.path, why: paintsNothing(top) }); continue; }
           occluded.push(piece);
         }
         for (const piece of occluded) {
@@ -615,7 +635,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       if (!paintsAbove(cover, layer(cover), target, own)) continue;
       if (cover.paint.pointerEvents !== 'none') {
         const sure = inner && overlap(inner, cover);
-        let ghost = sure && paintsNothing(cover) && !inControl(cover) && !unplacedPaint(cover) && !invisible(target) ? [sure] : [];
+        let ghost = sure && paintsNothing(cover) && !ownStretch(cover, target) && !unplacedPaint(cover) && !invisible(target) ? [sure] : [];
         for (const r of seenOver) ghost = ghost.flatMap(piece => subtract(piece, r));
         let seenPart = sure ? [sure] : [];
         for (const g of ghost) seenPart = seenPart.flatMap(piece => subtract(piece, g));
@@ -2232,22 +2252,27 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const ownPointer = row => row.paint.cursor === 'pointer' && row.chain?.at(-2)?.cursor !== 'pointer';
     const takesFocus = row => interactive(row) || row.box.tabIndex >= 0 || row.box.focusable === true || row.box.focusable === 'dynamic';
     // Why a candidate is no way out whatever the viewport (empty: it may be one where it renders, uncovered).
-    const staticWhy = row => {
+    // Where a candidate shows: where it, or a descendant laid out there, paints (a descendant shown at some widths only
+    // makes it seen there only).
+    const shownWhere = row => meet([row.region], [row, ...everything.filter(d => isAncestor(row.path, d.path))].filter(d => d.region && !paintsNothing(d)).map(d => d.region));
+    // dark: whether it paints nothing somewhere in its region (the reason is then listed).
+    const staticWhy = (row, dark) => {
       const why = [];
       if (inertAt(row)) why.push('is inert');
       if (row.paint.pointerEvents === 'none') why.push('takes no pointer (pointer-events: none)');
       if (row.box.nativeStates?.disabled === true) why.push('is disabled');
-      const shows = [row, ...everything.filter(d => isAncestor(row.path, d.path))].some(d => !paintsNothing(d));
       // A background-image the browser dropped (W_CSS_IMAGE_INVALID) is often the image the control was meant to show.
       const dropped = row.paint.droppedImage?.[0], lost = dropped ? `; its ${dropped.property} ${dropped.value} is dropped by the browser (W_CSS_IMAGE_INVALID)` : '';
-      if (!shows) { const reason = paintsNothing(row); why.push(reason === 'opacity 0' ? 'is invisible (opacity 0)' : reason === 'visibility: hidden' ? 'is hidden (visibility: hidden)' : reason === 'it is clipped to nothing' ? 'is clipped to nothing' : `paints nothing (${reason}${lost})`); }
+      if (dark) { const reason = paintsNothing(row) ?? 'no text, background, border or image there'; why.push(reason === 'opacity 0' ? 'is invisible (opacity 0)' : reason === 'visibility: hidden' ? 'is hidden (visibility: hidden)' : reason === 'it is clipped to nothing' ? 'is clipped to nothing' : `paints nothing (${reason}${lost})`); }
       if (!isFrame(row) && !takesFocus(row)) why.push('cannot take focus and has no role (only cursor: pointer)');
       return why;
     };
     const byLayer = new Map();
     for (const pair of coverPairs) {
       const { target, cover } = pair;
-      if (paintsNothing(cover) || inControl(cover) || target.box.pseudo) continue;
+      // A cover that paints nothing is an invisible blocker, unless a descendant without a position paints (a frame in a
+      // clipping layer): then it may be seen, and its layer gets the trap analysis like a painted one.
+      if ((paintsNothing(cover) && !unplacedPaint(cover)) || inControl(cover) || target.box.pseudo) continue;
       const layerRow = layerOf(cover, target);
       if (!layerRow || inControl(layerRow)) continue;
       const whole = contains(cover, target, pair.region);
@@ -2259,43 +2284,74 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       entry.pieces.push(...minus(pieces, entry.pieces));
       entry.covered.set(target.path, target);
     }
-    for (const { layerRow, pieces, covered } of byLayer.values()) {
-      // Candidates: controls, focusable boxes, boxes that look clickable, and frames, in the layer or painted above it
-      // where they overlap it.
-      const candidate = row => !row.box.pseudo && row.path !== layerRow.path && visible(row) && (interactive(row) || takesFocus(row) || ownPointer(row) || isFrame(row));
-      const inside = hitPlaced.filter(row => candidate(row) && isAncestor(layerRow.path, row.path));
-      // Candidates in the layer whose position is not known (inside a box that scrolls): one may be the way out.
-      const hitPaths = new Set(hitPlaced.map(row => row.path));
-      const unplaced = geometry.filter(row => candidate(row) && isAncestor(layerRow.path, row.path) && !hitPaths.has(row.path) && row.region);
-      const above = hitPlaced.filter(row => candidate(row) && !related(row.path, layerRow.path) && !covered.has(row.path) && paintsAbove(row, layer(row), layerRow, layer(layerRow)) && overlap(row, layerRow))
-        .map(row => ({ ...row, region: overlap(row, layerRow) }));
-      const candidates = [...inside, ...above];
+    // Candidates: controls, focusable boxes, boxes that look clickable, and frames.
+    const candidate = (row, layerRow) => !row.box.pseudo && row.path !== layerRow.path && visible(row) && (interactive(row) || takesFocus(row) || ownPointer(row) || isFrame(row));
+    const hitPaths = new Set(hitPlaced.map(row => row.path));
+    // Judges one layer: where none of the candidates is a way out over the pieces, an error (or Unknown where a frame
+    // or a candidate without a position may be one). how: { lead, leadMaybe } words the finding.
+    const judge = ({ layerRow, pieces, covered }, candidates, unplaced, how) => {
       const exits = [], frames = [], failing = [];
       for (const row of candidates) {
-        const why = staticWhy(row);
-        const where = (() => { let r = sized(row, row.region); r = r && onScreen(row, r); if (!r) return []; return minus([r], coverPairs.filter(p => p.target.path === row.path && !paintsNothing(p.cover)).map(p => contains(p.cover, row, p.region)).filter(Boolean)); })();
-        if (isFrame(row) && !why.length) { frames.push({ row, where }); continue; }
-        if (!why.length && where.length) exits.push({ row, where });
-        failing.push({ box: row.box.label, path: row.path, why: why.length ? why.join(' and ') : 'is covered, has no size or is off-screen here' });
+        const shown = shownWhere(row), dark = minus([row.region], shown).length > 0;
+        const hard = staticWhy(row, false), why = staticWhy(row, dark);
+        // Every hit-testable cover takes the click where it covers the candidate, whether or not it paints (a
+        // transparent link over the close button takes it).
+        const over = coverPairs.filter(p => p.target.path === row.path).map(p => ({ cover: p.cover, region: contains(p.cover, row, p.region) })).filter(p => p.region);
+        const placedAt = (() => { let r = sized(row, row.region); r = r && onScreen(row, r); return r ? [r] : []; })();
+        const where = meet(minus(placedAt, over.map(p => p.region)), shown);
+        if (isFrame(row) && !hard.length) { frames.push({ row, where }); if (!dark) continue; }
+        else if (!hard.length && where.length) exits.push({ row, where });
+        const covers = [...new Map(over.filter(p => meet(placedAt, [p.region]).length).map(p => [p.cover.path, p.cover])).values()];
+        const coveredWhy = covers.length ? `is covered by ${covers.map(c => `${c.box.label}${paintsNothing(c) ? ', which paints nothing' : ''}`).join(' and ')}` : '';
+        failing.push({ box: row.box.label, path: row.path, why: why.length ? [...why, ...(coveredWhy ? [coveredWhy] : [])].join(' and ') : coveredWhy ? `${coveredWhy} (or has no size or is off-screen here)` : 'has no size or is off-screen here' });
       }
       const coveredRows = [...covered.values()].sort((a, b) => treeOrder(a.path, b.path));
       const labels = coveredRows.map(r => r.box.label);
       const named = `${labels.length} control${labels.length === 1 ? '' : 's'} of the page (${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ', …' : ''})`;
-      const reasons = failing.length ? failing.slice(0, 4).map(f => `${f.box} ${f.why}`).join('; ') + (failing.length > 4 ? `; and ${failing.length - 4} more` : '') : 'it has no control, and none is painted above it';
-      const extra = { rule: 'click-trap', covered: labels, exits: failing };
+      const reasons = failing.length ? failing.slice(0, 4).map(f => `${f.box} ${f.why}`).join('; ') + (failing.length > 4 ? `; and ${failing.length - 4} more` : '') : how.none;
+      const extra = { rule: 'click-trap', covered: labels, exits: failing, ...how.extra };
       let trapped = pieces;
       for (const exit of exits) trapped = minus(trapped, exit.where);
       for (const { row, where } of frames) {
         const maybe = meet(trapped, where);
-        for (const piece of maybe) report(unknowns, 'U_A11Y_CLICK_TRAP', 'unknown', `${layerRow.box.label} covers ${named}, and nothing in it that the analysis can see is a way out (${reasons}); but it shows ${row.box.label}, whose content is not analysed: the way out may be inside it`, layerRow, piece, { ...extra, frame: row.path });
+        for (const piece of maybe) report(unknowns, 'U_A11Y_CLICK_TRAP', 'unknown', `${how.lead(named)}, and nothing ${how.scope} that the analysis can see is a way out (${reasons}); but ${layerRow.box.label} shows ${row.box.label}, whose content is not analysed: the way out may be inside it`, layerRow, piece, { ...extra, frame: row.path });
         trapped = minus(trapped, where);
       }
       for (const row of unplaced) {
         const maybe = meet(trapped, [row.region]);
-        for (const piece of maybe) report(unknowns, 'U_A11Y_CLICK_TRAP', 'unknown', `${layerRow.box.label} covers ${named}, and nothing in it that the analysis can place is a way out (${reasons}); but the position of ${row.box.label} is not known (it is inside a box that scrolls): it may be the way out`, layerRow, piece, { ...extra, unplaced: row.path });
+        for (const piece of maybe) report(unknowns, 'U_A11Y_CLICK_TRAP', 'unknown', `${how.lead(named)}, and nothing ${how.scope} that the analysis can place is a way out (${reasons}); but the position of ${row.box.label} is not known (it is inside a box that scrolls): it may be the way out`, layerRow, piece, { ...extra, unplaced: row.path });
         trapped = minus(trapped, [row.region]);
       }
-      for (const piece of trapped) report(findings, 'E_A11Y_CLICK_TRAP', 'error', `${layerRow.box.label} covers ${named} and offers no way out: ${reasons}. Give it a close button that shows and takes focus (a <button> with a name) in or above the layer, or do not show the layer`, layerRow, piece, extra);
+      for (const piece of trapped) report(findings, 'E_A11Y_CLICK_TRAP', 'error', `${how.lead(named)} and ${how.scope === 'in it' ? 'offers' : 'there is'} no way out: ${reasons}. Give ${layerRow.box.label} a close button that shows and takes focus (a <button> with a name)${how.scope === 'in it' ? ' in or above the layer' : ''}, or do not show the layer`, layerRow, piece, extra);
+    };
+    for (const entry of byLayer.values()) {
+      const { layerRow, covered } = entry;
+      // In the layer, or painted above it where they overlap it.
+      const inside = hitPlaced.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path));
+      // Candidates in the layer whose position is not known (inside a box that scrolls): one may be the way out.
+      const unplaced = geometry.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path) && !hitPaths.has(row.path) && row.region);
+      const above = hitPlaced.filter(row => candidate(row, layerRow) && !related(row.path, layerRow.path) && !covered.has(row.path) && paintsAbove(row, layer(row), layerRow, layer(layerRow)) && overlap(row, layerRow))
+        .map(row => ({ ...row, region: overlap(row, layerRow) }));
+      judge(entry, [...inside, ...above], unplaced, { lead: named => `${layerRow.box.label} covers ${named}`, scope: 'in it', none: 'it has no control, and none is painted above it', extra: {} });
+    }
+    // An inert page under a shown layer: the inert controls take no click or focus (as if covered), so the way out must
+    // be a control outside the inert part (in the layer, or anywhere else on the page). The layers are the outermost
+    // absolutely positioned or fixed boxes that are not inert, hold no inert control, and show something.
+    // (An inert link loses its focus, so interactive() no longer counts it: its href still says it is one.)
+    const inertShown = placed.filter(row => (interactive(row) || (row.box.tag === 'a' && row.box.href !== undefined)) && visible(row) && inertAt(row) && !row.box.pseudo);
+    if (inertShown.length) {
+      const outer = row => { for (let p = parentPath(row.path); p; p = parentPath(p)) { const r = rowAt(p); if (r && ['absolute', 'fixed'].includes(r.position)) return false; } return true; };
+      const layers = hitPlaced.filter(row => ['absolute', 'fixed'].includes(row.position) && !inertAt(row) && visible(row) && outer(row) && !inertShown.some(t => related(t.path, row.path))
+        && (shownWhere(row).length || unplacedPaint(row)));
+      const covered = new Map(inertShown.sort((a, b) => treeOrder(a.path, b.path)).map(r => [r.path, r]));
+      for (const layerRow of layers) {
+        const pieces = minus(meet([layerRow.region], inertShown.map(r => r.region)), []);
+        if (!pieces.length) continue;
+        const candidates = hitPlaced.filter(row => candidate(row, layerRow) && !inertAt(row));
+        const unplaced = geometry.filter(row => candidate(row, layerRow) && !inertAt(row) && !hitPaths.has(row.path) && row.region);
+        const plural = covered.size === 1 ? 'is' : 'are';
+        judge({ layerRow, pieces, covered }, candidates, unplaced, { lead: named => `${named} ${plural} inert (they take no click or focus) while ${layerRow.box.label} shows`, scope: 'outside the inert part', none: 'no control outside the inert part', extra: { inert: true } });
+      }
     }
   }
   return { findings: dedupe(findings), warnings: dedupe(warnings), unknowns: dedupe(unknowns), exempted: dedupe(exempted), notes };

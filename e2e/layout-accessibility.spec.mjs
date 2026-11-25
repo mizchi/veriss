@@ -1743,7 +1743,9 @@ test('stretched link: Chromium hits the link\'s ::after at the button exactly wh
   for (const [fix, covered] of [['', true], ['.l::after{pointer-events:none}', false]]) {
     const css = base + fix;
     const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 480, max: 900}}, accessibility: true});
-    expect(report.diagnostics.some(d => blocks(d) && d.box === '.b'), fix || 'bare').toBe(covered);
+    // A cover that belongs to the card's own link stays an occlusion (the click reaches the link the card stands for).
+    expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.b'), fix || 'bare').toBe(covered);
+    expect(report.diagnostics.some(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER' && d.box === '.b'), fix || 'bare').toBe(false);
     await page.setViewportSize({width: 400, height: 300});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const hit = await page.evaluate(() => { const b = document.querySelector('.b').getBoundingClientRect(); return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.className; });
@@ -2419,11 +2421,18 @@ test('click traps and invisible blockers match hit testing and what the browser 
     // overflow: hidden layers: their content hit-tests where it sits at scroll offset 0.
     {name: 'clipping slot, painting frame', layer: '<div class="w"><iframe class="f" title="Advertisement" width="300" height="250" srcdoc="<p>ad</p>"></iframe><div class="x"></div></div>', css: slot(''), trap: false, occluded: true},
     {name: 'clipping slot, opacity-0 frame', layer: '<div class="w"><iframe class="f" title="Advertisement" width="300" height="250" srcdoc="<p>ad</p>"></iframe><div class="x"></div></div>', css: slot('opacity:0'), trap: false, blocker: true},
+    // An ad's transparent link over the whole viewport: a click hijack, like the click-catcher.
+    {name: 'transparent link catcher', layer: '<a class="catch" href="https://adv.example/"></a>', css: '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;display:block}', trap: false, blocker: true},
+    // The visible close button is under a transparent link of the same overlay: the click lands on the link.
+    {name: 'close button under a transparent link', layer: '<div class="ov"><button class="x" aria-label="Close"></button><a class="lp" href="https://adv.example/"></a></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff}.lp{position:absolute;top:0;left:0;right:0;bottom:0;display:block}', trap: true, coveredBy: {'.x': '.lp'}},
+    // An inert page and a shown layer without a way out; with a named close button, the button is the way out.
+    {name: 'inert page, layer without a way out', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}', trap: true, inert: true},
+    {name: 'inert page, layer with a close button', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"><button class="x" aria-label="Close">x</button></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}.x{width:44px;height:44px;background:#fff;color:#000}', boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}, trap: false, exit: '.x'},
     {name: 'clipping overlay, invisible close control', layer: `<div class="ov">${frame}<div class="x"></div></div>`, css: overlay.replace('}', ';overflow:hidden}') + '.f{display:block;width:300px;height:250px;border:0;opacity:0}.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-size:42px 42px;background-image:https://example.com/close.png}', trap: true},
   ];
   await page.setViewportSize({width: 800, height: 800});
   for (const c of cases) {
-    const css = base + c.css, html = `<html lang="en"><body>${host}${c.layer}</body></html>`;
+    const css = base + c.css, html = `<html lang="en"><body>${c.host ?? host}${c.layer}</body></html>`;
     const report = analyzeHTML(html, {name: 'P', viewport, accessibility: true, boxes: {'.l': line, '.m': line, ...(c.boxes ?? {})}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css});
     const traps = report.diagnostics.filter(d => d.code === 'E_A11Y_CLICK_TRAP'), blockers = report.diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER');
     expect(traps.length > 0, c.name).toBe(c.trap);
@@ -2434,14 +2443,22 @@ test('click traps and invisible blockers match hit testing and what the browser 
       const paints = e => { const s = getComputedStyle(e); return opacity(e) > 0 && s.visibility === 'visible' && (s.backgroundImage !== 'none' || !/^(?:transparent|rgba\(0, 0, 0, 0\))$/.test(s.backgroundColor) || ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(s[`border${side}Width`]) > 0) || e.textContent.trim() !== '' || ['IFRAME', 'IMG', 'VIDEO', 'CANVAS'].includes(e.tagName)); };
       const at = sel => { const e = document.querySelector(sel), r = e.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); };
       const label = e => e ? `.${e.className}` : null;
-      const layer = document.querySelector('.ov, .box, .catch, .w');
-      const candidates = [...layer.querySelectorAll('*')].map(e => ({box: label(e), paints: paints(e), focusable: e.tabIndex >= 0, role: e.getAttribute('role'), takesClick: (() => { const r = e.getBoundingClientRect(); return r.width > 0 && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === e; })()}));
-      return {hit: {'.l': label(at('.l')), '.m': label(at('.m'))}, candidates, blockerPaints: Object.fromEntries(['.l', '.m'].map(sel => [sel, at(sel) && at(sel) !== document.querySelector(sel) ? paints(at(sel)) : null]))};
+      const layer = document.querySelector('.ov, .box, .catch, .w, .ad');
+      const candidates = [...layer.querySelectorAll('*')].map(e => ({box: label(e), paints: paints(e), focusable: e.tabIndex >= 0 && !e.closest('[inert]'), role: e.getAttribute('role'), hitBy: label(at(`.${e.className}`)), takesClick: (() => { const r = e.getBoundingClientRect(); return r.width > 0 && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === e; })()}));
+      const focuses = sel => { const e = document.querySelector(sel); e.focus(); const ok = document.activeElement === e; e.blur(); return ok; };
+      return {hit: {'.l': label(at('.l')), '.m': label(at('.m'))}, focus: {'.l': focuses('.l'), '.m': focuses('.m')}, candidates, blockerPaints: Object.fromEntries(['.l', '.m'].map(sel => [sel, at(sel) && at(sel) !== document.querySelector(sel) ? paints(at(sel)) : null]))};
     });
     for (const t of traps) for (const covered of t.covered) {
       expect(facts.hit[covered], `${c.name}: ${covered} does not take the click`).not.toBe(covered);
-      // No candidate in the layer both shows and can take focus (or a role).
-      expect(facts.candidates.filter(e => e.paints && (e.focusable || e.role)), c.name).toEqual([]);
+      // No candidate in the layer shows, can take focus (or has a role) and takes the click.
+      expect(facts.candidates.filter(e => e.paints && (e.focusable || e.role) && e.takesClick), c.name).toEqual([]);
+      // Inert: the page's controls take no focus either.
+      if (c.inert) expect(facts.focus[covered], `${c.name}: ${covered} takes no focus`).toBe(false);
+    }
+    for (const [box, cover] of Object.entries(c.coveredBy ?? {})) {
+      expect(traps.some(t => t.exits.some(e => e.box === box && e.why.includes(`covered by ${cover}, which paints nothing`))), c.name).toBe(true);
+      expect(facts.candidates.find(e => e.box === box), c.name).toMatchObject({paints: true, focusable: true, takesClick: false, hitBy: cover});
+      expect(facts.candidates.find(e => e.box === cover)?.paints, c.name).toBe(false);
     }
     if (c.occluded) {
       expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.l'), c.name).toBe(true);

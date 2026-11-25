@@ -505,6 +505,13 @@
   rtl のコンテナの鏡映(包含ブロックが一緒に動くとき)と、祖先の拡大縮小でも同じだけ動かす。任意の角度の回転では、箱の位置と同じく不明にする。
   今までは動かしておらず、rtl で右端に置いた箱の中のスキップリンク(3 ブラウザーで x = 290、画面内)や、`scale(0.5)` の中のもの(x = −5〜15)を、
   フォーカスしても画面外(`E_A11Y_FOCUS_OFFSCREEN`)と誤って報告していた。e2e `focused positions follow rtl mirroring and scales` で 5 通り
+- [x] **H21. クリックの乗っ取りと出口を塞ぐ透明な覆い**(`E_A11Y_INVISIBLE_BLOCKER`・`E_A11Y_CLICK_TRAP`): viewport 全体に fixed で張った透明な
+  `<a>`(広告のリンク)は、部品であっても見えない覆い。部品の一部が覆う組を `E_A11Y_OCCLUDED` に残すのは、覆いを張る箱の包含ブロック(html・body 以外)が
+  対象を含むとき(stretched link の `::after` が自分のカードのボタンを覆う)だけ。閉じるボタンの上に同じ層の透明な全面リンクがあると、ボタンは
+  見えてフォーカスも受けるがクリックはリンクに届く: 出口にならず、理由に「何も描かない覆いに覆われている」と書く。ページの部品が `inert` で、
+  `inert` でない層(`role="dialog"` の広告)に出口がないときも trap(`inert` の部品はクリックもフォーカスも受けない)。出口の候補の子孫が描くのが
+  一部の幅だけなら、その幅だけ出口にする。Chromium・Firefox・WebKit で `elementFromPoint` と `focus()` を照合(e2e `click traps and invisible blockers`
+  に 4 通り、stretched link は `OCCLUDED` のままで `INVISIBLE_BLOCKER` にならないことを確かめる)
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
