@@ -578,6 +578,15 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
   3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
   (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
+- [x] **I19. overflow の箱の中の操作部品とテキストを覆うもの**(見逃し): `html, body { overflow: hidden }`(スクロールの止め方)の body の中のボタンに、
+  body を抜け出る fixed のシートが重なっても `E_A11Y_OCCLUDED` が出ず、何も報告しなかった。body が html に overflow を渡さずスクロールコンテナになり、
+  中の箱の位置が決まらない(スクロール位置による)ので、覆いの判定が位置のない箱を飛ばしていた。fixed が抜け出る変更の前からある穴で、
+  overflow: hidden の箱の外の absolute の兄弟でも同じだった。今は、overflow: clip の中は位置が決まるのでそのまま判定し、スクロールコンテナの中は
+  `U_A11Y_SCROLLED_COVER` を出したうえでスクロール位置 0 の配置で `E_A11Y_OCCLUDED` を出す。どちらも祖先が切り取る部分は覆われたと数えない。
+  テキストの `U_A11Y_SCROLLED_COVER` も auto / scroll だけを見ていたので、hidden と clip に広げた。375×667 で 3 ブラウザーの elementFromPoint が、
+  html と body が hidden、html hidden と body clip、html auto と body hidden、350px の hidden / clip の箱(その下端より下のボタンは
+  切り取られて当たらない)、対照(html hidden だけ、overflow なし)で一致し、hidden ではホイールも PageDown もスクロールしなかった。
+  残り: 同じスクロールコンテナの中の覆い同士、`E_A11Y_FOCUS_OBSCURED`・`E_A11Y_FIXED_HIDES` などほかの覆いの規則は、位置のない箱をまだ見ない。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

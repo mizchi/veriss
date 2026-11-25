@@ -2015,6 +2015,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         ...(/^(?:0|\d+(?:\.\d+)?px)$/.test(String(style['padding-right'])) ? { paddingInlineEnd: px(String(style['padding-right']) === '0' ? '0px' : style['padding-right']) } : {}),
         // overflow: clip clips without scrolling (hidden still scrolls a focused descendant into view).
         clipAxes: { inline: style['overflow-x'] === 'clip', block: style['overflow-y'] === 'clip' },
+        // The axes on which its overflow clips its content (a visible axis beside a hidden/auto/scroll one computes to
+        // auto), and whether it scrolls it (positions inside then follow a scroll offset). The root's overflow applies
+        // to the viewport, not to its box.
+        ...(box.documentRoot && available.root ? {} : (() => {
+          const x = String(style['overflow-x']), y = String(style['overflow-y']), scrolls = v => !['visible', 'clip'].includes(v);
+          const clips = { inline: x !== 'visible' || scrolls(y), block: y !== 'visible' || scrolls(x) };
+          return clips.inline || clips.block ? { overflowClips: clips, scroller: scrolls(x) || scrolls(y) } : {};
+        })()),
         overflow: ['hidden','clip'].includes(overflowValue) ? 'clip' : ['auto','scroll'].includes(overflowValue) ? 'scroll' : 'visible', overflowValue,
         // Where a single line of text starts inside the box (font-derived text extents).
         content: { left: add(px(style['border-left']), px(style['padding-left'])), top: add(px(style['border-top']), px(style['padding-top'])), inline: contentInline },
@@ -4018,6 +4026,13 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       for (const d of zero.diagnostics.filter(d => ['E_A11Y_TEXT_START_OBSCURED', 'E_A11Y_TEXT_LINE_OBSCURED'].includes(d.code)))
         if (scrolledCovers.some(u => d.path.startsWith(`${u.path}/`) && u.cover === d.cover) && !diagnostics.some(x => x.code === d.code && x.path === d.path && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
           diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${scrolledCovers.find(u => d.path.startsWith(`${u.path}/`)).box}; other scroll offsets are not checked)` });
+      // A target inside a scroll container under a box that is not scrolled with it (occluded-target's Unknown names
+      // the target and the cover): covered at the initial scroll offset is an error there.
+      for (const d of zero.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED')) {
+        const u = scrolledCovers.find(u => u.rule === 'occluded-target' && u.targets?.includes(d.path) && u.cover === d.cover);
+        if (u && !diagnostics.some(x => x.code === d.code && x.path === d.path && x.cover === d.cover && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
+          diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${u.box}; other scroll offsets are not checked)` });
+      }
     }
     // Focus rules that change layout: each focusable box they can reach is laid out again focused, and the geometric
     // focus findings for that box come from that layout instead of the unfocused one.

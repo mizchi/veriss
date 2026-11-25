@@ -395,6 +395,46 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const top = inner.reduce((a, b) => b.zIndex > a.zIndex ? b : a);
     return `${base}: the z-index ${top.zIndex} of ${top.box.label} orders it only inside the stacking context of ${outer.box.label} (${contextReasons(outer).join(', ')}), which paints below ${cover.box.label}`;
   };
+  // Hit testing inside boxes that clip their overflow. A box's position is `origin`; inside an overflow: clip box it is
+  // `clipOrigin` (exact, but parts may be cut off); inside a scroll container (hidden, auto, scroll) it follows the
+  // scroll offset and is known only in the scroll-zero layout. What a clipping ancestor cuts off is not under the
+  // pointer, so two boxes overlap where they meet inside the padding boxes of the ancestors that clip either of them
+  // (pairwise on each clipped axis: open intervals with a common point pairwise have one in common). A fixed box escapes
+  // the overflow of the ancestors above it (`clipsIt`).
+  const clipsIt = (clipper, target) => isAncestor(clipper.path, target.path) && (!target.fixedFrom || clipper.path === target.fixedFrom || isAncestor(target.fixedFrom, clipper.path));
+  const at = row => row.origin ?? row.clipOrigin ?? null;
+  const located = row => at(row) && row.block ? (row.origin ? row : { ...row, origin: row.clipOrigin }) : null;
+  const clippingRows = everything.filter(row => row.overflowClips);
+  const paddingBox = c => ({ ...c, origin: { inline: sum(c.origin.inline, scalar(c.borders.left)), block: sum(c.origin.block, scalar(c.borders.top)) }, inline: diff(diff(c.inline, scalar(c.borders.left)), scalar(c.borders.right)), block: diff(diff(c.block, scalar(c.borders.top)), scalar(c.borders.bottom)) });
+  const meetOn = (region, a, b, axes) => {
+    if (axes.inline) { region = below(region, a.origin.inline, right(b)); region = below(region, b.origin.inline, right(a)); }
+    if (axes.block) { region = below(region, a.origin.block, bottom(b)); region = below(region, b.origin.block, bottom(a)); }
+    return region;
+  };
+  // Where a and b (located rows) overlap and both are under the pointer there: pieces of a region (a clipper may have a
+  // row per viewport piece), or null when a clipping ancestor has no known position (then it is not decided).
+  const visibleOverlap = (a, b) => {
+    const base = overlap(a, b);
+    if (!base) return [];
+    const paths = [...new Set(clippingRows.filter(c => clipsIt(c, a) || clipsIt(c, b)).map(c => c.path))];
+    let pieces = [{ region: base, boxes: [] }];
+    for (const path of paths) {
+      const rows = clippingRows.filter(c => c.path === path);
+      if (rows.some(c => !located(c))) return null;
+      pieces = pieces.flatMap(piece => rows.map(c => {
+        const k = paddingBox(located(c)), axes = c.overflowClips;
+        let region = intersect(piece.region, c.region);
+        for (const axis of ['inline', 'block']) if (axes[axis]) region = below(region, scalar(0), k[axis]);
+        region = meetOn(meetOn(region, a, k, axes), b, k, axes);
+        for (const other of piece.boxes) region = meetOn(region, other.k, k, { inline: axes.inline && other.axes.inline, block: axes.block && other.axes.block });
+        return region ? { region, boxes: [...piece.boxes, { k, axes }] } : null;
+      }).filter(Boolean));
+    }
+    return pieces.map(piece => piece.region);
+  };
+  // The outermost scroll container with a known position that clips a box without one: the box is seen only inside it.
+  const unlocatedScroller = row => at(row) ? null : clippingRows.findLast(c => c.scroller && clipsIt(c, row) && located(c)) ?? null; // (rows are in post-order: ancestors after)
+  const occlusionRows = everything.map(located).filter(Boolean);
   const targets = placed.filter(row => interactive(row) && visible(row) && !inertAt(row));
   // inert-shown: an inert control that nothing paints over looks clickable, but takes no click: the click
   // reaches whatever is under it. (An inert page behind a modal's backdrop is covered there, and not reported.)
@@ -409,25 +449,56 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     }
     for (const piece of rest) report(warnings, 'W_A11Y_INERT_SHOWN', 'warning', `${target.box.label} is inert but shown with nothing over it: it looks clickable, yet takes no click or focus (the click reaches what is under it). Remove inert while it is shown, or hide it`, target, piece, { rule: 'inert-shown' });
   }
-  for (const target of targets) {
+  for (const target of occlusionRows.filter(row => interactive(row) && visible(row) && !inertAt(row))) {
     const own = layer(target);
     // Every cover counts where it covers: one cover's region is not another's (the first found used to end the
     // search, which lost the region where only a later cover overlaps; found by the occlusion fuzz).
     let reported = [];
     // Paint order: stacking contexts by z-index (paintsAbove), then positioned layers after in-flow content in tree order;
     // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
-    const covers = placed.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
-      .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
+    // (Where a clipping ancestor of either box has no known position, whether they meet under the pointer is not
+    // decided: Unknown.)
+    const covers = occlusionRows.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
+      .flatMap(cover => {
+        const pieces = visibleOverlap(target, cover);
+        if (pieces === null) { report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', `${cover.box.label} may cover ${target.box.label}, but a box that clips one of them has no known position (it is inside a scroll container): whether it covers it is not checked`, target, overlap(target, cover), { rule: 'occluded-target', cover: cover.path }); return []; }
+        return pieces.map(region => ({ cover, region }));
+      });
     for (const { cover, region } of covers) {
       let fresh = [region];
       for (const done of reported) fresh = fresh.flatMap(piece => subtract(piece, done));
       for (const piece of fresh) {
         // The other boxes over the target in the same viewport range: removing this cover alone does not free it.
-        const others = covers.filter(c => c.cover !== cover && intersect(c.region, piece)).map(c => c.cover);
+        const others = [...new Set(covers.filter(c => c.cover !== cover && intersect(c.region, piece)).map(c => c.cover))];
         const also = others.length ? `; ${others.map(c => c.box.label).join(', ')} ${others.length > 1 ? 'are' : 'is'} over it there too` : '';
         report(findings, 'E_A11Y_OCCLUDED', 'error', occludedMessage(target, cover) + also, target, piece, { rule: 'occluded-target', cover: cover.path, ...(others.length ? { alsoCoveredBy: others.map(c => c.path) } : {}) });
       }
       reported.push(region);
+    }
+  }
+  // A target inside a scroll container has no position here (it follows the scroll offset). Where a box that paints over
+  // it and is not scrolled with it (outside the container, or a fixed box that escapes it) reaches into the container's
+  // box, whether it covers the target is not decided here: Unknown, never a silent pass. The scroll-zero layout decides
+  // it at the initial scroll offset (judged from there in the engine), and the Unknown stays for the other offsets.
+  {
+    const byScroller = new Map();
+    for (const target of everything.filter(row => !at(row) && row.block && interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path))) {
+      const s = unlocatedScroller(target);
+      if (!s) continue;
+      if (!byScroller.has(s.path)) byScroller.set(s.path, { s, targets: [] });
+      byScroller.get(s.path).targets.push(target);
+    }
+    // (A scroller with a row per viewport piece: each piece's box.)
+    for (const { s: first, targets: inside } of byScroller.values()) for (const s of clippingRows.filter(c => c.path === first.path && located(c))) {
+      const port = paddingBox(located(s));
+      for (const cover of occlusionRows) {
+        if (cover.path === s.path || clipsIt(s, cover) || !visible(cover) || cover.paint.pointerEvents === 'none' || inertAt(cover)) continue;
+        const under = inside.filter(target => !related(cover.path, target.path) && paintsAbove(cover, layer(cover), target, layer(target)));
+        if (!under.length) continue;
+        const pieces = visibleOverlap(port, cover);
+        for (const region of pieces ?? [overlap(port, cover)].filter(Boolean))
+          report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', `${cover.box.label} paints over part of ${s.box.label}, which scrolls (overflow: ${s.overflowValue}) the controls under it (${under.map(t => t.box.label).join(', ')}): whether it covers them is not checked at every scroll offset, as positions there depend on it. Keep the covering box off the scrolling area, or give the content room beside it`, s, region, { rule: 'occluded-target', cover: cover.path, targets: under.map(t => t.path) });
+      }
     }
   }
 
@@ -594,8 +665,6 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // focus-clipped: overflow: clip does not scroll a focused descendant into view (hidden does; measured), so a
   // focusable box entirely outside the clip edge (its padding box) on a clipped axis can never be seen focused.
   const clipPlaced = everything.filter(row => row.clipOrigin && row.block).map(row => ({ ...row, origin: row.clipOrigin }));
-  // An ancestor's overflow clips a box unless a position: fixed box between them (or the box itself) escapes it.
-  const clipsIt = (clipper, target) => isAncestor(clipper.path, target.path) && (!target.fixedFrom || clipper.path === target.fixedFrom || isAncestor(target.fixedFrom, clipper.path));
   for (const target of focusedRows(clipPlaced.filter(row => focusable(row) && !hiddenFrom(row.path) && !row.box.pseudo))) {
     for (const clipper of clipPlaced.filter(row => clipsIt(row, target) && (row.clipAxes?.inline || row.clipAxes?.block))) {
       const edges = { left: sum(clipper.origin.inline, scalar(clipper.borders.left)), right: diff(right(clipper), scalar(clipper.borders.right)), top: sum(clipper.origin.block, scalar(clipper.borders.top)), bottom: diff(bottom(clipper), scalar(clipper.borders.bottom)) };
@@ -715,7 +784,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // text-start-obscured: an opaque later-painted box over the point where
   // its text starts (ltr, text-align start/left: the first glyph sits at the content box's left edge, in the middle
   // of the first line) hides its first characters, whatever the text's width (a badge or overlay laid on a heading).
-  const scrollersOf = target => placed.filter(row => row.overflow === 'scroll' && isAncestor(row.path, target.path) && row.path !== root?.path && !row.box.documentRoot);
+  const scrollersOf = target => placed.filter(row => row.scroller && clipsIt(row, target) && row.path !== root?.path && !row.box.documentRoot);
   for (const target of placed.filter(row => row.box.text && visible(row) && !hiddenFrom(row.path) && !row.box.pseudo && row.content && ['start', 'left'].includes(String(row.textAlign)) && row.direction !== 'rtl' && /^\d+(?:\.\d+)?px$/.test(String(row.lineHeight)))) {
     const own = layer(target), half = Number(String(target.lineHeight).slice(0, -2)) / 2;
     const x = sum(target.origin.inline, scalar(target.content.left)), y = sum(sum(target.origin.block, scalar(target.content.top)), scalar(q(String(half))));
@@ -781,15 +850,18 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // not see it. Where an opaque box outside the scroll container paints over part of it, whether that text is covered
   // is not checked: Unknown, never a silent pass (a carousel's arrow buttons over its scrolling slides).
   const sliver = div(q(1), q(64));
-  for (const s of placed.filter(row => row.overflow === 'scroll' && row.path !== root?.path && !row.box.documentRoot)) {
-    if (!geometry.some(row => isAncestor(s.path, row.path) && row.box.text && visible(row) && !hiddenFrom(row.path) && !row.origin)) continue;
-    for (const cover of placed) {
-      if (related(cover.path, s.path) || !visible(cover) || !cover.painted || !opaque(cover)) continue;
+  // The same inside a box that clips its overflow without scrolling (overflow: clip): the text has an exact position, but
+  // the rules above do not take what the clip cuts off from it. And a fixed box inside the container escapes its overflow
+  // (it is not scrolled or clipped with the text): it counts as outside.
+  for (const s of everything.filter(row => row.overflowClips && located(row) && row.path !== root?.path && !row.box.documentRoot).map(located)) {
+    if (!geometry.some(row => clipsIt(s, row) && row.box.text && visible(row) && !hiddenFrom(row.path) && !row.origin)) continue;
+    for (const cover of occlusionRows) {
+      if (cover.path === s.path || isAncestor(cover.path, s.path) || clipsIt(s, cover) || !visible(cover) || !cover.painted || !opaque(cover)) continue;
       if (!paintsAbove(cover, layer(cover), s, layer(s))) continue;
       let region = intersect(s.region, cover.region);
       region = atMost(region, sum(s.origin.inline, scalar(sliver)), right(cover)); region = atMost(region, sum(cover.origin.inline, scalar(sliver)), right(s));
       region = atMost(region, sum(s.origin.block, scalar(sliver)), bottom(cover)); region = atMost(region, sum(cover.origin.block, scalar(sliver)), bottom(s));
-      if (region) { report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', `${cover.box.label} paints over part of ${s.box.label}, a scroll container: whether it covers the text inside is not checked (positions there depend on the scroll offset). Keep controls outside the scrolling area, or give the content room beside them`, s, region, { rule: 'text-start-obscured', cover: cover.path }); break; }
+      if (region) { report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', s.scroller ? `${cover.box.label} paints over part of ${s.box.label}, a scroll container (overflow: ${s.overflowValue}): whether it covers the text inside is not checked (positions there depend on the scroll offset). Keep controls outside the scrolling area, or give the content room beside them` : `${cover.box.label} paints over part of ${s.box.label}, which clips its overflow (overflow: clip): whether it covers the text inside is not checked. Keep the covering box off it, or give the content room beside it`, s, region, { rule: 'text-start-obscured', cover: cover.path }); break; }
     }
   }
 
