@@ -1,10 +1,22 @@
-# 引き継ぎ(2026-11-24)
+# 引き継ぎ(2026-11-25)
 
 isle から切り出した CSS 検証器(veriss)を、別のマシンで続けて開発するための文書。今どこにいて、何をどう続けるか。
 
 ## 今どこにいるか
 
 - `main` に全部入っている(このセッションの作業も)。isle は veriss を git 依存で使う利用者になった(isle の `package.json` の `@mizchi/veriss` が commit を指す)
+- **実ページの Unknown を減らす(2026-11-24〜25、PR #19〜#32)**: CSS-in-JS の管理画面の実ページ(約 40 ページ)に veriss を当て、
+  止まりどころを 1 つずつ潰した。チェックリストの I1〜I17。自分で書く側の規約は [安全なサブセット](safe-subset.md)
+  - 誤検出を直した: keyframes 名の大文字・小文字、辺ごとの border の一括指定、caret、`*` の擬似要素のリセット(1 万 7 千件 → 0)
+  - Unknown を箱ごとにした: 未対応の宣言・セレクター・入力の段の問題が当たる箱だけを Unknown にし、ページ全体を止めない
+  - 判定できるようにした: flex の container の absolute の子、% の幅の flex item と px の max-width(中央寄せの容器)、clip する祖先の中の
+    containing block、折り返すテキストの `word-break: break-all`(Chromium の組の表)、配置を変える `:active`(押した状態で配置し直す)、
+    `:has()` の中の `>` と子孫の結合子、`border-image: none`
+  - mizchi/css の border の幅の誤りを見つけて直した(0.8.3)。オラクルは 0.8.3 を使い、border の全形式を比べる
+  - 止まりどころの重みは `tools/blocker-weights.mjs` で測る(下の「次にやること」)
+- **コンポーネントの CSS を中に閉じる(PR #33)**: コンポーネントの CSS がコンポーネントの外の要素に当たらないこと(外向き)を、
+  `E_SCOPE_GLOBAL`(ページ全体に効く CSS で、どの compound にも固有のクラスがない)・`E_SCOPE_REACHES`・`E_SCOPE_OUTSIDE`・
+  `E_SCOPE_ESCAPE` で保証する。styled-components にもスコープを付け、`createGlobalStyle` は escape。[component-lint.md](component-lint.md)
 - **押せない部品の検査(2026-11-23〜24、PR #14・#15)**: 覆い(見えない層、stacking context に閉じ込められた z-index、`filter`)、`inert`、
   端末の safe area とヒンジ、fixed の箱の viewport 外。チェックリストの H1〜H20。端末のプロファイル(StatCounter・Playwright・手で書いた safe area)は
   [docs/devices.md](devices.md)。safe area とヒンジの照合は Chromium の DevTools Protocol でしかできない(Firefox・WebKit は未照合)
@@ -73,7 +85,29 @@ tools/gate.sh                                     # push の前に毎回。20〜
 
 ## 次にやること
 
-- **実ページの Unknown**: [チェックリスト I](static-check-checklist.md) の残り(% の幅に max-width を組み合わせた flex の item: 実ページの 37 ページがここで止まる。次に中身で大きさの決まる flex の item)。自分で書く側の規約は [安全なサブセット](safe-subset.md)。Unknown の原因を潰すたびに、サブセットの「書いてよい形」へ移す
+- **実ページの Unknown**: 止まりどころは 1 ページに何段も重なっていて、ページ単位では直した効果が見えない。`tools/blocker-weights.mjs` で
+  箱単位の重みを測る(Unknown の箱を中身ごと外して解析し直し、外した要素の数を理由ごとに数える)。CSS-in-JS の管理画面 44 ページ
+  (約 2 万要素、Noto Sans JP を `--font` で渡した)の上位(2026-11-25、I17 まで入った main):
+
+  | 割合 | ページ | 理由 |
+  |---|---|---|
+  | 16.7% | 34 | 中身で大きさの決まる flex item の中に、幅の書かれていない img・フォーム部品 |
+  | 12.1% | 25 | `CSS max size clamping is not modeled`(max-width の掛かる箱の種類が足りない) |
+  | 9.9% | 10 | 0 でない inline 方向の margin(`margin: 0 -24px` で表をページの padding まで広げる) |
+  | 9.6% | 31 | inline-flex の箱の内容幅(下の fit-content の作業で一部済み) |
+  | 9.1% | 26 | 解析の作業量の上限(`U_LAYOUT_LIMIT`) |
+  | 7.7% | 3 | テキストと子要素の混在 |
+  | 7.6% | 9 | `border-collapse: collapse` で border のある表 |
+  | 4.2% | 2 | `text-box`(ボタンの中の `text-box: cap alphabetic`) |
+
+  - 外していくと 44 ページ中 19 ページが判定まで進み、25 ページは外せない Unknown(ページ全体のものなど)で止まった
+  - 未 push のブランチ `claude/fit-content-probe`: 中身の幅への `width: fit-content` / `min-content` / `max-content` の寄与と、
+    inline-block / inline-flex / inline-grid の内容幅(3 ブラウザーで一致)。その箱自身の配置(block の中の inline-level の箱)が
+    未対応なので、まだページは進まない
+  - block の中に inline-level の箱が 1 つだけある形(管理画面のボタン): 親の高さは、ボタンのテキストのベースラインの上下に親の strut が
+    収まれば箱と同じ(3 ブラウザーで 34px)。中身のない inline-block はベースラインが下端で、下に隙間ができる(Chromium 38、Firefox 39、
+    WebKit 37.891px と違う)。判定には親のフォントの strut が要るが、engine はフォントの寸法をテキストの箱の契約からしか受け取らない
+  - 自分で書く側の規約は [安全なサブセット](safe-subset.md)。Unknown の原因を潰すたびに、サブセットの「書いてよい形」へ移す
 
 - **eval の基準**: `evals/results/component-lint/` は Chromium 156(Playwright 1.64.1)で記録した。結果の `browser` が記録した版。別の版では文字の組み方の差で狭い幅の判定が動くので、gate で eval が変わったら、まず `browser` の行(gate が並べて出す)を見る
 - **M6 の残り**: layout が style を書き換えて報告する inert(% の高さ → auto、block flow の auto の上下 margin → 0、block flow の grid 配置)と inline の box の効かない寸法は engine に残る。`solve` の正規化(`$blockFlow`・`$inertMain`・`$anonymousGridText`)を style の段に出せれば、規則に移せる
@@ -111,6 +145,17 @@ tools/gate.sh                                     # push の前に毎回。20〜
 - `perspective` は none 以外でスタッキングコンテキストを作る。`text-wrap` はショートハンドで `text-wrap-mode` を wrap に戻す(`nowrap` の後に `text-wrap: balance` を書くと折り返しが戻る)
 - quirks モード(doctype なし)の WebKit は単位のない長さを px として受ける。解析は標準モードを前提にする
 - a11y の e2e は `evals/results/layout-accessibility/` を書き換える(コミット済みの `report.json` は古い)。コミットに混ぜない
+- engine は最初の Unknown で配置を打ち切り、`sizes` を返さない。「判定できた箱の数」は直接数えられないので、
+  `tools/blocker-weights.mjs` は Unknown の箱を中身ごと HTML から外して解析し直すのを繰り返し、外した要素の数を理由ごとに数える(見積もり)
+- 診断の `path`(`P/0/3/…`)は要素の子の番号。P が html、P/0 が body で、head は数えない
+- 複数の PR が同じ箇所(チェックリストの末尾の「残り」の直前)に書き足すと、毎回そこが衝突する。git の rerere は以前の解き方を
+  黙って再適用し、片方の記述を落とした。この repo では rerere を切ってある。解いたら必ず中身を確かめる
+- フォントを使う e2e: `setContent` の about:blank からは相対 URL のフォントを読めない(route したオリジンに `goto` する)。
+  `document.fonts.ready` は読み込みが始まる前に解決することがあるので、`[...document.fonts].map(f => f.load())` を待つ。
+  日本語は `<meta charset="utf-8">` と `text/html; charset=utf-8` を付ける(付けないと文字化けした行数を測る)
+- Playwright の `expect(a).toBe(b)` の失敗表示は Expected が b、Received が a。モデルとブラウザーのどちらを a にしたかで読み違えやすい
+- 実ページのテキストの寸法: unicode-range で分割した web フォント(Noto Sans JP の約 120 個の woff2)はそのまま渡せない。google/fonts の
+  完全版(`text-metrics/fixtures/sources.json` の出典と同じ)を `--font` に渡す
 - pnpm の git 依存では `workspace:*` が解決しない(内部パッケージは peerDependencies `*`)。`font_ffi.js` のビルド結果は `.gitignore` の否定でコミットしている
 
 ## isle との関係

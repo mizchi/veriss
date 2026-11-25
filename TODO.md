@@ -20,6 +20,9 @@ CSS × DOM の静的検査パターンを、**カテゴリごとに洗う**。�
    - `writing-mode: vertical-*` と物理プロパティ(`width` / `margin-top`)の取り違え
    - `inert` / `popover` と CSS の `display` の組み合わせ
    - `<picture>` / `srcset` と CSS の `width` / `object-fit`
+   - 実ページから出た観点(重みは [handoff](docs/handoff.md) の「次にやること」、`tools/blocker-weights.mjs`): 中身で大きさの決まる flex item の
+     中の img・フォーム部品、max-width の掛かる箱の種類、マイナスの inline margin、block の中の inline-level の箱(strut)、`text-box`、
+     `border-collapse: collapse` の border、解析の作業量の上限
 2. **構成の作業 M6**: `solve` の中の「効かない宣言」の判定(engine.mjs の reasons の塊)を `rules/` に移す。今回の F118・F124・F129 の「レイアウトが Unknown だと届かない」問題がこれで減る
 3. **M7〜M9**: contrast を規則に、a11y を DOM と幾何に分ける、`packages/` に出す
 4. **ADR-0017 の R2**(マージンの相殺の一般化)と **R3**(web-platform-tests の部分集合を回帰試験に)。R2 が Unknown を直接減らす
