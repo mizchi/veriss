@@ -2428,6 +2428,8 @@ test('click traps and invisible blockers match hit testing and what the browser 
     // An inert page and a shown layer without a way out; with a named close button, the button is the way out.
     {name: 'inert page, layer without a way out', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}', trap: true, inert: true},
     {name: 'inert page, layer with a close button', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"><button class="x" aria-label="Close">x</button></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}.x{width:44px;height:44px;background:#fff;color:#000}', boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}, trap: false, exit: '.x'},
+    // An opaque sheet that takes no click over the catcher: the control is not seen, so the catcher is an occlusion.
+    {name: 'catcher under an opaque pointer-events: none sheet', layer: '<div class="catch"></div><div class="sheet"></div>', css: '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}.sheet{position:fixed;top:0;left:0;right:0;height:100px;z-index:6;background:#000;pointer-events:none}', trap: false, blocker: false, hiddenUnder: '.sheet'},
     {name: 'clipping overlay, invisible close control', layer: `<div class="ov">${frame}<div class="x"></div></div>`, css: overlay.replace('}', ';overflow:hidden}') + '.f{display:block;width:300px;height:250px;border:0;opacity:0}.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-size:42px 42px;background-image:https://example.com/close.png}', trap: true},
   ];
   await page.setViewportSize({width: 800, height: 800});
@@ -2464,6 +2466,19 @@ test('click traps and invisible blockers match hit testing and what the browser 
       expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.l'), c.name).toBe(true);
       expect(facts.hit['.l'], `${c.name}: .l does not take the click`).not.toBe('.l');
       expect(facts.blockerPaints['.l'], `${c.name}: what takes .l's click (${facts.hit['.l']}) paints`).toBe(true);
+    }
+    if (c.hiddenUnder) {
+      // The browser gives the click to the catcher, and the painting sheet (pointer-events: none) is over it: the
+      // control is not seen there, so it is reported as covered by the catcher.
+      expect(facts.hit['.l'], c.name).toBe('.catch');
+      expect(facts.blockerPaints['.l'], c.name).toBe(false);
+      // (elementsFromPoint leaves out pointer-events: none boxes: the pixel at the control's centre is the sheet's.)
+      const r = await page.locator('.l').boundingBox();
+      const pixel = await page.screenshot({clip: {x: Math.floor(r.x + r.width / 2), y: Math.floor(r.y + r.height / 2), width: 1, height: 1}});
+      const sheet = await page.evaluate(sel => getComputedStyle(document.querySelector(sel)).backgroundColor, c.hiddenUnder);
+      expect(sheet, c.name).toBe('rgb(0, 0, 0)');
+      expect(await page.evaluate(async b64 => { const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode(); const k = document.createElement('canvas'); k.width = k.height = 1; const g = k.getContext('2d'); g.drawImage(img, 0, 0); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3).join(','); }, pixel.toString('base64')), c.name).toBe('0,0,0');
+      expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.l' && /\.catch/.test(d.message)), c.name).toBe(true);
     }
     if (c.exit) expect(facts.candidates.find(e => e.box === c.exit), c.name).toMatchObject({paints: true, focusable: true, takesClick: true});
     for (const b of blockers) {

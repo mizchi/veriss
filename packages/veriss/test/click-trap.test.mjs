@@ -367,3 +367,14 @@ test('a close button clipped away by an overflow: hidden ancestor is no way out'
     overlay + '.w{position:absolute;top:0;right:0;width:100px;height:60px;overflow:hidden;display:block}.x{position:absolute;top:10px;left:0;width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
   assert.equal(find(shown, 'E_A11Y_CLICK_TRAP').length + find(shown, 'U_A11Y_CLICK_TRAP').length, 0, JSON.stringify(shown.diagnostics.map(d => [d.code, d.box])));
 });
+
+// What the target shows is decided by every box painted over it, pointer-events: none or not: under an opaque sheet that
+// takes no click, the control is not seen, so the transparent catcher between them is an occlusion, not an invisible
+// blocker (giving the catcher pointer-events: none would not show the control).
+test('an opaque pointer-events: none sheet over the control: the catcher under it is an occlusion', () => {
+  const r = page('<div class="catch"></div><div class="sheet"></div>', '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}.sheet{position:fixed;top:0;left:0;right:0;height:100px;z-index:6;background:#000;pointer-events:none}');
+  assert.equal(find(r, 'E_A11Y_INVISIBLE_BLOCKER').filter(d => ['.l', '.m'].includes(d.box)).length, 0, JSON.stringify(find(r, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.message)));
+  assert.ok(find(r, 'E_A11Y_OCCLUDED').some(d => d.box === '.l' && d.cover === find(r, 'E_A11Y_OCCLUDED').find(x => x.box === '.l').cover && /\.catch/.test(d.message)), JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  // Without the sheet the catcher is an invisible blocker (control).
+  assert.ok(find(page('<div class="catch"></div>', '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}'), 'E_A11Y_INVISIBLE_BLOCKER').some(d => d.box === '.l'));
+});

@@ -477,6 +477,8 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     return hitPlaced.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
       .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
   };
+  // The regions where a box that paints lies over the target (any box: what it shows, not what takes the click).
+  const paintedOver = target => { const own = layer(target); return hitPlaced.filter(c => !related(c.path, target.path) && visible(c) && !paintsNothing(c) && paintsAbove(c, layer(c), target, own)).map(c => overlap(target, c)).filter(Boolean); };
   for (const target of targets) {
     // Every cover counts where it covers: one cover's region is not another's (the first found used to end the
     // search, which lost the region where only a later cover overlaps; found by the occlusion fuzz).
@@ -485,8 +487,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     // two in-flow block boxes paint (and hit-test) in tree order, the later one on top.
     const covers = coversOf(target);
     for (const c of covers) coverPairs.push({ target, ...c });
-    // Where something that paints covers the target, it is not seen as it is: the covers are occlusions there.
-    const seenOver = covers.filter(c => !paintsNothing(c.cover)).map(c => c.region);
+    // Where something that paints covers the target, it is not seen as it is: the covers are occlusions there. Every box
+    // painted over it counts, one with pointer-events: none or inert too (it takes no click, but hides the target).
+    const seenOver = paintedOver(target);
     const targetShows = !invisible(target);
     for (const { cover, region } of covers) {
       let fresh = [region];
@@ -673,11 +676,12 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const own = layer(target), inner = target.bounds.inner && { ...target, ...target.bounds.inner }, outer = { ...target, ...target.bounds.outer };
     // Where a box that paints is over the link, it is not seen as it is (an occlusion); elsewhere a cover that paints
     // nothing is an invisible blocker (see invisible-blocker above).
-    const seenOver = hitPlaced.filter(c => !related(c.path, target.path) && c.path !== target.parentText && visible(c) && c.paint.pointerEvents !== 'none' && !paintsNothing(c) && paintsAbove(c, layer(c), target, own)).map(c => overlap(outer, c)).filter(Boolean);
+    const seenOver = hitPlaced.filter(c => !related(c.path, target.path) && c.path !== target.parentText && visible(c) && !paintsNothing(c) && paintsAbove(c, layer(c), target, own)).map(c => overlap(outer, c)).filter(Boolean);
     for (const cover of hitPlaced) {
       if (related(cover.path, target.path) || cover.path === target.parentText || !visible(cover)) continue;
       if (!paintsAbove(cover, layer(cover), target, own)) continue;
-      if (cover.paint.pointerEvents !== 'none') {
+      // (An inert cover takes no click either: the click reaches what is under it. It still paints: seenOver above.)
+      if (cover.paint.pointerEvents !== 'none' && !inertAt(cover)) {
         const sure = inner && overlap(inner, cover);
         let ghost = sure && paintsNothing(cover) && !ownStretch(cover, target) && !unplacedPaint(cover) && !invisible(target) ? [sure] : [];
         for (const r of seenOver) ghost = ghost.flatMap(piece => subtract(piece, r));
