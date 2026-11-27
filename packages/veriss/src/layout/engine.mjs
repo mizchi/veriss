@@ -2053,7 +2053,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         overflow: ['hidden','clip'].includes(overflowValue) ? 'clip' : ['auto','scroll'].includes(overflowValue) ? 'scroll' : 'visible', overflowValue,
         // Where a single line of text starts inside the box (font-derived text extents).
         content: { left: add(px(style['border-left']), px(style['padding-left'])), top: add(px(style['border-top']), px(style['padding-top'])), inline: contentInline },
-        textAlign: style['text-align'], lineHeight: style['line-height'], direction: style.direction, overflowX: style['overflow-x'], painted: paints(style),
+        textAlign: style['text-align'], lineHeight: style['line-height'], direction: style.direction, overflowX: style['overflow-x'], overflowY: style['overflow-y'], painted: paints(style),
         // z-index applies to positioned boxes and to grid/flex items.
         zIndex: style['z-index'] !== 'auto' && (style.position !== 'static' || ['grid', 'flex'].includes(parents.at(-1)?.style.display)) ? Number(style['z-index']) : null,
         paint: paintFacts(style), chain: [...ancestorPaint, ...parents.map((parent, i) => captionBackdrop(parent, parents[i + 1]?.box ?? box, paintFacts(parent.style))), paintFacts(style)],
@@ -2990,7 +2990,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (trap && !layoutWarnings.some(w => w.code === 'W_LAYOUT_FIXED_TRAPPED' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_FIXED_TRAPPED', severity: 'warning', box: item.box.label, path: item.box.path, ancestor: trap.box.label,
         message: `${item.box.label} is position: fixed, but ${trap.box.label} (${fixedContainer(trap.style)}) becomes its containing block: it is placed against ${trap.box.label} and moves with it instead of staying on the viewport. Render it outside that box (a portal to the end of body), or drop the property`, ...ranges(r) });
       if (trap) throw Object.assign(new Error(`${item.box.label} is position: fixed, but its ancestor ${trap.box.label} has ${fixedContainer(trap.style)}, which makes it the containing block: ${item.box.label} is placed against ${trap.box.label} and scrolls with it, not with the viewport. Move it outside that box (for example to the end of body), or drop the property`), { code: 'U_LAYOUT_FIXED_CONTAINED', box: item.box, region: r, ancestor: trap.box.label, ancestorPath: trap.box.path, property: 'transform' });
-      if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible'))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
+      // (overflow: hidden / clip on the root element goes to the viewport, which neither clips nor moves a fixed box:
+      // measured in Chromium, Firefox and WebKit, the fixed box stays where it is and the page does not scroll.)
+      const rootToViewport = ancestor => ancestor.box?.documentRoot && ['overflow-x','overflow-y'].every(key=>['hidden','clip'].includes(ancestor.style[key]));
+      if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || (!rootToViewport(ancestor) && ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible')))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
       const viewport = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
       return solve(item.box,{inline:viewport.inline,block:viewport.block,containingBlock:{path:'viewport',...viewport},...(staticOrigin !== undefined ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
     }
@@ -4123,6 +4126,25 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       for (const d of zero.diagnostics.filter(d => ['E_A11Y_TEXT_START_OBSCURED', 'E_A11Y_TEXT_LINE_OBSCURED'].includes(d.code)))
         if (scrolledCovers.some(u => d.path.startsWith(`${u.path}/`) && u.cover === d.cover) && !diagnostics.some(x => x.code === d.code && x.path === d.path && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
           diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${scrolledCovers.find(u => d.path.startsWith(`${u.path}/`)).box}; other scroll offsets are not checked)` });
+    }
+    // Hit testing inside overflow: hidden boxes (ad slots and overlays clip their frame and close control): those boxes
+    // are scroll containers, so their content has no position in this pass, and a transparent wrapper looks like an
+    // invisible blocker, or a layer like a trap without a way out. Nobody can scroll an overflow: hidden box, so the
+    // page laid out at scroll offset 0 gives where that content hit-tests: the occlusion, blocker and trap findings of
+    // the covered controls and the layers are taken from there.
+    const hitCodes = new Set(['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP']);
+    const hiddenBox = geometry.some(row => row.overflow === 'clip' && row.overflowValue === 'hidden' && !row.box.documentRoot && row.path !== root.path);
+    if (pristine && hiddenBox && diagnostics.some(d => ['E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP'].includes(d.code))) {
+      let zero = null;
+      try { zero = analyzeBoxTree(pristine, { ...options, integrity: undefined }, scrollbarProfile, budget, inlineSheets, [], ['scroll-zero']); } catch { zero = null; }
+      // (Unknown accessibility findings there are fine; a layout that is not decided at offset 0 is not used.)
+      if (zero && !zero.diagnostics.some(d => d.severity === 'unknown' && !d.rule)) {
+        const targetsHit = new Set(diagnostics.filter(d => ['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code)).map(d => d.path));
+        const keep = d => !hitCodes.has(d.code) || (['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code) && !targetsHit.has(d.path));
+        const taken = zero.diagnostics.filter(d => hitCodes.has(d.code) && (['E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP'].includes(d.code) || targetsHit.has(d.path)));
+        for (let i = diagnostics.length - 1; i >= 0; i--) if (!keep(diagnostics[i])) diagnostics.splice(i, 1);
+        diagnostics.push(...taken.map(d => ({ ...d, scrollOffset: 0 })));
+      }
     }
     // Focus rules that change layout: each focusable box they can reach is laid out again focused, and the geometric
     // focus findings for that box come from that layout instead of the unfocused one.
