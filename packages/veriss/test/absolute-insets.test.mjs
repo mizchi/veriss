@@ -219,6 +219,14 @@ test('an undecided absolute box keeps its style checks', () => {
   assert.ok(unplaced(mixed).some(b => /\.t/.test(b)), JSON.stringify(mixed.accessibility?.warnings?.map(w => w.code)));
 });
 
+// The same for an absolute grid child whose static position an alignment moves (Unknown in the layout).
+test('an absolute grid child with an aligned static position keeps its style checks', () => {
+  const r = analyzeHTML('<html lang="en"><body><main class="page"><div class="grid"><div class="o"><p class="t">Low contrast text</p></div></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.page{${g}}.page{background:#fff}.grid{display:grid;position:relative;height:200px;align-items:end;background:#fff}.o{position:absolute;width:100px;background:#fff}.t{color:#777;font-size:16px}`, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}, accessibility: true});
+  assert.equal(r.status, 'unknown');
+  assert.match(r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message).join(' | '), /static position that is not modeled/);
+  assert.ok((r.accessibility?.warnings ?? []).some(w => w.code === 'W_A11Y_CONTRAST_UNPLACED' && /\.t/.test(w.box)), JSON.stringify(r.accessibility?.warnings?.map(w => w.code)));
+});
+
 // The ad idiom: a fixed overlay with a box centred in it by negative margins; the accessibility checks see the overlay.
 // (The translate centres the painted box only: its layout box still reaches past the overlay, E_LAYOUT_ABSOLUTE_END,
 // which the margins do not; the accessibility verdicts are the same.)

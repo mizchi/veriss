@@ -661,8 +661,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           // the static position (measured: align-items: flex-end on an 80px grid puts a 20px absolute child at 60).
           const aligned = value => !['auto', 'normal', 'stretch', 'start', 'flex-start', 'self-start'].includes(String(value ?? 'auto'));
           const blockAlign = String(style['align-self'] ?? 'auto') === 'auto' ? parentStyle['align-items'] : style['align-self'];
-          if (none('top') && none('bottom') && aligned(blockAlign)) throw Object.assign(new Error(`${box.label}: an absolute box with auto top and bottom aligned by ${String(style['align-self'] ?? 'auto') === 'auto' ? `its grid's align-items: ${blockAlign}` : `align-self: ${blockAlign}`} has a static position that is not modeled`), { code: 'U_LAYOUT_CSS', box });
-          if (none('top') && none('bottom')) style = { ...style, top: '0px', $staticPosition: true, $staticBlock: true };
+          // Unknown in the layout; the style-only walk keeps reading the box (with its declared insets).
+          if (none('top') && none('bottom') && aligned(blockAlign)) { if (!readingStyles) throw Object.assign(new Error(`${box.label}: an absolute box with auto top and bottom aligned by ${String(style['align-self'] ?? 'auto') === 'auto' ? `its grid's align-items: ${blockAlign}` : `align-self: ${blockAlign}`} has a static position that is not modeled`), { code: 'U_LAYOUT_CSS', box }); }
+          else if (none('top') && none('bottom')) style = { ...style, top: '0px', $staticPosition: true, $staticBlock: true };
         }
         // In a block container that is also the containing block, a block-level box with both inline insets auto starts
         // at the container's content edge: its inline-start padding inside the padding box (measured in Chromium,
