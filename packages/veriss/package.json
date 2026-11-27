@@ -1,7 +1,6 @@
 {
   "name": "@mizchi/veriss",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "description": "Static responsive CSS verification over a closed box-tree model.",
   "exports": {
@@ -78,5 +77,8 @@
     "type": "git",
     "url": "git+https://github.com/mizchi/veriss.git",
     "directory": "packages/veriss"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -18,9 +18,19 @@ Unknown is never turned into success: what the model does not cover is reported 
 
 Users: [mizchi/isle](https://github.com/mizchi/isle) checks its components' layout contracts with `@mizchi/veriss`.
 
+## Install
+
+`@mizchi/veriss` (the core) is on npm; the adapters are not published yet.
+
+```sh
+npm install @mizchi/veriss
+```
+
+[vlmkit](https://github.com/mizchi/vlmkit) runs it on rendered pages: `vlmkit check css <page>` hands veriss the DOM after the page's scripts ran and every stylesheet the page loaded.
+
 ## Use from git
 
-Not published to npm. With pnpm, depend on a package directory at a commit:
+For an unreleased commit, or an adapter, depend on a package directory with pnpm:
 
 ```json
 { "dependencies": { "@mizchi/veriss": "github:mizchi/veriss#<commit>&path:packages/veriss" } }
