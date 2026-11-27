@@ -1672,3 +1672,11 @@ test('F138: a var() with a fallback is reported only when a bare-number definiti
   // Defined on :root only under a query: elsewhere the fallback is used.
   assert.equal(codes(run('@media (min-width:600px){:root{--d:300}}.a{transition:opacity var(--d,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
 });
+
+test('F138: a quoted animation name is not a var(); a non-ASCII variable keeps its fallback', () => {
+  assert.equal(codes(run(':root{--d:2}@keyframes "var(--d)"{to{opacity:.5}}.a{animation:"var(--d)" 1s infinite}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(":root{--d:2}@keyframes 'a\\'var(--d)'{to{opacity:.5}}.a{animation:'a\\'var(--d)' 1s infinite}"), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run('.other{--délai:300}.a{transition:opacity var(--délai,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--délai:300}.a{transition:opacity var(--délai,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+});

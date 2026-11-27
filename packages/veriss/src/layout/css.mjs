@@ -1392,7 +1392,9 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         if (prop.startsWith('--')) definitions.set(d.prop, [...(definitions.get(d.prop) ?? []), { value: d.value.trim(), universal: d.parent?.type === 'rule' && d.parent.parent?.type === 'root' && (d.parent.selectors ?? []).some(sel => /^(?::root|html|\*)$/i.test(sel.trim())) }]);
         if (/^(?:transition|animation)(?:-duration|-delay)?$/.test(prop)) {
           // Outside calc(): there a bare number is a multiplier.
-          let outside = '', depth = 0; for (let i = 0; i < d.value.length; i++) { if (depth === 0 && /^calc\(/i.test(d.value.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (d.value[i] === '(') depth++; else if (d.value[i] === ')') depth--; continue; } outside += d.value[i]; }
+          // A quoted string (an animation name may be one) is opaque: its text is never a var() or a parenthesis.
+          const unquoted = d.value.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+          let outside = '', depth = 0; for (let i = 0; i < unquoted.length; i++) { if (depth === 0 && /^calc\(/i.test(unquoted.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (unquoted[i] === '(') depth++; else if (unquoted[i] === ')') depth--; continue; } outside += unquoted[i]; }
           // Only a var() at parenthesis depth 0 is a time for sure: one inside steps() or cubic-bezier() is that function's
           // number, and a fallback is used only when its variable has no value. Every other function is kept as its name.
           // A name is read whole (CSS allows non-ASCII), never as its ASCII prefix: --délai is not --d.
@@ -1401,7 +1403,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
             const fn = /^([\w-]+)\(/.exec(outside.slice(i));
             if (!fn) { top += outside[i]; continue; }
             const v = /^var\(\s*(--[^\s,()]+)\s*[,)]/i.exec(outside.slice(i));
-            top += v ? `var(${v[1]}${/^var\(\s*--[\w-]+\s*,/i.test(outside.slice(i)) ? ',' : ''})` : `${fn[1]}()`;
+            top += v ? `var(${v[1]}${v[0].endsWith(',') ? ',' : ''})` : `${fn[1]}()`;
             let depth = 0, k = i + fn[0].length - 1;
             for (; k < outside.length; k++) { if (outside[k] === '(') depth++; else if (outside[k] === ')' && --depth === 0) break; }
             i = k;
