@@ -8,6 +8,7 @@ import { familyProblem, fontShorthandProblem } from './font-syntax.mjs';
 import { gridTrackProblem } from './grid-syntax.mjs';
 import { keywordProblem } from './keyword-syntax.mjs';
 import { timingProblem } from './timing-syntax.mjs';
+import { propertyTypo, mediaFeatureTypo, mediaFeatureNames } from './name-syntax.mjs';
 import {findCSSWriteConflicts,cssWriteConflictMessage} from '../css-writes.mjs';
 import { q, cmp, add, mul, div, exact, decimal } from './linear.mjs';
 import { parseCondition, preferenceValues } from './conditions.mjs';
@@ -118,6 +119,8 @@ function propertyRuleProblem(rawSyntax, inherits, initial) {
   return null;
 }
 const wide = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
+// The words of a transition item that are not its property (easings, transition-behavior, CSS-wide keywords).
+const transitionKeywords = new Set(['ease', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end', 'allow-discrete', 'normal', ...wide]);
 const decoration = /^(?:background-(?:position|size|repeat|clip|origin|attachment)|border-radius|text-shadow|text-decoration-(?:color|style|thickness)|text-underline-offset|transition-behavior|list-style-(?:position|image))$/;
 // Properties a :hover/:focus rule may set: they repaint (or restack) without changing geometry.
 // The selector with its pseudo-classes and pseudo-elements removed (:not(), :is(), :has() and states included; tags,
@@ -800,7 +803,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
   let repairedOffsets = [];
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
-  const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
+  const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeRules = new Map(), declaredProperties = new Set(), transitionedCustom = [], keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
   const layerIndex = name => { if (!layers.includes(name)) layers.push(name); return layers.indexOf(name); };
   let count = 0, scope = null;
   const reportedMediaEm = new Set();
@@ -849,6 +852,10 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       }
       if (node.type === 'atrule' && /^(?:-webkit-)?keyframes$/i.test(node.name)) {
         const name = node.params.trim().replace(/^["']|["']$/g, ''); keyframes.add(name);
+        // F135: an unconditional, unprefixed @keyframes of a name already defined replaces it whole (frames are not merged).
+        // Unconditional: at the top, or directly in a layer block (layers are flat; a conditional one is Unknown above).
+        if (contexts.length === 0 && depth === (layer !== null ? 1 : 0) && node.name === 'keyframes') { const animated = new Set(); node.walkDecls(d => { if (d.prop.toLowerCase() !== 'animation-timing-function') animated.add(d.prop.toLowerCase()); });
+          keyframeRules.set(name, [...(keyframeRules.get(name) ?? []), { animated, layer, file: filename, line: node.source.start.line }]); }
         // The paint of each frame (for the flash rule): offsets with their background-color and opacity.
         const frames = [];
         for (const frame of node.nodes ?? []) if (frame.type === 'rule') for (const at of frame.selectors) {
@@ -910,6 +917,8 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         // F111: an @property the browser ignores (the property then stays unregistered) is ignored here too and reported.
         { const invalid = propertyRuleProblem(descriptor('syntax'), inherits, initial);
           if (invalid) { note('W_CSS_PROPERTY_INVALID', { name, problem: invalid, file: filename, line: node.source.start.line }); continue; } }
+        // Registered in the browser (F136), whether or not the analysis models its syntax.
+        declaredProperties.add(name);
         const problemOf = !customName(name) ? 'the name is not a custom property' : !syntax || !(syntax === '*' || typedValue[syntax]) ? `syntax ${syntax ?? '(missing)'} is not modeled` : !['true', 'false'].includes(inherits) ? 'inherits must be true or false' : syntax !== '*' && (initial === undefined || !typedValue[syntax].test(initial)) ? `initial-value ${initial ?? '(missing)'} is not a literal ${syntax}` : null;
         if (problemOf) { problem('U_LAYOUT_CSS', `@property ${name}: ${problemOf}`, node.source.start.line); continue; }
         if (depth > 0) { problem('U_LAYOUT_CSS', `@property ${name} inside a conditional rule is not modeled`, node.source.start.line); continue; }
@@ -961,6 +970,14 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         // F87: "and(", "or(" or "not(" (no space) is a function token, not the keyword: the query is invalid and never matches (measured
         // in Chromium, Firefox and WebKit). In a list only that query fails, so only a single query is handled.
         if (node.name.toLowerCase() === 'media' && /(?<![\w:-])(?:and|or|not)\(/i.test(node.params) && !postcss.list.comma(node.params).slice(1).length) { note('W_CSS_MEDIA_AND_SPACE', { params: node.params.trim(), written: /(?<![\w:-])(?:and|or|not)\(/i.exec(node.params)[0], file: filename, line: node.source.start.line }); continue; }
+        // F139: a feature name no browser knows makes the query never match (in a not () too; measured in Chromium, Firefox and
+        // WebKit). Only a name near a known feature is called a typo; in a list only that query fails, so only a single query.
+        // An unknown feature is "unknown", not false: an or with a true side matches, and so does a not over a group whose
+        // other side is false (measured in all three), so those stay with the query parser (Unknown).
+        if (node.name.toLowerCase() === 'media' && !postcss.list.comma(node.params).slice(1).length && !/(?<![\w-])or(?![\w-])/i.test(node.params) && !/(?<![\w-])not\s*\(\s*\(/i.test(node.params)) {
+          const typo = mediaFeatureNames(node.params).map(feature => ({ feature, suggestion: mediaFeatureTypo(feature) })).find(t => t.suggestion);
+          if (typo) { note('W_CSS_MEDIA_FEATURE_UNKNOWN', { params: node.params.trim(), ...typo, file: filename, line: node.source.start.line }); continue; }
+        }
         if (node.name.toLowerCase() === 'media' && /var\(/i.test(node.params) && !postcss.list.comma(node.params).slice(1).length) {
           note('W_CSS_MEDIA_VAR', { params: node.params.trim(), file: filename, line: node.source.start.line });
           continue;
@@ -1144,6 +1161,18 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         const discrete = authored.some(d => /^transition-behavior$/i.test(d.prop) && /allow-discrete/i.test(d.value)) || named.some(d => /allow-discrete/i.test(d.value));
         if (named.length && !discrete) note('W_CSS_TRANSITION_DISPLAY', { file: filename, line: named[0].source.start.line, selector: node.selector });
       }
+      // F136, F137: the properties a transition names. A misspelled one transitions nothing; a custom property animates only
+      // once registered (@property), otherwise it flips at once (measured in Chromium, Firefox and WebKit).
+      for (const d of authored) if (/^(?:transition|transition-property)$/i.test(d.prop) && !/var\(/i.test(d.value))
+        for (const item of postcss.list.comma(d.value)) {
+          const word = d.prop.toLowerCase() === 'transition-property' ? item.trim() : postcss.list.space(item).find(t => /^(?:--|-?[a-z_])[\w-]*$/i.test(t) && !transitionKeywords.has(t.toLowerCase()));
+          if (!word || ['all', 'none'].includes(word.toLowerCase()) || wide.has(word.toLowerCase())) continue;
+          // With allow-discrete (in the item, or a transition-behavior of the rule) it does transition, discretely (measured).
+          if (word.startsWith('--') && (/(?:^|\s)allow-discrete(?:\s|$)/i.test(item) || authored.some(b => /^transition-behavior$/i.test(b.prop) && /allow-discrete/i.test(b.value)))) continue;
+          if (word.startsWith('--')) { transitionedCustom.push({ property: word, selector: node.selector, file: filename, line: d.source.start.line }); continue; }
+          const suggestion = propertyTypo(word);
+          if (suggestion) note('W_CSS_TRANSITION_PROPERTY_UNKNOWN', { property: word, suggestion, selector: node.selector, file: filename, line: d.source.start.line });
+        }
       const conflicts=findCSSWriteConflicts(authored.map(declaration=>declaration.prop));
       for(const conflict of conflicts) {
         const location=index=>({file:filename,line:authored[index].source.start.line,column:authored[index].source.start.column});
@@ -1345,6 +1374,50 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
     }
     const seen = new Set();
     for (const d of declared) if (d.name !== 'list-item' && !read.has(d.name) && !seen.has(d.name)) { seen.add(d.name); note('W_CSS_COUNTER_UNUSED', d); }
+  }
+  // F135: the earlier @keyframes of a name defined twice in one layer never runs.
+  for (const [name, defined] of keyframeRules) { const last = defined.at(-1);
+    for (const earlier of defined.slice(0, -1)) if (earlier.layer === last.layer) note('W_CSS_KEYFRAMES_DUPLICATE', { name, lost: [...earlier.animated].filter(p => !last.animated.has(p)), file: earlier.file, line: earlier.line, laterLine: last.line, laterFile: last.file }); }
+  // F136: the custom properties transitioned with no @property (CSS.registerProperty in a script is not seen here).
+  { const seen = new Set(); for (const t of transitionedCustom) if (!declaredProperties.has(t.property) && !seen.has(`${t.file}:${t.line}:${t.property}`)) { seen.add(`${t.file}:${t.line}:${t.property}`); note('W_CSS_TRANSITION_UNREGISTERED', t); } }
+  // F138: a time given by var() whose every definition is a bare number: the declaration is invalid at computed-value time
+  // (a <time> needs its unit; a transition or animation is then none — measured in Chromium, Firefox and WebKit).
+  {
+    const definitions = new Map(), uses = [];
+    for (const sheet of sheets) {
+      let root; try { root = postcss.parse(sheet.css, { from: sheet.file }); } catch { continue; }
+      root.walkDecls(d => {
+        const prop = d.prop.toLowerCase();
+        // universal: on :root, html or *, outside any at-rule, so it reaches every element that does not set its own.
+        if (prop.startsWith('--')) definitions.set(d.prop, [...(definitions.get(d.prop) ?? []), { value: d.value.trim(), universal: d.parent?.type === 'rule' && d.parent.parent?.type === 'root' && (d.parent.selectors ?? []).some(sel => /^(?::root|html|\*)$/i.test(sel.trim())) }]);
+        if (/^(?:transition|animation)(?:-duration|-delay)?$/.test(prop)) {
+          // Outside calc(): there a bare number is a multiplier.
+          // A quoted string (an animation name may be one) is opaque: its text is never a var() or a parenthesis.
+          const unquoted = d.value.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+          let outside = '', depth = 0; for (let i = 0; i < unquoted.length; i++) { if (depth === 0 && /^calc\(/i.test(unquoted.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (unquoted[i] === '(') depth++; else if (unquoted[i] === ')') depth--; continue; } outside += unquoted[i]; }
+          // Only a var() at parenthesis depth 0 is a time for sure: one inside steps() or cubic-bezier() is that function's
+          // number, and a fallback is used only when its variable has no value. Every other function is kept as its name.
+          // A name is read whole (CSS allows non-ASCII), never as its ASCII prefix: --délai is not --d.
+          let top = '';
+          for (let i = 0; i < outside.length; i++) {
+            const fn = /^([\w-]+)\(/.exec(outside.slice(i));
+            if (!fn) { top += outside[i]; continue; }
+            const v = /^var\(\s*(--[^\s,()]+)\s*[,)]/i.exec(outside.slice(i));
+            top += v ? `var(${v[1]}${v[0].endsWith(',') ? ',' : ''})` : `${fn[1]}()`;
+            let depth = 0, k = i + fn[0].length - 1;
+            for (; k < outside.length; k++) { if (outside[k] === '(') depth++; else if (outside[k] === ')' && --depth === 0) break; }
+            i = k;
+          }
+          for (const item of postcss.list.comma(top)) {
+            // In the animation shorthand a bare number is its iteration count, unless the item already has one.
+            if (prop === 'animation' && !postcss.list.space(item).some(t => /^(?:infinite|[+-]?(?:\d+\.?\d*|\.\d+))$/i.test(t))) continue;
+            for (const m of item.matchAll(/var\(\s*(--[^\s,()]+)\s*[,)]/g)) uses.push({ variable: m[1], fallback: m[0].endsWith(','), property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
+          }
+        }
+      });
+    }
+    // With a fallback, an element no definition reaches takes the fallback: reported only when one reaches every element.
+    for (const { fallback, ...use } of uses) { const values = definitions.get(use.variable) ?? []; if (values.length && values.every(v => /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(v.value)) && (!fallback || values.some(v => v.universal))) note('W_CSS_DURATION_UNITLESS', { ...use, value: values[0].value }); }
   }
   // An animation-name without @keyframes runs no animation.
   // (Checklist F1: the names without @keyframes are kept for a warning — a typo or a missing rule.)

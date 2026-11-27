@@ -16,8 +16,8 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | # | 役割 | 何を見るか | 入力 | 主なコード | 検査できる | 検査しない(Unknown) |
 |---|---|---|---|---|---|---|
 | 1 | [CSS の構文](#1-css-の構文宣言ごと捨てられる値) | ブラウザーが宣言ごと捨てる値 | CSS だけ | `W_CSS_*_INVALID` など 18 | 構文が閉じた値(calc の空白、色、キーワード、grid のトラック…) | `var()` を含む値、`-webkit-` の値、システムフォント |
-| 2 | [at-rule とカスケード](#2-at-rule-とカスケード) | 決して当たらない `@media`・`@supports`、層や順番で負ける規則 | CSS だけ | `W_CSS_MEDIA_*` など 14 | 範囲が空の query、不正な query・`@property`・`@font-face`、層の順 | 別ファイルの `@import`、query の並びで当たりうるもの |
-| 3 | [効かない宣言](#3-文脈で効かない宣言) | 受け入れられるが何もしない宣言 | CSS + box の祖先 | `W_LAYOUT_DECLARATION_INERT` ほか 28 | 親の display・position・表の境界モデルなどで決まる 80 以上の組み合わせ | ブラウザーで効き方が違う組み合わせ(除外して記録) |
+| 2 | [at-rule とカスケード](#2-at-rule-とカスケード) | 決して当たらない `@media`・`@supports`、層や順番で負ける規則 | CSS だけ | `W_CSS_MEDIA_*` など 16 | 範囲が空の query、不正な query・`@property`・`@font-face`、層の順 | 別ファイルの `@import`、query の並びで当たりうるもの |
+| 3 | [効かない宣言](#3-文脈で効かない宣言) | 受け入れられるが何もしない宣言 | CSS + box の祖先 | `W_LAYOUT_DECLARATION_INERT` ほか 31 | 親の display・position・表の境界モデルなどで決まる 80 以上の組み合わせ | ブラウザーで効き方が違う組み合わせ(除外して記録) |
 | 4 | [セレクタ × DOM](#4-セレクタ--dom) | DOM の形や状態のせいで当たらないセレクタ | CSS + DOM | `W_CSS_STATE_UNREACHABLE` ほか 7 | フォーカス・リンク・フォームの状態、HTML の解析が補う要素 | 動的な属性(tabindex・lang・dir・value)、外から渡される子 |
 | 5 | [HTML の構造と属性](#5-html-の構造と属性) | 解析で組み替わる構造、効かない属性 | HTML | `W_HTML_*` 3 | `<p>` の中の `<div>`、入れ子の `<a>`、効かない `width`・`disabled` など | DOM API で組み立てた木(React など)では構造の検査をしない |
 | 6 | [配置(収まり・はみ出し)](#6-配置収まりはみ出し重なり) | すべての viewport 幅で箱が収まるか | CSS + box tree | `E_LAYOUT_*` 25、`W_LAYOUT_*` 28 | grid・flex・block・絶対配置の幅と高さ、トラック、文字の改行 | float、表の自動配置、bidi の混ざった rtl、行を高くする inline |
@@ -68,6 +68,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_MEDIA_NEVER` | 下限が上限より上で、どの viewport にも当たらない `@media`(F5) | 検査可 |
 | `W_CSS_MEDIA_GAP` | ブレークポイントの間に当たらない幅が残る | 検査可 |
 | `W_CSS_MEDIA_VAR` | `@media (min-width: var(--bp))`: query の中の `var()` は置き換わらない(F78) | 検査可 |
+| `W_CSS_MEDIA_FEATURE_UNKNOWN` | `(min-widht: 600px)` のような綴り違いの feature で、決して当たらない query(F139) | 検査可(知っている feature から近い名前だけ) |
 | `W_CSS_MEDIA_INVALID_LENGTH` | `(min-width: 600)`、`600 px`(F79) | 検査可 |
 | `W_CSS_MEDIA_AND_SPACE` | `and(`・`or(`・`not(`(F87) | 検査可 |
 | `W_CSS_MEDIA_EM_ROOT` | ルートの `font-size` を変えたページの `em`・`rem` の query(F125) | 検査可(報告だけ。解析は Unknown) |
@@ -77,6 +78,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_LAYER_OVERRIDDEN` | 詳細度で勝つのに層の順で負ける宣言(F112) | 検査可 |
 | `W_CSS_CONTAINER_QUERY_NEVER` | container のない `@container`、当たらない大きさ | 検査可 |
 | `W_CSS_KEYFRAMES_MISSING` | `@keyframes` のないアニメーション名(F1) | 検査可 |
+| `W_CSS_KEYFRAMES_DUPLICATE` | 同じ名前の `@keyframes` の 2 つ目が 1 つ目を丸ごと置き換える(F135) | 検査可 |
 | `W_CSS_COUNTER_UNUSED` | どの `content` も読まないカウンター(F102) | 一部(解析した CSS の中だけ) |
 | `W_CSS_STATE_SHADOWED` | 後の規則に負けて見えない `:hover`・`:focus`(LVHA の順、F131) | 検査可 |
 
@@ -95,6 +97,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_ANIMATION_NO_DURATION` / `W_CSS_TRANSITION_NO_DURATION` | 長さのないアニメーション・transition(F2・F12) | 検査可 |
 | `W_CSS_TRANSITION_AUTO` | `height: auto` と長さの間の transition(F8) | 検査可 |
 | `W_CSS_TRANSITION_DISPLAY` | `allow-discrete` のない `display` の transition | 検査可 |
+| `W_CSS_TRANSITION_UNREGISTERED` / `W_CSS_TRANSITION_PROPERTY_UNKNOWN` / `W_CSS_DURATION_UNITLESS` | `@property` のないカスタムプロパティ、`widht` のような綴り違い、単位のない数の変数の時間: 始まらない transition・animation(F136〜F138) | 検査可(綴り違いは知っているプロパティから近い名前だけ。`CSS.registerProperty` は見えない) |
 | `W_LAYOUT_MIN_ABOVE_MAX` | min より小さい max(F4) | 検査可 |
 | `W_LAYOUT_AUTO_MARGIN_ABSOLUTE` | 中央に寄らない絶対配置の `margin: auto`(F38) | 検査可 |
 | `W_LAYOUT_CONTENTS_REMOVED` | 置換要素・フォーム部品の `display: contents`(none になる。F30) | 検査可 |
