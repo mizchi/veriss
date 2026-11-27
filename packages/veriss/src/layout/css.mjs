@@ -1372,8 +1372,18 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         if (/^(?:transition|animation)(?:-duration|-delay)?$/.test(prop)) {
           // Outside calc(): there a bare number is a multiplier.
           let outside = '', depth = 0; for (let i = 0; i < d.value.length; i++) { if (depth === 0 && /^calc\(/i.test(d.value.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (d.value[i] === '(') depth++; else if (d.value[i] === ')') depth--; continue; } outside += d.value[i]; }
-          // Only a var() at the top of the value is substituted for sure: a fallback is used only when its variable has no value.
-          let top = '', nest = 0; for (let i = 0; i < outside.length; i++) { if (/^var\(/i.test(outside.slice(i)) && nest === 0) { const end = outside.slice(i).search(/[,)]/); top += outside.slice(i, i + end + 1); if (outside[i + end] === ',') { nest = 1; i += end; continue; } i += end; continue; } if (nest) { if (outside[i] === '(') nest++; else if (outside[i] === ')') nest--; continue; } top += outside[i]; }
+          // Only a var() at parenthesis depth 0 is a time for sure: one inside steps() or cubic-bezier() is that function's
+          // number, and a fallback is used only when its variable has no value. Every other function is kept as its name.
+          let top = '';
+          for (let i = 0; i < outside.length; i++) {
+            const fn = /^([\w-]+)\(/.exec(outside.slice(i));
+            if (!fn) { top += outside[i]; continue; }
+            const v = /^var\(\s*(--[\w-]+)/i.exec(outside.slice(i));
+            top += v ? `var(${v[1]})` : `${fn[1]}()`;
+            let depth = 0, k = i + fn[0].length - 1;
+            for (; k < outside.length; k++) { if (outside[k] === '(') depth++; else if (outside[k] === ')' && --depth === 0) break; }
+            i = k;
+          }
           for (const item of postcss.list.comma(top)) {
             // In the animation shorthand a bare number is its iteration count, unless the item already has one.
             if (prop === 'animation' && !postcss.list.space(item).some(t => /^(?:infinite|[+-]?(?:\d+\.?\d*|\.\d+))$/i.test(t))) continue;

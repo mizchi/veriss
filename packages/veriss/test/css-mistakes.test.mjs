@@ -1625,3 +1625,9 @@ test('F139: a typo in a query that an or (or a not over a group) can still make 
   for (const css of ['@media (min-widht:1px) and (min-width:1px){.a{color:red}}', '@media not (min-widht:1px){.a{color:red}}', '@media not screen and (min-widht:1px){.a{color:red}}'])
     assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 1, css);
 });
+
+test('F138: a var() inside another function (steps(), cubic-bezier()) is that function\'s number, not a time', () => {
+  assert.equal(codes(run(':root{--frames:8}@keyframes play{to{opacity:.5}}.a{animation:play 1s steps(var(--frames)) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--x1:.4}.a{transition:opacity 1s cubic-bezier(var(--x1),0,0,1)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+});
