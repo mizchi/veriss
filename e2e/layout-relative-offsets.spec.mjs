@@ -118,3 +118,33 @@ test('absolute and fixed boxes with an auto width shrink to fit as the browser d
     expect([v(s.inlineStart), v(s.blockStart), v(s.inlineSize), v(s.blockSize)], `${width} ${box}`).toEqual(b);
   }
 });
+
+// px margins (negative too) on absolute and fixed boxes: the border box starts at the start inset plus the start margin,
+// ends at the end inset less the end margin, and an auto size between both insets loses both margins. Rectangles at 320
+// and 400 against the browser's (the centring idiom top: 50%; left: 50%; margin: -h/2 0 0 -w/2 among them).
+test('px margins offset absolute and fixed boxes from their insets', async ({page}) => {
+  const html = '<main class="page"><div class="card"><div class="o"></div></div></main>';
+  const cases = [['top:50%;left:50%;width:100px;height:60px;margin:-30px 0 0 -50px', ''], ['right:10px;bottom:20px;width:100px;height:60px;margin:5px 7px 11px 13px', ''],
+    ['top:10%;left:25%;width:100px;height:60px;margin:4px 0 0 6px', ''], ['top:20px;left:30px;width:50%;height:25%;margin:-10px 0 0 -20px', ''],
+    ['top:0;left:0;width:50%;height:25%;margin:-10px 0 0 -20px', ''], ['top:10px;left:10px;width:100px;height:60px;margin:10px 20px 30px 40px', ''],
+    ['inset:0;margin:10px 20px 30px 40px', ''], ['inset:0;width:100px;height:50px;margin:10px 20px 30px 40px', ''], ['inset:0;width:100px;height:50px;margin:10px 20px 30px 40px', 'direction:rtl'],
+    ['top:0;right:0;width:100px;height:50px;margin:10px 20px 30px 40px', 'direction:rtl'], ['inset:0;margin:10px 20px;padding:5px;box-sizing:content-box', ''],
+    ['top:5px;left:5px;right:15px;height:20px;margin:0 -4px', 'padding:8px;border:3px solid #000'], ['top:5px;left:5px;right:15px;height:20px;margin:0 -10px', 'padding:8px;border:3px solid #000'],
+    ['position:fixed;top:50%;left:50%;width:300px;height:250px;margin:-125px 0 0 -150px', ''], ['position:fixed;bottom:0;right:0;width:30px;height:25px;margin:0 -5px -5px 0', ''],
+    ['position:fixed;inset:0;margin:20px 30px', '']];
+  // Control: without the margins the rectangles differ (the comparison is not vacuous).
+  let moved = 0;
+  for (const width of [320, 400]) for (const [o, c] of cases) {
+    const css = `*{box-sizing:border-box;margin:0}html,body,.page,.card{${g}}.card{position:relative;height:200px;${c}}.o{position:absolute;${o}}`;
+    const r = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css, viewport: {min: width, max: width, height: {min: 600, max: 600}}, accessibility: true});
+    expect(r.status === 'unknown', `${c} / ${o}: ${JSON.stringify(r.diagnostics.filter(x => x.severity === 'unknown').map(x => x.message))}`).toBe(false);
+    const n = t => { const [a, b = '1'] = String(t ?? '0').split('/'); return Number(a) / Number(b); };
+    const s = r.sizes.find(s => s.box === '.o').rect, v = x => n(x.constant) + width * n(x.coefficient) + 600 * n(x.heightCoefficient);
+    await page.setViewportSize({width, height: 600});
+    const rectOf = async extra => { await page.setContent(`<!doctype html><html lang="en"><head><style>${css}${extra}</style></head><body>${html}</body></html>`); return page.evaluate(() => { const r = document.querySelector('.o').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }); };
+    const b = await rectOf('');
+    expect([v(s.inlineStart), v(s.blockStart), v(s.inlineSize), v(s.blockSize)], `${width} ${c} / ${o}`).toEqual(b);
+    if (JSON.stringify(await rectOf('.o{margin:0}')) !== JSON.stringify(b)) moved++;
+  }
+  expect(moved).toBe(cases.length * 2);
+});

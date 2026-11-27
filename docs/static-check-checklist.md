@@ -419,7 +419,7 @@
 - [x] **F131. 後の規則に負けて見えない `:hover` / `:focus` / `:active`**(`W_CSS_STATE_SHADOWED`): `a:hover { color }` を `a:link { color }` の前に書くと、ホバーしても色が変わらない(Chromium・Firefox・WebKit でホバーして実測。LVHA の順)。状態を有効にして計算した値の勝者が、状態のいらない規則で、値が違うときに報告する(後に書いたものも、詳細度が高いものも)
 - [x] **F132. セレクタリストの中の `-moz-` / `-ms-` の擬似**(`W_CSS_SELECTOR_LIST_VENDOR`、解析はこの規則で Unknown のまま): 1 つでも無効なセレクタがあるとリスト全体が捨てられる。`-moz-` は Chromium と WebKit で、`-ms-` と `-o-` はどこでも無効(実測)。`-webkit-` は 3 ブラウザーとも受け付け、`:is()` / `:where()` の中は許される(実測)ので報告しない
 - [x] **F133. container のない軸の container query の単位**(`W_CSS_CONTAINER_UNIT_VIEWPORT`、解析は `cq*` の長さで Unknown のまま): `cqw`・`cqi` は祖先に `container-type: inline-size` か `size` がなければ、`cqh`・`cqb` は `size` がなければ small viewport の単位(`svw`・`svi`・`svh`・`svb`)になる(Chromium・Firefox・WebKit で、10 通りの組で `sv` の単位と同じ箱になることを実測: container のない要素、`inline-size` の container の中の `cqh`、`container-name` だけの祖先、自分自身の `container-type`、`calc()` の中、`font-size`。対照として `inline-size` の container・一括指定 `container: card / inline-size`・祖父母の container では箱が変わる)。ほかの状態や media query で祖先を container にする規則があれば報告しない。解析が読めないセレクタ(`.g:hover .p`)で container を作る規則があるときも報告しない。縦書きは対象外
-- [x] **F134. `<image>` でない `background-image` と、値の中の `:`**(`W_CSS_IMAGE_INVALID`、`W_CSS_STRAY_COLON`、以前はシート全体が `U_LAYOUT_CSS: Missed semicolon`): `url()` のない URL(`background-image: https://example.com/close.png`)や引用符の文字列(`"close.png"`)は `<image>` でないので宣言ごと捨てられ、前の `background-image` が残る(Chromium・Firefox・WebKit で `getComputedStyle` を実測)。一括指定 `background` の画像の位置にある同じものも、一括指定ごと捨てられる(色も付かない)。PostCSS は値の中の `:` で「Missed semicolon」を投げてシート全体を読まないが、ブラウザーはその宣言だけを次の `;` まで捨てて続きを読む(セミコロンの書き忘れも同じ)。解析は `:` を同じ長さの印に置き換えて読み、その宣言を捨てて報告する。`url()`・`image-set()`・グラデーション・`none`・`var()` はそのまま
+- [x] **F134. `<image>` でない `background-image` と、値の中の `:`**(`W_CSS_IMAGE_INVALID`、`W_CSS_STRAY_COLON`、以前はシート全体が `U_LAYOUT_CSS: Missed semicolon`): `url()` のない URL(`background-image: https://example.com/close.png`)や引用符の文字列(`"close.png"`)は `<image>` でないので宣言ごと捨てられ、前の `background-image` が残る(Chromium・Firefox・WebKit で `getComputedStyle` を実測)。一括指定 `background` の画像の位置にある同じものも、一括指定ごと捨てられる(色も付かない)。PostCSS は値の中の `:` で「Missed semicolon」を投げてシート全体を読まないが、ブラウザーはその宣言だけを次の `;` まで捨てて続きを読む(セミコロンの書き忘れも同じ)。解析は `:` を同じ長さの印に置き換えて読み、その宣言を捨てて報告する。`url()`・`image-set()`・グラデーション・`none`・`var()` はそのまま。一括指定の大きさ(`/` の後)や位置に書いた `min()`・`max()`・`clamp()` は画像ではない(3 ブラウザーで `CSS.supports` が true)。捨てられる宣言は前の宣言を上書きしないので、`W_CSS_DUPLICATE_DECLARATION` にもしない。e2e は `layout-css-mistakes.spec.mjs` の F134(捨てられる宣言を外したときと computed style が同じこと、効く値の対照つき)
   ので、`@media (min-width: var(--bp))` は無効な query になり、その規則は決して当たらない(3 つのブラウザーで 800px でも当たらない)。
   解析も当たらない規則として扱う。query を並べたもの(`print, (…var…)`)は、ほかの query が当たりうるので今までどおり。
 - 試して当てはまらなかったもの: `progress`・`input[type=range]` の `appearance: none` は、3 つのブラウザーとも何かを描く
@@ -673,6 +673,16 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   html と body が hidden、html hidden と body clip、html auto と body hidden、350px の hidden / clip の箱(その下端より下のボタンは
   切り取られて当たらない)、対照(html hidden だけ、overflow なし)で一致し、hidden ではホイールも PageDown もスクロールしなかった。
   残り: 同じスクロールコンテナの中の覆い同士、`E_A11Y_FOCUS_OBSCURED`・`E_A11Y_FIXED_HIDES` などほかの覆いの規則は、位置のない箱をまだ見ない。
+- [x] **I24. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
+  `top: 50%; left: 50%; margin: -125px 0 0 -150px` で、ページ全体の a11y の判定が消えた。文言も block の margin を消せという見当違いのもの)。
+  margin の箱を inset に置く(CSS 2 §10.3.7 / §10.6.4): border の箱は始点の inset + 始点の margin から、終点の inset だけのときは
+  終点の inset − 終点の margin で終わる。両側の inset で auto の大きさは、両側の margin も引く。決まりすぎ(大きさも両側の inset もある)の
+  ときは終点の inset と margin を捨てる(終点は箱自身ではなく包含ブロックの direction で決まり、rtl では left 側。viewport の direction が html と body で食い違うなど分からないときは、幅か max-width・min-width があれば Unknown)。両側の inset で auto の大きさの置換要素(img など)は自分の大きさのままになるので Unknown。Chromium・Firefox・WebKit で、left/top と負の margin、right/bottom と margin、
+  % の inset と px の margin、% の大きさの箱、正の margin、`inset: 0` と auto の大きさ、rtl の決まりすぎ、content-box の padding、border と
+  padding のある包含ブロック、fixed の箱(中央寄せ、右下、`inset: 0`)の 16 通りを 320px と 400px で照合し、矩形が一致した
+  (e2e `px margins offset absolute and fixed boxes`。対照として margin を 0 にすると全組で矩形が変わる)。包含ブロックの外に出る負の margin は
+  inset と同じく `E_LAYOUT_ABSOLUTE_START`。`auto` と % の margin、静的位置の軸(両側の inset が auto)の margin、shrink-to-fit の幅の箱の
+  横の margin は Unknown のまま(文言は箱の名前と margin を出す)
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

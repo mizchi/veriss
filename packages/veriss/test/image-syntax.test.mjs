@@ -48,6 +48,13 @@ test('a quoted string in background-image is dropped; the earlier image stays', 
   const parsed = parse('.b{background-image:url(a.png);background-image:"close.png"}');
   assert.equal(parsed.notes.filter(n => n.code === 'W_CSS_IMAGE_INVALID').length, 1);
   assert.deepEqual(parsed.rules.flatMap(r => r.declarations.filter(d => d.property === 'background-image').map(d => d.value)), ['url(a.png)']);
+  // The earlier image is the one that applies, so it is not reported as a duplicate overridden by the dropped one.
+  const r = run('.b{width:42px;height:42px;background-image:url(a.png);background-image:"close.png"}');
+  assert.equal(warnings(r, 'W_CSS_DUPLICATE_DECLARATION').length, 0, JSON.stringify(r.layoutWarnings));
+  assert.equal(warnings(r, 'W_CSS_IMAGE_INVALID').length, 1, JSON.stringify(r.layoutWarnings));
+  // The same for a declaration dropped for a stray colon.
+  const colon = run('.b{width:42px;color:red;color:blue\n background:x}');
+  assert.deepEqual((colon.layoutWarnings ?? []).map(w => w.code).filter(c => /DUPLICATE|STRAY/.test(c)), ['W_CSS_STRAY_COLON']);
 });
 
 test('the background shorthand with a bare URL or a quoted string as its image is dropped', () => {
@@ -90,6 +97,12 @@ test('a "/" glued to the size in the shorthand is the position/size separator, n
   for (const css of ['.b{background:url(a.png) center /cover no-repeat}', '.b{background:url(a.png) 0 0 /50% auto}', '.b{background:url(a.png) center/contain}', '.b{background:#fff url(a.png) left top /42px 42px no-repeat}']) {
     const parsed = parse(css);
     assert.equal(parsed.notes.filter(n => n.code === 'W_CSS_IMAGE_INVALID').length, 0, css);
+    assert.ok(parsed.rules.flatMap(r => r.declarations.map(d => d.property)).includes('background-image'), css);
+  }
+  // A math function as the size ("/min(…)", "/clamp(…)") is the separator too; so is one as the position before "/".
+  for (const css of ['.b{background:#fff url(a.png) center /min(10px,20px) no-repeat}', '.b{background:url(a.png) center /max(10px,2em) auto}', '.b{background:url(a.png) 0 0 /clamp(10px,5vw,40px)}', '.b{background:url(a.png) min(10px,5%) 0 / cover}']) {
+    const parsed = parse(css);
+    assert.equal(parsed.notes.filter(n => /^W_CSS_(?:IMAGE_INVALID|BACKGROUND)/.test(n.code)).length, 0, css + ' ' + JSON.stringify(parsed.notes));
     assert.ok(parsed.rules.flatMap(r => r.declarations.map(d => d.property)).includes('background-image'), css);
   }
   // A bare absolute path is still not an image.

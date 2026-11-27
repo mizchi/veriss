@@ -2461,6 +2461,8 @@ test('click traps and invisible blockers match hit testing and what the browser 
     // An inert page and a shown layer without a way out; with a named close button, the button is the way out.
     {name: 'inert page, layer without a way out', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}', trap: true, inert: true},
     {name: 'inert page, layer with a close button', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"><button class="x" aria-label="Close">x</button></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}.x{width:44px;height:44px;background:#fff;color:#000}', boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}, trap: false, exit: '.x'},
+    // An opaque sheet that takes no click over the catcher: the control is not seen, so the catcher is an occlusion.
+    {name: 'catcher under an opaque pointer-events: none sheet', layer: '<div class="catch"></div><div class="sheet"></div>', css: '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}.sheet{position:fixed;top:0;left:0;right:0;height:100px;z-index:6;background:#000;pointer-events:none}', trap: false, blocker: false, hiddenUnder: '.sheet'},
     {name: 'clipping overlay, invisible close control', layer: `<div class="ov">${frame}<div class="x"></div></div>`, css: overlay.replace('}', ';overflow:hidden}') + '.f{display:block;width:300px;height:250px;border:0;opacity:0}.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-size:42px 42px;background-image:https://example.com/close.png}', trap: true},
   ];
   await page.setViewportSize({width: 800, height: 800});
@@ -2498,11 +2500,46 @@ test('click traps and invisible blockers match hit testing and what the browser 
       expect(facts.hit['.l'], `${c.name}: .l does not take the click`).not.toBe('.l');
       expect(facts.blockerPaints['.l'], `${c.name}: what takes .l's click (${facts.hit['.l']}) paints`).toBe(true);
     }
+    if (c.hiddenUnder) {
+      // The browser gives the click to the catcher, and the painting sheet (pointer-events: none) is over it: the
+      // control is not seen there, so it is reported as covered by the catcher.
+      expect(facts.hit['.l'], c.name).toBe('.catch');
+      expect(facts.blockerPaints['.l'], c.name).toBe(false);
+      // (elementsFromPoint leaves out pointer-events: none boxes: the pixel at the control's centre is the sheet's.)
+      const r = await page.locator('.l').boundingBox();
+      const pixel = await page.screenshot({clip: {x: Math.floor(r.x + r.width / 2), y: Math.floor(r.y + r.height / 2), width: 1, height: 1}});
+      const sheet = await page.evaluate(sel => getComputedStyle(document.querySelector(sel)).backgroundColor, c.hiddenUnder);
+      expect(sheet, c.name).toBe('rgb(0, 0, 0)');
+      expect(await page.evaluate(async b64 => { const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode(); const k = document.createElement('canvas'); k.width = k.height = 1; const g = k.getContext('2d'); g.drawImage(img, 0, 0); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3).join(','); }, pixel.toString('base64')), c.name).toBe('0,0,0');
+      expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.l' && /\.catch/.test(d.message)), c.name).toBe(true);
+    }
     if (c.exit) expect(facts.candidates.find(e => e.box === c.exit), c.name).toMatchObject({paints: true, focusable: true, takesClick: true});
     for (const b of blockers) {
       expect(facts.hit[b.box], `${c.name}: ${b.box} does not take the click`).not.toBe(b.box);
       expect(facts.blockerPaints[b.box], `${c.name}: what takes ${b.box}'s click (${facts.hit[b.box]}, static ${b.cover}) paints nothing`).toBe(false);
     }
+    // The whole set: every control whose click the browser gives to a box that paints nothing is reported (at this
+    // viewport, inside the analysed range), and no other.
+    if (c.blocker) expect([...new Set(blockers.map(b => b.box))].sort(), c.name).toEqual(['.l', '.m'].filter(sel => facts.hit[sel] !== sel && facts.blockerPaints[sel] === false));
+  }
+});
+
+// A positioned box inside an overflow: hidden box that paints under the controls: it is drawn and hit-tested above them
+// (a positioned layer), so it takes their clicks. The analysis lays the page out at scroll offset 0 for it.
+test('a cover inside an overflow: hidden box that itself paints under the controls', async ({page}) => {
+  const viewport = {min: 320, max: 800, height: {min: 600, max: 900}};
+  const line = {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20};
+  const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#fff;color:#000}main{display:block;position:relative}.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px;font-family:sans-serif}.l{position:absolute;top:0;left:0}.m{position:absolute;top:40px;left:0}.w{display:block;height:100px;overflow:hidden}.c{position:relative;display:block;height:100px}';
+  const html = '<html lang="en"><body><main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="w"><div class="c"></div></div></main></body></html>';
+  await page.setViewportSize({width: 800, height: 800});
+  for (const [extra, code] of [['', 'E_A11Y_INVISIBLE_BLOCKER'], ['.c{background:#000}', 'E_A11Y_OCCLUDED'], ['.c{pointer-events:none}', null]]) {
+    const css = base + extra;
+    const report = analyzeHTML(html, {name: 'P', viewport, accessibility: true, boxes: {'.l': line, '.m': line}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css});
+    const reported = [...new Set(report.diagnostics.filter(d => ['E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_OCCLUDED'].includes(d.code)).map(d => `${d.code} ${d.box}`))].sort();
+    await page.setContent(`<!doctype html>${html.replace('<body>', `<head><style>${css}</style></head><body>`)}`);
+    const hit = await page.evaluate(() => ['.l', '.m'].map(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; }));
+    expect(hit, extra || 'transparent').toEqual(code ? ['c', 'c'] : ['l', 'm']);
+    expect(reported, extra || 'transparent').toEqual(code ? [`${code} .l`, `${code} .m`] : []);
   }
 });
 
@@ -2538,6 +2575,15 @@ test('fixed covers and scrolling: the offsets where a transparent fixed box take
   expect(run(wipeHTML, wipeCSS('.ad{pointer-events:none}')).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER')).toEqual([]);
   await open(wipeHTML, wipeCSS('.ad{pointer-events:none}'));
   expect(await hitAt('.m', (from + to) / 2)).toBe('m');
+  // A box reaching past the viewport bottom: the link meets it where it enters the viewport (1000 − 667), not at the
+  // box's page bottom (1000 − 800), where the link is still below the viewport.
+  const low = `.gap{display:block;height:960px}.tail{display:block;height:400px}.ad{position:fixed;left:0;top:600px;width:320px;height:200px;z-index:2147483000;opacity:0;background:#fff}`;
+  const [late] = run(wipeHTML, low).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER' && d.box === '.m');
+  expect(Math.round(late.scrolled.from)).toBe(333);
+  await open(wipeHTML, low);
+  expect(await page.evaluate(() => { scrollTo(0, 250); return document.querySelector('.m').getBoundingClientRect().top >= innerHeight; }), 'at 250 the link is below the viewport').toBe(true);
+  // Just past the offset, the link's visible top is under the box.
+  expect(await page.evaluate(y => { scrollTo(0, y); const r = document.querySelector('.m').getBoundingClientRect(); return document.elementFromPoint(r.left + 10, Math.min(r.top + 1, innerHeight - 1))?.className; }, late.scrolled.from + 2)).toBe('ad');
 
   const sheetHTML = '<main><div class="gap"></div><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="tail"></div></main><div class="sh"></div>';
   const sheetCSS = root => `.gap{display:block;height:500px}.tail{display:block;height:800px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`;
@@ -2551,4 +2597,11 @@ test('fixed covers and scrolling: the offsets where a transparent fixed box take
     expect(scrolled > 0, `${root || 'scrolls'}: the wheel scrolls the page`).toBe(!trapped);
     if (!trapped) expect(await page.evaluate(() => { const r = document.querySelector('.l').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; })).toBe('l');
   }
+  // The same sheet in an untransformed position: relative wrapper: still fixed, still scrolled free (no trap).
+  const wrappedHTML = sheetHTML.replace('<div class="sh"></div>', '<div class="wr"><div class="sh"></div></div>'), wrappedCSS = sheetCSS('') + '.wr{position:relative;display:block}';
+  expect(run(wrappedHTML, wrappedCSS).diagnostics.some(d => d.code === 'E_A11Y_CLICK_TRAP'), 'wrapped').toBe(false);
+  await open(wrappedHTML, wrappedCSS);
+  expect(await hitAt('.l', 0), 'wrapped').toBe('sh');
+  await page.mouse.move(100, 100); await page.mouse.wheel(0, 300); await page.waitForTimeout(300);
+  expect(await page.evaluate(() => { const r = document.querySelector('.l').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; }), 'wrapped: scrolled free').toBe('l');
 });

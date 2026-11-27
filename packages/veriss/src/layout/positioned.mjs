@@ -19,12 +19,23 @@ export function insetLength(text, basis) {
   return result;
 }
 
+/** A px margin (negative too) of an absolutely positioned box; auto and % margins are not modeled. */
+export const absoluteMarginText = value => value === undefined || /^(?:0|-?\d+(?:\.\d{1,20})?px)$/.test(String(value));
+const marginLength = (style, key) => {
+  const value = style[key];
+  if (value === undefined || ['0', '0px'].includes(String(value))) return scalar(0);
+  if (!absoluteMarginText(value)) throw new Error(`Unsupported margin on an absolutely positioned box: ${key}: ${value}`);
+  return scalar(q(String(value).slice(0, -2)));
+};
+
 // staticPosition: where the box sits on an axis whose insets are both auto (relative to the containing block), when known.
+// A px margin moves the margin box off the inset (CSS 2 §10.3.7, §10.6.4): the border box starts at the start inset plus
+// the start margin, or ends at the end inset less the end margin. (On a static axis the margins are Unknown upstream.)
 export function absoluteOrigin(style, containing, size, staticPosition) {
   const coordinate = (start, end, basis, dimension, axis) => {
     if (style[start] === 'auto' && style[end] === 'auto' && staticPosition?.[axis]) return staticPosition[axis];
     if ((style[start] === 'auto') === (style[end] === 'auto')) throw new Error('Absolute positioning requires exactly one inset per axis');
-    return style[start] !== 'auto' ? insetLength(style[start], basis) : diff(diff(basis, insetLength(style[end], basis)), dimension);
+    return style[start] !== 'auto' ? sum(insetLength(style[start], basis), marginLength(style, `margin-${start}`)) : diff(diff(diff(basis, insetLength(style[end], basis)), marginLength(style, `margin-${end}`)), dimension);
   };
   return {inline: coordinate('left', 'right', containing.inline, size.inline, 'inline'), block: coordinate('top', 'bottom', containing.block, size.block, 'block')};
 }
