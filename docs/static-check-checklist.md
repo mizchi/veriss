@@ -417,11 +417,12 @@
 - [x] **F131. 後の規則に負けて見えない `:hover` / `:focus` / `:active`**(`W_CSS_STATE_SHADOWED`): `a:hover { color }` を `a:link { color }` の前に書くと、ホバーしても色が変わらない(Chromium・Firefox・WebKit でホバーして実測。LVHA の順)。状態を有効にして計算した値の勝者が、状態のいらない規則で、値が違うときに報告する(後に書いたものも、詳細度が高いものも)
 - [x] **F132. セレクタリストの中の `-moz-` / `-ms-` の擬似**(`W_CSS_SELECTOR_LIST_VENDOR`、解析はこの規則で Unknown のまま): 1 つでも無効なセレクタがあるとリスト全体が捨てられる。`-moz-` は Chromium と WebKit で、`-ms-` と `-o-` はどこでも無効(実測)。`-webkit-` は 3 ブラウザーとも受け付け、`:is()` / `:where()` の中は許される(実測)ので報告しない
 - [x] **F133. container のない軸の container query の単位**(`W_CSS_CONTAINER_UNIT_VIEWPORT`、解析は `cq*` の長さで Unknown のまま): `cqw`・`cqi` は祖先に `container-type: inline-size` か `size` がなければ、`cqh`・`cqb` は `size` がなければ small viewport の単位(`svw`・`svi`・`svh`・`svb`)になる(Chromium・Firefox・WebKit で、10 通りの組で `sv` の単位と同じ箱になることを実測: container のない要素、`inline-size` の container の中の `cqh`、`container-name` だけの祖先、自分自身の `container-type`、`calc()` の中、`font-size`。対照として `inline-size` の container・一括指定 `container: card / inline-size`・祖父母の container では箱が変わる)。ほかの状態や media query で祖先を container にする規則があれば報告しない。解析が読めないセレクタ(`.g:hover .p`)で container を作る規則があるときも報告しない。縦書きは対象外
-- [x] **F134. 同じ名前の `@keyframes` を 2 回書く**(`W_CSS_KEYFRAMES_DUPLICATE`、vlmkit `check animation` の `duplicate-keyframes` の静的な版): 後の規則が前の規則を丸ごと置き換え、キーフレームは合わさらない(Chromium・Firefox・WebKit で実測: `opacity` の `@keyframes k` の後に `transform` の `@keyframes k` を書くと、途中で止めた時点の `opacity` は 1 のまま。対照として名前を変えると 0.5)。前の規則だけが動かすプロパティを `lost` に出す。条件(`@media` など)の中の規則・`-webkit-keyframes`・層の違う規則は報告しない
-- [x] **F135. `@property` のないカスタムプロパティの transition**(`W_CSS_TRANSITION_UNREGISTERED`、vlmkit の `unregistered-property-transition`): 型のないカスタムプロパティは一度に変わり、transition が始まらない(3 ブラウザーで `getAnimations()` が 0。対照として `@property --x { syntax: "<number>" }` では 1)。解析が型を扱わない構文の `@property`(`<color>` など)も登録とみなす。スクリプトの `CSS.registerProperty` は見えないので、文言で断る
-- [x] **F136. transition の綴り違いのプロパティ**(`W_CSS_TRANSITION_PROPERTY_UNKNOWN`、vlmkit の `unknown-transition-property`): `transition: widht 1s` は受け入れられ(計算値の `transition-property` は `widht`)、何も遷移しない(3 ブラウザーで実測。対照の `width` では 1)。css-tree の定義にあるプロパティから編集距離 2 以内(隣どうしの入れ替えは 1)のものがあるときだけ報告し、`suggestion` に出す。遠い名前は新しいプロパティかもしれないので報告しない。`-webkit-` などの接頭辞と `var()` は見ない
-- [x] **F137. 単位のない数の変数を時間に使う**(`W_CSS_DURATION_UNITLESS`、vlmkit の `unitless-duration-var`): `--d: 300` を `transition: opacity var(--d)` に使うと、計算値の時点で宣言が無効になり transition も animation も始まらない(3 ブラウザーで実測。対照として `calc(var(--d) * 1ms)` と `--d: 300ms` は始まる)。`calc()` の中は掛ける数なので報告しない。変数の定義のどれかに単位があれば、要素によって違うので報告しない
-- [x] **F138. 綴り違いの media feature**(`W_CSS_MEDIA_FEATURE_UNKNOWN`、vlmkit の `unknown-media-feature`。以前は `U_LAYOUT_QUERY`): ブラウザーの知らない feature の query は当たらず、`not (…)` でも当たらない(3 ブラウザーで `(min-widht: 1px)`・`(widht > 1px)`・`screen and (hovr: hover)`・`not (prefers-reduced-motoin: reduce)` を実測。対照の `(min-width: 1px)`・`(scripting: enabled)`・`(update: fast)`・`(-webkit-min-device-pixel-ratio: 1)` は当たる)。仕様の feature から編集距離 2 以内のときだけ報告し、規則は当たらないものとして解析する(Unknown にしない)。仕様にあるがどのブラウザーも実装しない `prefers-reduced-data` は綴り違いではないので今までどおり。query を並べたものは、ほかの query が当たりうるので対象外
+- [x] **F134. `<image>` でない `background-image` と、値の中の `:`**(`W_CSS_IMAGE_INVALID`、`W_CSS_STRAY_COLON`、以前はシート全体が `U_LAYOUT_CSS: Missed semicolon`): `url()` のない URL(`background-image: https://example.com/close.png`)や引用符の文字列(`"close.png"`)は `<image>` でないので宣言ごと捨てられ、前の `background-image` が残る(Chromium・Firefox・WebKit で `getComputedStyle` を実測)。一括指定 `background` の画像の位置にある同じものも、一括指定ごと捨てられる(色も付かない)。PostCSS は値の中の `:` で「Missed semicolon」を投げてシート全体を読まないが、ブラウザーはその宣言だけを次の `;` まで捨てて続きを読む(セミコロンの書き忘れも同じ)。解析は `:` を同じ長さの印に置き換えて読み、その宣言を捨てて報告する。`url()`・`image-set()`・グラデーション・`none`・`var()` はそのまま
+- [x] **F135. 同じ名前の `@keyframes` を 2 回書く**(`W_CSS_KEYFRAMES_DUPLICATE`、vlmkit `check animation` の `duplicate-keyframes` の静的な版): 後の規則が前の規則を丸ごと置き換え、キーフレームは合わさらない(Chromium・Firefox・WebKit で実測: `opacity` の `@keyframes k` の後に `transform` の `@keyframes k` を書くと、途中で止めた時点の `opacity` は 1 のまま。対照として名前を変えると 0.5)。前の規則だけが動かすプロパティを `lost` に出す。条件(`@media` など)の中の規則・`-webkit-keyframes`・層の違う規則は報告しない
+- [x] **F136. `@property` のないカスタムプロパティの transition**(`W_CSS_TRANSITION_UNREGISTERED`、vlmkit の `unregistered-property-transition`): 型のないカスタムプロパティは一度に変わり、transition が始まらない(3 ブラウザーで `getAnimations()` が 0。対照として `@property --x { syntax: "<number>" }` では 1)。解析が型を扱わない構文の `@property`(`<color>` など)も登録とみなす。スクリプトの `CSS.registerProperty` は見えないので、文言で断る
+- [x] **F137. transition の綴り違いのプロパティ**(`W_CSS_TRANSITION_PROPERTY_UNKNOWN`、vlmkit の `unknown-transition-property`): `transition: widht 1s` は受け入れられ(計算値の `transition-property` は `widht`)、何も遷移しない(3 ブラウザーで実測。対照の `width` では 1)。css-tree の定義にあるプロパティから編集距離 2 以内(隣どうしの入れ替えは 1)のものがあるときだけ報告し、`suggestion` に出す。遠い名前は新しいプロパティかもしれないので報告しない。`-webkit-` などの接頭辞と `var()` は見ない
+- [x] **F138. 単位のない数の変数を時間に使う**(`W_CSS_DURATION_UNITLESS`、vlmkit の `unitless-duration-var`): `--d: 300` を `transition: opacity var(--d)` に使うと、計算値の時点で宣言が無効になり transition も animation も始まらない(3 ブラウザーで実測。対照として `calc(var(--d) * 1ms)` と `--d: 300ms` は始まる)。`calc()` の中は掛ける数なので報告しない。変数の定義のどれかに単位があれば、要素によって違うので報告しない
+- [x] **F139. 綴り違いの media feature**(`W_CSS_MEDIA_FEATURE_UNKNOWN`、vlmkit の `unknown-media-feature`。以前は `U_LAYOUT_QUERY`): ブラウザーの知らない feature の query は当たらず、`not (…)` でも当たらない(3 ブラウザーで `(min-widht: 1px)`・`(widht > 1px)`・`screen and (hovr: hover)`・`not (prefers-reduced-motoin: reduce)` を実測。対照の `(min-width: 1px)`・`(scripting: enabled)`・`(update: fast)`・`(-webkit-min-device-pixel-ratio: 1)` は当たる)。仕様の feature から編集距離 2 以内のときだけ報告し、規則は当たらないものとして解析する(Unknown にしない)。仕様にあるがどのブラウザーも実装しない `prefers-reduced-data` は綴り違いではないので今までどおり。query を並べたものは、ほかの query が当たりうるので対象外
   ので、`@media (min-width: var(--bp))` は無効な query になり、その規則は決して当たらない(3 つのブラウザーで 800px でも当たらない)。
   解析も当たらない規則として扱う。query を並べたもの(`print, (…var…)`)は、ほかの query が当たりうるので今までどおり。
 - 試して当てはまらなかったもの: `progress`・`input[type=range]` の `appearance: none` は、3 つのブラウザーとも何かを描く
@@ -509,6 +510,24 @@
   rtl のコンテナの鏡映(包含ブロックが一緒に動くとき)と、祖先の拡大縮小でも同じだけ動かす。任意の角度の回転では、箱の位置と同じく不明にする。
   今までは動かしておらず、rtl で右端に置いた箱の中のスキップリンク(3 ブラウザーで x = 290、画面内)や、`scale(0.5)` の中のもの(x = −5〜15)を、
   フォーカスしても画面外(`E_A11Y_FOCUS_OFFSCREEN`)と誤って報告していた。e2e `focused positions follow rtl mirroring and scales` で 5 通り
+- [x] **H21. クリックの乗っ取りと出口を塞ぐ透明な覆い**(`E_A11Y_INVISIBLE_BLOCKER`・`E_A11Y_CLICK_TRAP`): viewport 全体に fixed で張った透明な
+  `<a>`(広告のリンク)は、部品であっても見えない覆い。部品の一部が覆う組を `E_A11Y_OCCLUDED` に残すのは、覆いを張る箱の包含ブロック(html・body 以外)が
+  対象を含むとき(stretched link の `::after` が自分のカードのボタンを覆う)だけ。閉じるボタンの上に同じ層の透明な全面リンクがあると、ボタンは
+  見えてフォーカスも受けるがクリックはリンクに届く: 出口にならず、理由に「何も描かない覆いに覆われている」と書く。ページの部品が `inert` で、
+  `inert` でない層(`role="dialog"` の広告)に出口がないときも trap(`inert` の部品はクリックもフォーカスも受けない)。出口の候補の子孫が描くのが
+  一部の幅だけなら、その幅だけ出口にする。Chromium・Firefox・WebKit で `elementFromPoint` と `focus()` を照合(e2e `click traps and invisible blockers`
+  に 4 通り、stretched link は `OCCLUDED` のままで `INVISIBLE_BLOCKER` にならないことを確かめる)
+- [x] **H22. スクロールと fixed の覆い**(`E_A11Y_INVISIBLE_BLOCKER` の `scrolled`、`E_A11Y_CLICK_TRAP`): 何も描かない fixed の箱(opacity 0 のまま
+  残った広告)は、ページをスクロールすると流れの中のリンクがその下を通り、そのあいだクリックは見えない箱に届く(375×667 で 3 ブラウザーとも、
+  スクロール位置 0 では当たらず 300 で当たる。`pointer-events: none` の対照では当たらない)。位置 0 で箱より下にあり、スクロールの範囲
+  (0〜ページの高さ − viewport の高さ)の中で箱に重なる部品を報告し、重なり始めと終わりのスクロール位置を `scrolled` に書く。描く fixed の箱は
+  見えているので、スクロールを続ければ抜けられる(報告しない)。ページがスクロールしないとき: html と body の overflow の 16 通りを、ホイールと
+  PageDown で 3 ブラウザーで測った。html が hidden / clip ならスクロールしない(body が visible・hidden・clip のとき。body が auto だと body が
+  スクロールする箱になる)。html が visible で body が hidden / clip でもしない(body の値が viewport に移る)。html が auto ならいつもする。
+  html の overflow が両方の軸で hidden / clip のとき、fixed の層の下の流れの中の部品はスクロールで抜けられないので trap に数え、
+  `E_A11Y_OCCLUDED` の文言に「スクロールでは抜けられない」と書く。あわせて、html の hidden / clip は viewport に移るので fixed の箱を
+  閉じ込めない(以前は Unknown)。body の hidden / clip(html が visible のとき、または html も hidden のとき)は解析が Unknown のまま。
+  e2e `fixed covers and scrolling` で 3 ブラウザー
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 

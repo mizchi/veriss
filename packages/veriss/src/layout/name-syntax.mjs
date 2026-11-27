@@ -1,4 +1,4 @@
-// Names the browser does not know, and the known name each is a typo of (checklist F136, F138).
+// Names the browser does not know, and the known name each is a typo of (checklist F137, F139).
 // A name is called a typo only when it is near a known one (edit distance 2 at most): a name far from every known one
 // may be newer than the data, so it is left alone.
 import data from 'css-tree/definition-syntax-data';

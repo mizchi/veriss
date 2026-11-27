@@ -1618,11 +1618,11 @@ test('F133: a container query unit with no container for its axis is the small-v
   }
 });
 
-// F134-F138 (the static half of vlmkit check animation's CSS rules): each warning holds exactly where the browser shows
+// F135-F139 (the static half of vlmkit check animation's CSS rules): each warning holds exactly where the browser shows
 // no effect, and each control (a registered property, the right spelling, calc(), another name) has one.
 const started = async (page, css) => { await load(page, css); return page.evaluate(() => { const a = document.querySelector('.a'); a.getBoundingClientRect(); a.classList.add('on'); getComputedStyle(a).width; getComputedStyle(a).opacity; getComputedStyle(a).getPropertyValue('--x'); return document.getAnimations().length; }); };
 
-test('F134: a second @keyframes of one name replaces the first whole', async ({page}) => {
+test('F135: a second @keyframes of one name replaces the first whole', async ({page}) => {
   for (const [css, dup] of [['@keyframes k{from{opacity:0}to{opacity:1}}@keyframes k{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 10s linear -5s paused}', true],
     ['@keyframes k{from{opacity:0}to{opacity:1}}@keyframes j{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 10s linear -5s paused,j 10s linear -5s paused}', false]]) {
     await load(page, css);
@@ -1633,7 +1633,7 @@ test('F134: a second @keyframes of one name replaces the first whole', async ({p
   }
 });
 
-test('F135, F136, F137: a transition that never starts', async ({page}) => {
+test('F136, F137, F138: a transition that never starts', async ({page}) => {
   for (const [css, code] of [['.a{--x:0;transition:--x 1s}.a.on{--x:1}', 'W_CSS_TRANSITION_UNREGISTERED'], ['@property --x{syntax:"<number>";inherits:false;initial-value:0}.a{--x:0;transition:--x 1s}.a.on{--x:1}', null],
     ['.a{width:10px;transition:widht 1s}.a.on{width:100px}', 'W_CSS_TRANSITION_PROPERTY_UNKNOWN'], ['.a{width:10px;transition:width 1s}.a.on{width:100px}', null],
     [':root{--d:300}.a{transition:opacity var(--d)}.a.on{opacity:.5}', 'W_CSS_DURATION_UNITLESS'], [':root{--d:300}.a{transition:opacity calc(var(--d) * 1ms)}.a.on{opacity:.5}', null], [':root{--d:300ms}.a{transition:opacity var(--d)}.a.on{opacity:.5}', null]]) {
@@ -1649,7 +1649,7 @@ test('F135, F136, F137: a transition that never starts', async ({page}) => {
   }
 });
 
-test('F138: a misspelled media feature makes the query never match', async ({page}) => {
+test('F139: a misspelled media feature makes the query never match', async ({page}) => {
   await page.setViewportSize({width: 800, height: 600});
   for (const [query, typo] of [['(min-widht: 1px)', true], ['(widht > 1px)', true], ['screen and (hovr: hover)', true], ['not (prefers-reduced-motoin: reduce)', true], ['(prefers-color-schema: light)', true],
     ['(min-width: 1px)', false], ['(scripting: enabled)', false], ['(update: fast)', false], ['(-webkit-min-device-pixel-ratio: 1)', false]]) {

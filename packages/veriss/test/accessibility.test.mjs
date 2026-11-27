@@ -18,7 +18,7 @@ test('accessibility rules are opt-in and listed in the report', () => {
   assert.equal(analyzeLayout(tree, {name: 'Page', css: reset + css, viewport: domain}).accessibility, undefined);
   const report = run(tree, css);
   assert.equal(report.status, 'verified', JSON.stringify(report.diagnostics));
-  assert.deepEqual(report.accessibility.rules, ['accessible-name', 'text-contrast', 'occluded-target', 'target-overlap', 'visual-order', 'hidden-focusable', 'empty-heading', 'heading-order', 'nested-interactive', 'duplicate-id', 'aria-reference', 'positive-tabindex', 'multiple-main', 'scrollable-region-focusable', 'reflow', 'focus-obscured', 'focus-area', 'pointer-disabled', 'small-text', 'target-size', 'image-alt', 'form-label', 'label-for', 'list-structure', 'radio-group', 'landmark-name', 'role-valid', 'interactive-role-focusable', 'link-in-text-block', 'table-headers', 'td-headers', 'fieldset-name', 'label-in-name', 'link-purpose', 'link-text', 'role-parent', 'role-children', 'role-attr', 'aria-attr', 'aria-value', 'presentation-conflict', 'empty-th', 'redundant-alt', 'title-only', 'input-button-name', 'autocomplete', 'scope', 'html-lang', 'lang-valid', 'meta-viewport', 'touch-zoom', 'forced-colors', 'page-h1', 'region', 'bypass', 'landmark-top-level', 'duplicate-landmark', 'p-as-heading', 'orientation', 'focus-visible', 'text-spacing', 'state-contrast', 'frame-title', 'video-caption', 'autoplay-audio', 'hover-only', 'clickable-look', 'list-style-semantics', 'motion', 'blink', 'definition-list', 'accesskeys', 'server-side-image-map', 'aria-hidden-body', 'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable']);
+  assert.deepEqual(report.accessibility.rules, ['accessible-name', 'text-contrast', 'occluded-target', 'target-overlap', 'visual-order', 'hidden-focusable', 'empty-heading', 'heading-order', 'nested-interactive', 'duplicate-id', 'aria-reference', 'positive-tabindex', 'multiple-main', 'scrollable-region-focusable', 'reflow', 'focus-obscured', 'focus-area', 'pointer-disabled', 'small-text', 'target-size', 'image-alt', 'form-label', 'label-for', 'list-structure', 'radio-group', 'landmark-name', 'role-valid', 'interactive-role-focusable', 'link-in-text-block', 'table-headers', 'td-headers', 'fieldset-name', 'label-in-name', 'link-purpose', 'link-text', 'role-parent', 'role-children', 'role-attr', 'aria-attr', 'aria-value', 'presentation-conflict', 'empty-th', 'redundant-alt', 'title-only', 'input-button-name', 'autocomplete', 'scope', 'html-lang', 'lang-valid', 'meta-viewport', 'touch-zoom', 'forced-colors', 'page-h1', 'region', 'bypass', 'landmark-top-level', 'duplicate-landmark', 'p-as-heading', 'orientation', 'focus-visible', 'text-spacing', 'state-contrast', 'frame-title', 'video-caption', 'autoplay-audio', 'hover-only', 'clickable-look', 'list-style-semantics', 'motion', 'blink', 'definition-list', 'accesskeys', 'server-side-image-map', 'aria-hidden-body', 'color-only-state', 'input-image-alt', 'fragment-target', 'page-main', 'icon-font-name', 'generated-name', 'focus-clipped', 'hidden-overridden', 'state-mismatch', 'focus-transparent', 'error-message', 'modal-background', 'inert-shown', 'safe-area-target', 'hinge-target', 'target-offscreen', 'new-window', 'form-submit', 'native-aria-conflict', 'focus-semantics', 'focus-offscreen', 'focus-scrolled-under', 'fixed-hides-content', 'fixed-covers-part', 'text-start-obscured', 'page-clipped', 'image-fallback-contrast', 'visual-presentation', 'focus-contrast', 'field-boundary', 'placeholder-contrast', 'checked-indicator', 'focus-clipped-away', 'fragment-under-bar', 'flash', 'text-obscured', 'focus-appearance', 'focus-ring-clipped', 'hidden-control', 'select-indicator', 'live-hidden', 'tabindex-removed', 'contents-focus', 'icon-contrast', 'caret-hidden', 'label-pointer', 'bar-covered', 'bar-transparent', 'autofocus', 'scroll-end-covered', 'scroll-start-unreachable', 'behind-background', 'page-start-unreachable', 'invisible-blocker', 'click-trap']);
 });
 
 // accessible-name: a link (or button) needs text that renders, or a name attribute.
@@ -100,7 +100,7 @@ test('text-contrast: images, opacity, unknown colors and no declared colors are 
 
 // occluded-target: a positioned box painted later covers part of a button.
 const panel = overlay => ({tag: 'main', classes: ['panel'], children: [{tag: 'button', classes: ['go']}, {tag: 'div', classes: ['cover']}]});
-const panelCSS = extra => `.panel { display: grid; grid-template-columns: 100px minmax(0, 1fr); grid-template-rows: 40px; position: relative; }\n.go { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; }\n.cover { position: absolute; top: 0; left: 80px; inline-size: 60px; block-size: 40px; }\n${extra}`;
+const panelCSS = extra => `.panel { display: grid; grid-template-columns: 100px minmax(0, 1fr); grid-template-rows: 40px; position: relative; }\n.go { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; }\n.cover { position: absolute; top: 0; left: 80px; inline-size: 60px; block-size: 40px; background: #ccc; }\n${extra}`;
 
 test('occluded-target: a later absolute box over a button, unless it ignores pointer events', () => {
   const report = run(panel(), panelCSS(''));
@@ -252,7 +252,7 @@ test('focus-obscured and focus-area', () => {
   const covered = run(panel(), panelCSS('.cover { left: 0; inline-size: 120px; background: #fff; }'));
   assert.deepEqual(find(covered, 'E_A11Y_FOCUS_OBSCURED').map(d => d.box), ['.go']);
   assert.equal(find(run(panel(), panelCSS('.cover { background: #fff; }')), 'E_A11Y_FOCUS_OBSCURED').length, 0); // only partly covered
-  assert.equal(find(run(panel(), panelCSS('.cover { left: 0; inline-size: 120px; }')), 'E_A11Y_FOCUS_OBSCURED').length, 0); // nothing painted
+  assert.equal(find(run(panel(), panelCSS('.cover { left: 0; inline-size: 120px; background: none; }')), 'E_A11Y_FOCUS_OBSCURED').length, 0); // nothing painted
   const zero = run(panel(), panelCSS('.panel { grid-template-columns: 0px minmax(0, 1fr); }\n.cover { display: none; }'));
   assert.deepEqual(find(zero, 'E_A11Y_FOCUS_AREA').map(d => d.box), ['.go']);
 });
@@ -267,6 +267,36 @@ test('pointer-disabled: a visible target under inherited pointer-events: none', 
   const [finding] = find(run(panel(), panelCSS('.panel { pointer-events: none; }\n.cover { display: none; }')), 'E_A11Y_POINTER_DISABLED');
   assert.equal(finding.box, '.go');
   assert.equal(find(run(panel(), panelCSS('.panel { pointer-events: none; }\n.go { pointer-events: auto; }\n.cover { display: none; }')), 'E_A11Y_POINTER_DISABLED').length, 0);
+});
+
+// #46: the SVG-only pointer-events keywords behave as auto on a non-SVG element (CSS UI 4 §5.2.2 / SVG 2 §15.6).
+const svgKeywords = ['all', 'visiblePainted', 'visibleFill', 'visibleStroke', 'visible', 'painted', 'fill', 'stroke'];
+const unsupportedPointer = report => report.diagnostics.filter(d => d.code.startsWith('U_') && /pointer-events/.test(d.message));
+
+test('pointer-events: the SVG-only keywords on a link are auto, not Unknown (#46 repro)', () => {
+  const repro = value => analyzeHTML('<html lang="en"><body><main><a id="a" href="/x">Link</a></main></body></html>',
+    {name: 'Page', css: `html,body{margin:0;padding:0}\n#a{display:block;width:100px;height:44px;pointer-events:${value};color:#00e;background:#fff}`, viewport: domain});
+  for (const value of svgKeywords) assert.deepEqual(unsupportedPointer(repro(value)), [], value);
+});
+
+test('pointer-events: an SVG-only keyword undoes an inherited none like auto', () => {
+  for (const value of svgKeywords) {
+    assert.equal(find(run(panel(), panelCSS(`.panel { pointer-events: none; }\n.go { pointer-events: ${value}; }\n.cover { display: none; }`)), 'E_A11Y_POINTER_DISABLED').length, 0, value);
+    // The cover takes the pointer back, so it covers the button again.
+    const covered = run(panel(), panelCSS(`.panel { pointer-events: none; }\n.cover { pointer-events: ${value}; }`));
+    assert.deepEqual(unsupportedPointer(covered), [], value);
+    assert.equal(find(covered, 'E_A11Y_OCCLUDED').length, 1, value);
+  }
+});
+
+test('pointer-events: an unknown value, or an SVG keyword reaching an svg, stays Unknown', () => {
+  assert.equal(unsupportedPointer(run(panel(), panelCSS('.go { pointer-events: bounding-box; }'))).length, 1);
+  // On an svg the keywords pick which painted parts take the pointer, which is not modeled.
+  const icon = css => analyzeHTML('<html lang="en"><body><main><svg class="i" width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg></main></body></html>',
+    {name: 'Page', css: `html,body{margin:0;padding:0}\n${css}`, viewport: domain});
+  assert.equal(unsupportedPointer(icon('.i{pointer-events:visibleFill}')).length, 1);
+  assert.equal(unsupportedPointer(icon('main{pointer-events:all}')).length, 1);
+  assert.deepEqual(unsupportedPointer(icon('.i{pointer-events:none}')), []);
 });
 
 test('small-text: rendered text below 12px is a warning', () => {
@@ -422,8 +452,12 @@ test('occluded-target: a later in-flow box covers a target that overflows into i
   // .a overflows its 20px row by 20px into .b's row; .b is later in tree order and on top.
   const tree = page([{tag: 'button', classes: ['a'], named: true}, {tag: 'div', classes: ['b']}]);
   const css = '.page { display: grid; grid-template-columns: 100px; grid-template-rows: 20px 20px; }\n.a { appearance: none; display: block; block-size: 40px; padding: 0; border: 0; min-width: 0; min-height: 0; }\n';
-  const report = run(tree, css, {boxes: {'.page': {overflowBlock: 'visible'}}});
+  const report = run(tree, css + '.b { background: #ccc; }\n', {boxes: {'.page': {overflowBlock: 'visible'}}});
   assert.deepEqual(find(report, 'E_A11Y_OCCLUDED').map(d => d.cover), ['Page/1']);
+  // Painting nothing, the same box is an invisible blocker for that pair (and not also an occlusion).
+  const bare = run(tree, css, {boxes: {'.page': {overflowBlock: 'visible'}}});
+  assert.deepEqual(find(bare, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.cover), ['Page/1']);
+  assert.equal(find(bare, 'E_A11Y_OCCLUDED').length, 0);
 });
 
 test('form-label: a display: none label does not name its field there (aria-labelledby would)', () => {
@@ -1039,15 +1073,19 @@ test('input-image-alt, fragment-target and page-main', () => {
   assert.equal(warn(run(body(false), '.page { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 20px; }'), 'W_A11Y_NO_MAIN').length, 1);
 });
 
-test('generated boxes: an empty absolute ::after overlay covers what it paints over; generated text is Unknown', () => {
+test('generated boxes: an empty absolute ::after overlay blocks what it lies over (it paints nothing); generated text is Unknown', () => {
   const tree = {tag: 'main', classes: ['page'], children: [{tag: 'div', classes: ['card'], children: [{tag: 'div', classes: ['x']}]}, {tag: 'button', classes: ['b'], named: true}]};
   const css = extra => `.page { display: grid; grid-template-columns: 200px; grid-auto-rows: 40px; position: relative; background: #fff; }\n.card { display: grid; grid-template-columns: minmax(0, 1fr); }\n.b { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; }\n${extra}`;
   assert.equal(find(run(tree, css('')), 'E_A11Y_OCCLUDED').length, 0);
   const over = run(tree, css('.card::after { content: ""; position: absolute; left: 0; top: 0; inline-size: 200px; block-size: 80px; }'));
-  assert.deepEqual(find(over, 'E_A11Y_OCCLUDED').map(d => [d.box, d.cover]), [['.b', 'Page/0/1']]);
+  assert.deepEqual(find(over, 'E_A11Y_INVISIBLE_BLOCKER').map(d => [d.box, d.cover]), [['.b', 'Page/0/1']]);
+  assert.equal(find(over, 'E_A11Y_OCCLUDED').length, 0);
+  // With a background it is seen: an occlusion.
+  assert.deepEqual(find(run(tree, css('.card::after { content: ""; position: absolute; left: 0; top: 0; inline-size: 200px; block-size: 80px; background: #eee; }')), 'E_A11Y_OCCLUDED').map(d => [d.box, d.cover]), [['.b', 'Page/0/1']]);
   // Out of the way (above the button), or not hit-testable: nothing.
   assert.equal(find(run(tree, css('.card::after { content: ""; position: absolute; left: 0; top: 0; inline-size: 200px; block-size: 40px; }')), 'E_A11Y_OCCLUDED').length, 0);
   assert.equal(find(run(tree, css('.card::after { content: ""; position: absolute; left: 0; top: 0; inline-size: 200px; block-size: 80px; pointer-events: none; }')), 'E_A11Y_OCCLUDED').length, 0);
+  assert.equal(find(run(tree, css('.card::after { content: ""; position: absolute; left: 0; top: 0; inline-size: 200px; block-size: 80px; pointer-events: none; }')), 'E_A11Y_INVISIBLE_BLOCKER').length, 0);
   assert.equal(run(tree, css('.card::before { content: "→"; }')).status, 'unknown');
   // A pseudo-element of a list item is not a list item.
   const list = {tag: 'main', classes: ['page'], children: [{tag: 'ul', classes: ['l'], children: [{tag: 'li', classes: ['i'], children: [{tag: 'span', classes: ['t']}]}]}]};
@@ -2253,9 +2291,10 @@ test('occluded-target: what covers a modal close button, and why', () => {
   const trapped = occluded(run(tree, css('.m { z-index: 5; }\n.x { position: relative; z-index: 2147483647; }')));
   assert.deepEqual([...new Set(trapped.map(d => d.box))], ['.x']);
   assert.match(trapped[0].message, /z-index 2147483647 .*inside the stacking context of \.m \(z-index 5[,)]/);
-  // An overlay at a higher z-index, and the same at opacity 0: invisible, it still takes the pointer.
+  // An overlay at a higher z-index, and the same at opacity 0: invisible, it still takes the pointer (an invisible
+  // blocker: the button shows, the click lands on the overlay).
   assert.deepEqual([...new Set(occluded(run(tree, css('.o { z-index: 12; }'))).map(d => d.box))], ['.x']);
-  const ghost = occluded(run(tree, css('.o { z-index: 12; opacity: 0; }')));
+  const ghost = find(run(tree, css('.o { z-index: 12; opacity: 0; }')), 'E_A11Y_INVISIBLE_BLOCKER');
   assert.deepEqual([...new Set(ghost.map(d => d.box))], ['.x']);
   assert.match(ghost[0].message, /invisible \(opacity 0\).*pointer-events: none/);
   assert.equal(occluded(run(tree, css('.o { z-index: 12; opacity: 0; pointer-events: none; }'))).length, 0);
@@ -2271,8 +2310,9 @@ test('an invisible (opacity 0) layer hides nothing from sight: not focus-obscure
   const tree = page([btn('b'), {tag: 'div', classes: ['bg']}]);
   const css = extra => pageCSS(`.page { background: #fff; grid-auto-rows: 40px; }\n.b { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; inline-size: 24px; block-size: 24px; position: fixed; right: 0; bottom: 0; z-index: 1; }\n.bg { position: fixed; left: 0; right: 0; bottom: 0; block-size: 120px; background: #333; z-index: 2; ${extra} }`);
   const codes = report => [...new Set(report.diagnostics.filter(d => d.severity === 'error').map(d => d.code))].sort();
-  assert.deepEqual(codes(run(tree, css(''))), ['E_A11Y_FOCUS_OBSCURED', 'E_A11Y_OCCLUDED']);
-  assert.deepEqual(codes(run(tree, css('opacity: 0;'))), ['E_A11Y_OCCLUDED']);
+  // The painted strip covers the fixed button for good and has no control of its own: a click trap as well.
+  assert.deepEqual(codes(run(tree, css(''))), ['E_A11Y_CLICK_TRAP', 'E_A11Y_FOCUS_OBSCURED', 'E_A11Y_OCCLUDED']);
+  assert.deepEqual(codes(run(tree, css('opacity: 0;'))), ['E_A11Y_INVISIBLE_BLOCKER']);
   assert.deepEqual(codes(run(tree, css('opacity: 0; pointer-events: none;'))), []);
 });
 
@@ -2301,7 +2341,7 @@ test('px lengths with more than six decimals are exact rationals (a script write
 test('occluded-target names every box over the target where it is covered, not only the first', () => {
   const btn = cls => ({tag: 'button', classes: [cls], named: true});
   const tree = page([{tag: 'div', classes: ['host'], children: [btn('x')]}, {tag: 'div', classes: ['bg']}, {tag: 'div', classes: ['ad']}]);
-  const css = extra => pageCSS(`.page { background: #fff; }\n.host { position: fixed; right: 0; bottom: 0; inline-size: 120px; block-size: 60px; z-index: 5; display: grid; grid-template-columns: 24px; background: #fff; }\n.x { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; inline-size: 24px; block-size: 24px; }\n.bg { position: fixed; left: 0; right: 0; bottom: 0; block-size: 70px; opacity: 0; background: #333; z-index: 9; }\n.ad { position: fixed; left: 0; right: 0; bottom: 20px; block-size: 50px; z-index: 10; }\n${extra}`);
+  const css = extra => pageCSS(`.page { background: #fff; }\n.host { position: fixed; right: 0; bottom: 0; inline-size: 120px; block-size: 60px; z-index: 5; display: grid; grid-template-columns: 24px; background: #fff; }\n.x { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; inline-size: 24px; block-size: 24px; }\n.bg { position: fixed; left: 0; right: 0; bottom: 0; block-size: 70px; opacity: 0; background: #333; z-index: 9; }\n.ad { position: fixed; left: 0; right: 0; bottom: 20px; block-size: 50px; z-index: 10; background: #eee; }\n${extra}`);
   const found = find(run(tree, css('')), 'E_A11Y_OCCLUDED');
   assert.ok(found.length > 0);
   assert.ok(found.every(d => d.alsoCoveredBy?.length === 1), JSON.stringify(found.map(d => [d.cover, d.alsoCoveredBy])));
@@ -2316,7 +2356,7 @@ test('occluded-target names every box over the target where it is covered, not o
 // drop shadow takes no pointer), no layout change. Colors under it are not modeled (contrast Unknown).
 test('filter makes a stacking context and the fixed containing block, keeps the hit area, leaves colors Unknown', () => {
   const tree = page([{tag: 'div', classes: ['a'], children: [{tag: 'button', classes: ['b'], named: true}]}, {tag: 'div', classes: ['s']}]);
-  const css = (filter, extra = '') => pageCSS(`.page { background: #fff; grid-auto-rows: 100px; }\n.a { position: relative; display: grid; grid-template-columns: 40px; grid-auto-rows: 40px; filter: ${filter}; }\n.b { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; position: relative; z-index: 99; }\n.s { position: absolute; left: 0; top: 0; inline-size: 30px; block-size: 30px; z-index: 2; }\n${extra}`);
+  const css = (filter, extra = '') => pageCSS(`.page { background: #fff; grid-auto-rows: 100px; }\n.a { position: relative; display: grid; grid-template-columns: 40px; grid-auto-rows: 40px; filter: ${filter}; }\n.b { appearance: none; display: block; padding: 0; border: 0; min-width: 0; min-height: 0; position: relative; z-index: 99; }\n.s { position: absolute; left: 0; top: 0; inline-size: 30px; block-size: 30px; z-index: 2; background: #eee; }\n${extra}`);
   // Without a filter the button (z-index 99, in the root context) is above the sibling; with one it is trapped below.
   assert.equal(find(run(tree, css('none')), 'E_A11Y_OCCLUDED').length, 0);
   for (const filter of ['drop-shadow(4px 4px 4px black)', 'blur(2px)', 'brightness(1)', 'drop-shadow(0 0 2px rgb(0 0 0 / .5)) saturate(2)']) {

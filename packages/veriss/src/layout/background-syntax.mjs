@@ -20,3 +20,40 @@ export function backgroundProblem(value, isColor) {
   }
   return null;
 }
+
+// A background-image layer must be an <image> (CSS Images 3/4): url(), image-set(), a gradient, image(), cross-fade(),
+// element(), paint() — or none. A bare URL without url() or a quoted string is not one: the browser drops the whole
+// declaration (measured in Chromium, Firefox and WebKit: background-image: https://… and "x.png" both leave
+// getComputedStyle at the earlier value). var(), env() and attr() are not judged. STRAY_COLON marks a ':' the parser
+// stage replaced (see tolerateStrayColons in css.mjs).
+export const STRAY_COLON = '';
+const imageFunction = /^(?:url|src|(?:-webkit-)?image-set|image|cross-fade|-webkit-cross-fade|element|-moz-element|paint|(?:-webkit-|-moz-|-o-)?(?:repeating-)?(?:linear|radial|conic)-gradient|-webkit-gradient)\(/i;
+/** Why a background-image value is not a list of <image>s (or none), or null. */
+export function imageProblem(value) {
+  const text = String(value).replaceAll(STRAY_COLON, ':').trim();
+  if (!text || /var\(|env\(|attr\(/i.test(text) || /^(?:inherit|initial|unset|revert|revert-layer)$/i.test(text)) return null;
+  const layers = split(text, /,/).map(l => l.trim());
+  for (const layer of layers) {
+    if (/^none$/i.test(layer)) continue;
+    if (imageFunction.test(layer) && layer.endsWith(')') && split(layer, /\s/).filter(Boolean).length === 1) continue;
+    return imageWhy(layer);
+  }
+  return null;
+}
+const imageWhy = token => /^["']/.test(token) ? `${token} is a quoted string, not an image` : /[:/.]/.test(token) ? `${token} is a bare URL, not an image (a URL needs url())` : `${token} is not an image`;
+/** The URL to suggest in url("…") for an invalid image token. */
+export const imageURL = token => String(token).replaceAll(STRAY_COLON, ':').trim().replace(/^(["'])(.*)\1$/, '$2');
+// In the background shorthand, the parts the shorthand never takes that look like an image: a quoted string, or a
+// bare URL (with a scheme, a path or a file extension).
+/** The token of a background shorthand that was meant as an image but is not one, or null. */
+export function shorthandImageToken(value) {
+  const text = String(value).replaceAll(STRAY_COLON, ':').trim();
+  if (/var\(|env\(|attr\(/i.test(text)) return null;
+  for (const layer of split(text, /,/)) for (const token of split(layer, /\s/).filter(Boolean)) {
+    if (/^["']/.test(token)) return token;
+    // A "/" glued to the size ("center /cover", "0 0 /50% auto") separates the position from the size: not a path.
+    if (/^\/(?:cover|contain|auto|[+-]?(?:\d+\.?\d*|\.\d+)(?:[a-z]+|%)?|calc\(.*\))$/i.test(token)) continue;
+    if (/^[a-z][\w+.-]*:\/\//i.test(token) || /^\.{0,2}\/[^\s/]/.test(token) || /\.(?:png|jpe?g|gif|webp|avif|svg)(?:[?#].*)?$/i.test(token)) return token;
+  }
+  return null;
+}
