@@ -2491,6 +2491,25 @@ test('click traps and invisible blockers match hit testing and what the browser 
   }
 });
 
+// A positioned box inside an overflow: hidden box that paints under the controls: it is drawn and hit-tested above them
+// (a positioned layer), so it takes their clicks. The analysis lays the page out at scroll offset 0 for it.
+test('a cover inside an overflow: hidden box that itself paints under the controls', async ({page}) => {
+  const viewport = {min: 320, max: 800, height: {min: 600, max: 900}};
+  const line = {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20};
+  const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#fff;color:#000}main{display:block;position:relative}.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px;font-family:sans-serif}.l{position:absolute;top:0;left:0}.m{position:absolute;top:40px;left:0}.w{display:block;height:100px;overflow:hidden}.c{position:relative;display:block;height:100px}';
+  const html = '<html lang="en"><body><main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="w"><div class="c"></div></div></main></body></html>';
+  await page.setViewportSize({width: 800, height: 800});
+  for (const [extra, code] of [['', 'E_A11Y_INVISIBLE_BLOCKER'], ['.c{background:#000}', 'E_A11Y_OCCLUDED'], ['.c{pointer-events:none}', null]]) {
+    const css = base + extra;
+    const report = analyzeHTML(html, {name: 'P', viewport, accessibility: true, boxes: {'.l': line, '.m': line}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css});
+    const reported = [...new Set(report.diagnostics.filter(d => ['E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_OCCLUDED'].includes(d.code)).map(d => `${d.code} ${d.box}`))].sort();
+    await page.setContent(`<!doctype html>${html.replace('<body>', `<head><style>${css}</style></head><body>`)}`);
+    const hit = await page.evaluate(() => ['.l', '.m'].map(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; }));
+    expect(hit, extra || 'transparent').toEqual(code ? ['c', 'c'] : ['l', 'm']);
+    expect(reported, extra || 'transparent').toEqual(code ? [`${code} .l`, `${code} .m`] : []);
+  }
+});
+
 // Scrolling and fixed covers: a fixed box that paints nothing catches clicks on the in-flow controls that scroll under
 // it (E_A11Y_INVISIBLE_BLOCKER with the scroll offsets), and a fixed sheet over in-flow controls of a page whose root is
 // overflow: hidden is a click trap (the user cannot scroll them free).

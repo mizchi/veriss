@@ -429,3 +429,26 @@ test('an inert-page trap is reported only where the layer shows', () => {
   const traps = find(r, 'E_A11Y_CLICK_TRAP');
   assert.ok(traps.length > 0 && traps.every(t => t.box === '.ad' && t.range.min >= 600), JSON.stringify(traps.map(t => t.range)));
 });
+
+// The only cover of a control is a positioned box inside an overflow: hidden box that paints below the control: the
+// first pass cannot place it, so the page is laid out again at scroll offset 0 for it too (not only when the first
+// pass already found a blocker or a trap).
+const hiddenHost = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="w"><div class="c"></div></div></main>';
+const hiddenCover = extra => page('', 'main{position:relative}.l{position:absolute;top:0;left:0}.m{position:absolute;top:40px;left:0}.w{display:block;height:100px;overflow:hidden}.c{position:relative;display:block;height:100px}' + extra, {host: hiddenHost});
+test('a cover inside an overflow: hidden box is found at scroll offset 0 even when the first pass found nothing', () => {
+  const blockers = find(hiddenCover(''), 'E_A11Y_INVISIBLE_BLOCKER');
+  assert.deepEqual([...new Set(blockers.map(d => d.box))].sort(), ['.l', '.m'], JSON.stringify(hiddenCover('').diagnostics.map(d => d.code)));
+  assert.ok(blockers.every(d => d.scrollOffset === 0));
+  const painted = hiddenCover('.c{background:#000}');
+  assert.deepEqual([...new Set(find(painted, 'E_A11Y_OCCLUDED').map(d => d.box))].sort(), ['.l', '.m']);
+  // pointer-events: none on the cover: nothing.
+  assert.equal(find(hiddenCover('.c{pointer-events:none}'), 'E_A11Y_INVISIBLE_BLOCKER').length, 0);
+});
+
+// A control inside an overflow: hidden box has no position in the first pass; when offset 0 is laid out (for an unrelated
+// blocker), its own occlusion there is kept, not only the findings of controls the first pass had found.
+test('offset-0 occlusion of a control the first pass could not place is kept', () => {
+  const host = '<main><div class="w"><a class="k" href="/k">Inside</a><div class="sib"></div></div><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main><div class="catch"></div>';
+  const r = page('', '.w{position:relative;display:block;height:100px;overflow:hidden}.k{display:block;width:100px;height:40px;color:#000}.sib{position:absolute;top:0;left:0;width:200px;height:50px;background:#000}.catch{position:fixed;top:100px;left:0;width:50px;height:10px;z-index:5}', {host, boxes: {'.k': {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20}}});
+  assert.ok(find(r, 'E_A11Y_OCCLUDED').some(d => d.box === '.k' && d.scrollOffset === 0), JSON.stringify(r.diagnostics.map(d => [d.code, d.box, d.scrollOffset])));
+});

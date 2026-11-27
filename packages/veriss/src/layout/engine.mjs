@@ -4177,15 +4177,20 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // page laid out at scroll offset 0 gives where that content hit-tests: the occlusion, blocker and trap findings of
     // the covered controls and the layers are taken from there.
     const hitCodes = new Set(['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP']);
-    const hiddenBox = geometry.some(row => row.overflow === 'clip' && row.overflowValue === 'hidden' && !row.box.documentRoot && row.path !== root.path);
-    if (pristine && hiddenBox && diagnostics.some(d => ['E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP'].includes(d.code))) {
+    const hiddenRows = geometry.filter(row => row.overflow === 'clip' && row.overflowValue === 'hidden' && !row.box.documentRoot && row.path !== root.path);
+    // A box inside one that paints in a layer of its own (positioned, z-index, transform, opacity) may be the only cover
+    // of a control the hidden box itself paints under: the first pass places neither it nor any finding.
+    const layered = row => (row.position && row.position !== 'static') || row.zIndex !== null && row.zIndex !== undefined || (row.paint?.transform ?? 'none') !== 'none' || !['1', undefined].includes(row.paint?.opacity);
+    const unplacedLayer = geometry.some(row => !row.origin && layered(row) && row.paint?.pointerEvents !== 'none' && hiddenRows.some(h => row.path.startsWith(`${h.path}/`)));
+    if (pristine && hiddenRows.length && (unplacedLayer || diagnostics.some(d => ['E_A11Y_INVISIBLE_BLOCKER', 'E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP'].includes(d.code)))) {
       let zero = null;
       try { zero = analyzeBoxTree(pristine, { ...options, integrity: undefined }, scrollbarProfile, budget, inlineSheets, [], ['scroll-zero']); } catch { zero = null; }
       // (Unknown accessibility findings there are fine; a layout that is not decided at offset 0 is not used.)
       if (zero && !zero.diagnostics.some(d => d.severity === 'unknown' && !d.rule)) {
-        const targetsHit = new Set(diagnostics.filter(d => ['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code)).map(d => d.path));
-        const keep = d => !hitCodes.has(d.code) || (['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code) && !targetsHit.has(d.path));
-        const taken = zero.diagnostics.filter(d => hitCodes.has(d.code) && (['E_A11Y_CLICK_TRAP', 'U_A11Y_CLICK_TRAP'].includes(d.code) || targetsHit.has(d.path)));
+        // Every hit-testing finding comes from offset 0: of the controls the first pass judged (replaced), and of those it
+        // could not place or found nothing on (inside an overflow: hidden box, or under a cover only offset 0 places).
+        const keep = d => !hitCodes.has(d.code);
+        const taken = zero.diagnostics.filter(d => hitCodes.has(d.code));
         for (let i = diagnostics.length - 1; i >= 0; i--) if (!keep(diagnostics[i])) diagnostics.splice(i, 1);
         diagnostics.push(...taken.map(d => ({ ...d, scrollOffset: 0 })));
       }
