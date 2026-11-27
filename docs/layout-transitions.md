@@ -162,8 +162,8 @@ Workerでは`layout/noshift`の`createNoShiftPlan` / `verifyNoShiftPlan`を使�
 
 ## API
 
-以下は独立パッケージの例です。パッケージは現在private・レジストリ未公開です。
-インストールは[ローカルアーカイブの手順](../packages/veriss/README.md)を参照してください。
+以下は独立パッケージの例です。npm から `npm install veriss` で入れます
+(ほかの入れ方は [README](../packages/veriss/README.md) を参照してください)。
 
 ```js
 import {analyzeHTML} from 'veriss/html';

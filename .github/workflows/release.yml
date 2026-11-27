@@ -4,33 +4,51 @@ name: release
 # The npm side trusts this workflow by filename:
 #   npm trust github veriss --repo mizchi/veriss --file release.yml --allow-publish
 # No NPM_TOKEN: npm authenticates through OIDC and attaches provenance.
+#
+# Three jobs, so the OIDC token is never in reach of dependency code: `test` installs the
+# workspace (and runs its lifecycle scripts) with no id-token; `publish` holds id-token but installs
+# nothing (the package ships its sources, nothing is built) and publishes with --ignore-scripts;
+# `release` writes the GitHub release.
 on:
   push:
     tags: ['v*']
 
+permissions: {}
+
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # gh release create
-      id-token: write   # npm trusted publishing (OIDC)
+      contents: read
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          registry-url: https://registry.npmjs.org
-      - run: pnpm install --frozen-lockfile
       - name: Tag matches the package version
         run: |
           v=$(node -p "require('./packages/veriss/package.json').version")
           if [ "v$v" != "$GITHUB_REF_NAME" ]; then
             echo "packages/veriss is $v, tag is $GITHUB_REF_NAME"; exit 1
           fi
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # The unit tests of the published package (the browser e2e and the evals are tools/gate.sh, run before a push).
       - run: pnpm --filter veriss test
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # npm trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
       # Trusted publishing needs npm >= 11.5.1.
       - run: npm install -g npm@11
       - name: Publish
@@ -38,9 +56,17 @@ jobs:
         run: |
           version=${GITHUB_REF_NAME#v}
           case "$version" in
-            *-*) npm publish --access public --tag next ;;
-            *)   npm publish --access public ;;
+            *-*) npm publish --access public --ignore-scripts --tag next ;;
+            *)   npm publish --access public --ignore-scripts ;;
           esac
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # gh release create
+    steps:
+      - uses: actions/checkout@v6
       - name: GitHub release from the changelog
         run: |
           version=${GITHUB_REF_NAME#v}

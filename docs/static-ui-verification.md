@@ -9,8 +9,8 @@
 ## 現在の実装境界
 
 [`veriss の packages/veriss`](../packages/veriss/README.md) に幾何解析・CSS解析・
-契約IR・Z3検証を移した。仮の名前は `veriss`。privateな試作で、
-npmレジストリには未公開。入力はCSS、汎用box tree、viewport範囲、祖先・
+契約IR・Z3検証を移した。npm に `veriss` として公開している
+(`npm install veriss`)。入力はCSS、汎用box tree、viewport範囲、祖先・
 内容寸法・scrollbarの前提。静的HTML fragmentをbox treeに変換する入口もある。
 Isleの構文、コンパイラ、ProgramIR、ブラウザー描画器には依存しない。
 
