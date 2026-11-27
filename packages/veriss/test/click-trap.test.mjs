@@ -204,6 +204,10 @@ test('a candidate whose position is not known (in a scroll container) makes the 
   const r = page('<div class="ov"><div class="s"><button class="x" aria-label="Close">x</button></div></div>',
     overlay + '.s{position:absolute;top:0;right:0;width:60px;height:60px;overflow:auto}.x{width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
   assert.equal(find(r, 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(r, 'E_A11Y_CLICK_TRAP').map(d => d.message)));
+  // Unresolved, not dropped: the trap is Unknown and names the close button as the candidate it could not place.
+  const unknown = find(r, 'U_A11Y_CLICK_TRAP');
+  assert.ok(unknown.length > 0 && unknown.every(d => d.box === '.ov'), JSON.stringify(r.diagnostics.map(d => d.code)));
+  assert.ok(unknown.every(d => d.unplaced && /the position of \.x is not known/.test(d.message)), JSON.stringify(unknown.map(d => d.message)));
 });
 
 test('a transparent wrapper that scrolls (overflow: auto) around a painting frame is not known to be invisible', () => {
