@@ -1617,3 +1617,26 @@ test('F133: a container query unit with no container for its axis is the small-v
     expect((r.layoutWarnings ?? []).some(w => w.code === 'W_CSS_CONTAINER_UNIT_VIEWPORT'), `${ctx} ${cq}`).toBe(reported);
   }
 });
+
+test('F134: a background-image that is not an <image>, and a stray colon, are dropped where the warning says', async ({page}) => {
+  const style = async props => page.evaluate(props => { const s = getComputedStyle(document.querySelector('.a')); return props.map(p => s.getPropertyValue(p)).join(' | '); }, props);
+  const image = ['background-image', 'background-color'];
+  // [css with the declaration, the same rule without it, the properties to compare, the warning, whether it is dropped]
+  const cases = [
+    ['.a{background-image:url(https://example.com/a.png);background-image:https://example.com/close.png}', '.a{background-image:url(https://example.com/a.png)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{background-image:url(https://example.com/a.png);background-image:"close.png"}', '.a{background-image:url(https://example.com/a.png)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{background:rgb(255, 0, 0);background:"close.png" center / cover no-repeat}', '.a{background:rgb(255, 0, 0)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{background:rgb(255, 0, 0);background:/img/close.png center / cover no-repeat}', '.a{background:rgb(255, 0, 0)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{color:rgb(0, 128, 0);color:rgb(255, 0, 0)\n background:blue;width:10px}', '.a{color:rgb(0, 128, 0);width:10px}', ['color', 'background-color', 'width'], 'W_CSS_STRAY_COLON', true],
+    // Controls: valid values apply (absolute URLs: a relative one on about:blank computes alike in Firefox) and are not reported.
+    ['.a{background-image:url(https://example.com/a.png);background-image:url("https://example.com/b.png")}', '.a{background-image:url(https://example.com/a.png)}', image, 'W_CSS_IMAGE_INVALID', false],
+    ['.a{background:rgb(255, 0, 0);background:rgb(0, 0, 255) url(https://example.com/a.png) center /min(10px,20px) no-repeat}', '.a{background:rgb(255, 0, 0)}', image, 'W_CSS_IMAGE_INVALID', false],
+    ['.a{color:rgb(0, 128, 0);color:rgb(255, 0, 0);background:blue}', '.a{color:rgb(0, 128, 0)}', ['color', 'background-color'], 'W_CSS_STRAY_COLON', false],
+  ];
+  for (const [css, without, props, code, dropped] of cases) {
+    await load(page, css); const got = await style(props);
+    await load(page, without); const kept = await style(props);
+    expect(got === kept, `${css}: the browser ${dropped ? 'drops' : 'applies'} it`).toBe(dropped);
+    expect(warns(css, code), `${css}: ${code}`).toBe(dropped);
+  }
+});
