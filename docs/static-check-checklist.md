@@ -152,7 +152,7 @@
   は継承せず、その要素自身の装飾の線にだけ効くので、`text-decoration-line` が none なら何もしない。3 つのブラウザーで、
   これらの宣言を外しても描画が同じことを確かめた。
 - [x] **F17. フォーカスできない要素の `:focus`**(`W_CSS_STATE_UNREACHABLE`): tabindex がなく、リンク・ボタン・フォーム部品・
-  - 誤検出の修正: `overflow: auto` / `scroll` の箱の `:focus`。スクロールしてフォーカスできる子がなければ Chromium と Firefox は Tab でフォーカスを移す(実測。WebKit は既定で Tab がボタンにも移らず判定できない)。スクロールするかは配置で決まるので報告しない
+  - 誤検出の修正: `overflow: auto` / `scroll` の箱の `:focus`。スクロールしてフォーカスできる子がなければ Chromium と Firefox は Tab でフォーカスを移す(実測。WebKit は既定で Tab がボタンにも移らず判定できない)。スクロールするかは配置で決まるので報告しない。`:focus-within` も同じで、要素自身か中にスクロールする箱があれば報告しない(`overflow-y: hidden` だけでは `overflow-x` が auto に計算され、スクロールしうる箱になる。e2e で 3 ブラウザー)
   summary でもない要素の `:focus`・`:focus-visible` は当たらない(href のない `a` も)。動的な tabindex、iframe・動画などの
   フォーカスを記録していない要素は除く。3 つのブラウザーで、クリック・Tab・focus() のどれでもフォーカスされなかった。
 - [x] **F18. `pointer-events: none` の要素の `:hover`**(`W_CSS_STATE_UNREACHABLE`): 子のない要素ではポインターが当たらず、

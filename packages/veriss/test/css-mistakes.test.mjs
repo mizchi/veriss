@@ -415,6 +415,12 @@ test('F35: :focus-within on an element with nothing focusable inside', () => {
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x"><p class="a">t <a href="/y">y</a></p></div>').length, 0);
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x" tabindex="-1"><p class="a">t</p></div>').length, 0);
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x"><div class="a" tabindex="0"></div></div>').length, 0);
+  // A scroll container, the element itself or one inside it, can take keyboard focus (Chromium and Firefox Tab to one
+  // that scrolls and holds nothing focusable): whether it scrolls is layout, so :focus-within is not reported.
+  assert.equal(w('.x{overflow:auto}.x:focus-within{outline:2px solid}', '<div class="x"><p class="a">t</p></div>').length, 0);
+  assert.equal(w('.s{overflow-y:scroll}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 0);
+  // overflow: hidden is not one the user scrolls with the keyboard: still reported.
+  assert.equal(w('.s{overflow:hidden}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 1);
 });
 
 test('F17: :focus on a tabindex="-1" element is reachable (a click or focus() focuses it)', () => {

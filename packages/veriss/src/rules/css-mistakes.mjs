@@ -682,14 +682,19 @@ export function createCssMistakes({ report, facts, tools }) {
           const unrecordedBox = b => ['iframe', 'video', 'audio', 'embed', 'object', 'area', 'details'].includes(b.tag) || b.focusable === 'dynamic' || b.tabIndex === 'dynamic' || b.contentEditable !== undefined || b.attributes?.contenteditable !== undefined;
           // A scroll container is focusable by keyboard in Chromium and Firefox when it scrolls and holds nothing focusable
           // (measured with Tab): whether it scrolls is layout, so its focus is not known here.
-          const scroller = ['overflow-x', 'overflow-y'].some(key => ['auto', 'scroll'].includes(String(style[key])));
-          const unrecorded = unrecordedBox(box) || (sel.state !== 'focus-within' && scroller);
+          const scrolls = s => ['overflow-x', 'overflow-y'].some(key => ['auto', 'scroll'].includes(String(s[key])));
+          const unrecorded = unrecordedBox(box) || scrolls(style);
           const takesFocus = b => focusableBox(b) || Number.isInteger(b.tabIndex) || unrecordedBox(b);
           // F35: :focus-within holds when the element or one inside it has focus; with none that can take focus (and no
-          // slot or children passed in, whose content is not known) it never does.
+          // slot or children passed in, whose content is not known) it never does. A scroll container inside it (or the
+          // element itself) may take focus too, so it is judged on each one's style; a style not computed is not known.
           if (sel.state === 'focus-within') {
-            const inside = b => takesFocus(b) || (b.boundaries ?? []).some(x => ['slot', 'children', 'component'].includes(x.kind)) || [...(b.children ?? []), ...(b.inline ?? [])].some(inside);
-            if (inside(box) || layoutWarnings.some(w => w.code === 'W_CSS_STATE_UNREACHABLE' && w.path === box.path && w.selector === sel.source)) continue;
+            const inside = (b, chain, inh, own) => {
+              if (takesFocus(b) || (b.boundaries ?? []).some(x => ['slot', 'children', 'component'].includes(x.kind))) return true;
+              let states; if (own) states = [{ style: own }]; else try { states = styles(b, r, chain, inh, false, false); } catch { return true; }
+              return states.some(st => scrolls(st.style) || [...(b.children ?? []), ...(b.inline ?? [])].some(c => inside(c, [...chain, { box: b, style: st.style, names: [] }], st.style)));
+            };
+            if (inside(box, ancestors, inherited, style) || layoutWarnings.some(w => w.code === 'W_CSS_STATE_UNREACHABLE' && w.path === box.path && w.selector === sel.source)) continue;
             layoutWarnings.push({ code: 'W_CSS_STATE_UNREACHABLE', severity: 'warning', box: box.label, path: box.path, selector: sel.source, state: sel.state, css: [{ property: ':focus-within', file: rule.file, line: rule.line, selector: sel.source }],
               message: `${sel.source} never applies to ${box.label}: neither it nor anything inside it is focusable (no link with href, control or tabindex), so nothing in it ever has focus` });
             continue;
