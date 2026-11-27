@@ -1001,14 +1001,22 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // the rules above do not take what the clip cuts off from it. And a fixed box inside the container escapes its overflow
   // (it is not scrolled or clipped with the text): it counts as outside.
   for (const s of everything.filter(row => row.overflowClips && located(row) && row.path !== root?.path && !row.box.documentRoot).map(located)) {
-    if (!geometry.some(row => clipsIt(s, row) && row.box.text && visible(row) && !hiddenFrom(row.path) && !row.origin)) continue;
+    const texts = geometry.filter(row => clipsIt(s, row) && row.box.text && visible(row) && !hiddenFrom(row.path) && !row.origin);
+    if (!texts.length) continue;
+    const port = paddingBox(s);
     for (const cover of occlusionRows) {
       if (cover.path === s.path || isAncestor(cover.path, s.path) || clipsIt(s, cover) || !visible(cover) || !cover.painted || !opaque(cover)) continue;
       if (!paintsAbove(cover, layer(cover), s, layer(s))) continue;
       let region = intersect(s.region, cover.region);
       region = atMost(region, sum(s.origin.inline, scalar(sliver)), right(cover)); region = atMost(region, sum(cover.origin.inline, scalar(sliver)), right(s));
       region = atMost(region, sum(s.origin.block, scalar(sliver)), bottom(cover)); region = atMost(region, sum(cover.origin.block, scalar(sliver)), bottom(s));
-      if (region) { report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', s.scroller ? `${cover.box.label} paints over part of ${s.box.label}, a scroll container (overflow: ${s.overflowValue}): whether it covers the text inside is not checked (positions there depend on the scroll offset). Keep controls outside the scrolling area, or give the content room beside them` : `${cover.box.label} paints over part of ${s.box.label}, which clips its overflow (overflow: clip): whether it covers the text inside is not checked. Keep the covering box off it, or give the content room beside it`, s, region, { rule: 'text-start-obscured', cover: cover.path }); break; }
+      // Where the cover is under the pointer (its own clipping ancestors applied; Unknown kept where one has no
+      // position), and only the viewport ranges in which the box holds the text.
+      const visibleParts = region ? visibleOverlap(port, cover) : [];
+      const pieces = !region ? [] : visibleParts === null ? [region] : visibleParts.map(piece => intersect(piece, region)).filter(Boolean);
+      const hit = pieces.filter(piece => texts.some(t => intersect(t.region, piece)));
+      for (const piece of hit) report(unknowns, 'U_A11Y_SCROLLED_COVER', 'unknown', s.scroller ? `${cover.box.label} paints over part of ${s.box.label}, a scroll container (overflow: ${s.overflowValue}): whether it covers the text inside is not checked (positions there depend on the scroll offset). Keep controls outside the scrolling area, or give the content room beside them` : `${cover.box.label} paints over part of ${s.box.label}, which clips its overflow (overflow: clip): whether it covers the text inside is not checked. Keep the covering box off it, or give the content room beside it`, s, piece, { rule: 'text-start-obscured', cover: cover.path });
+      if (hit.length) break;
     }
   }
 

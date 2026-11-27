@@ -855,7 +855,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const visuallyHidden = visuallyHiddenStyle(style);
     // A collapsed box (a closed accordion panel: a 0px padding box that does not show its block overflow) hides its text
     // on purpose at every font size, and the text of every box inside it (those it clips).
-    const collapsed = st => ['0', '0px'].includes(String(st['block-size'])) && ['top', 'bottom'].every(side => ['0', '0px'].includes(String(st[`padding-${side}`]))) && String(st['overflow-y'] ?? 'visible') !== 'visible';
+    // (A min-height other than 0 raises the used height: not collapsed.)
+    const collapsed = st => ['0', '0px'].includes(String(st['block-size'])) && ['auto', '0', '0px'].includes(String(st['min-block-size'] ?? 'auto')) && ['top', 'bottom'].every(side => ['0', '0px'].includes(String(st[`padding-${side}`]))) && String(st['overflow-y'] ?? 'visible') !== 'visible';
     const hiddenByCollapse = collapsed(style) || clipChain(parents, style).some(p => p.style && collapsed(p.style));
     // Dynamic content alone (the adapters render {expression} and component children as '…') may be text or an icon. An
     // inline icon (an svg or img) sits on the line's baseline under the strut, which grows with the default font size
@@ -3026,7 +3027,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // Its outer height (margin box), when its height is a px length.
     // (auto is not 0 here: the height comes from the box, an aspect-ratio or the image, and is not a px length.)
     const bs = String(st['block-size'] ?? 'auto') === 'auto' ? null : pxv(st['block-size']), edges = ['top', 'bottom'].map(side => [pxv(st[`padding-${side}`]), pxv(st[`border-${side}`])]).flat();
-    const outer = bs === null || edges.includes(null) ? null : add(add(st['box-sizing'] === 'border-box' ? bs : edges.reduce(add, bs), mt), mb);
+    // (A min-height or max-height can change the used height after this: then it is not known here.)
+    const bounded = !['auto', '0', '0px'].includes(String(st['min-block-size'] ?? 'auto')) || String(st['max-block-size'] ?? 'none') !== 'none';
+    const outer = bs === null || bounded || edges.includes(null) ? null : add(add(st['box-sizing'] === 'border-box' ? bs : edges.reduce(add, bs), mt), mb);
     const va = String(st['vertical-align'] ?? 'baseline'), size = pxv(cs['font-size']), lh = String(cs['line-height']);
     const font = container.contract?.font;
     // The strut: its parts above and below the baseline, or null.
@@ -3045,7 +3048,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const done = (offset, gap) => ({ margins: { ...horizontal, 'margin-top': `${lengthText(add(mt, offset))}px`, 'margin-bottom': `${lengthText(add(mb, gap))}px` } });
     if (strut && cmp(strut.above, zero) <= 0 && cmp(strut.below, zero) <= 0 && ['baseline', 'top', 'bottom', 'middle'].includes(va)) return done(zero, zero);
     if (va === 'baseline' && strut) {
-      if (cmp(strut.above, zero) > 0 && outer === null) return { reason: 'its height is not a px length, so whether the strut\'s ascent reaches above it is not known' };
+      if (cmp(strut.above, zero) > 0 && outer === null) return { reason: bounded ? `its min-height (${st['min-block-size']}) or max-height (${st['max-block-size']}) can change its height, so whether the strut's ascent reaches above it is not known` : 'its height is not a px length, so whether the strut\'s ascent reaches above it is not known' };
       return done(cmp(strut.above, zero) > 0 && cmp(outer, strut.above) < 0 ? sub(strut.above, outer) : zero, max(strut.below, zero));
     }
     if (['top', 'bottom'].includes(va) && lineHeight !== null && outer !== null && cmp(outer, lineHeight) >= 0) return done(zero, zero);
@@ -4223,8 +4226,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (scrolledCovers.some(u => d.path.startsWith(`${u.path}/`) && u.cover === d.cover) && !diagnostics.some(x => x.code === d.code && x.path === d.path && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
           diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${scrolledCovers.find(u => d.path.startsWith(`${u.path}/`)).box}; other scroll offsets are not checked)` });
       // A target inside a scroll container under a box that is not scrolled with it (occluded-target's Unknown names
-      // the target and the cover): covered at the initial scroll offset is an error there.
-      for (const d of zero.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED')) {
+      // the target and the cover): covered at the initial scroll offset is an error there, by a box that paints
+      // (E_A11Y_OCCLUDED) or by one that paints nothing (E_A11Y_INVISIBLE_BLOCKER).
+      for (const d of zero.diagnostics.filter(d => ['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code))) {
         const u = scrolledCovers.find(u => u.rule === 'occluded-target' && u.targets?.includes(d.path) && u.cover === d.cover);
         if (u && !diagnostics.some(x => x.code === d.code && x.path === d.path && x.cover === d.cover && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
           diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${u.box}; other scroll offsets are not checked)` });

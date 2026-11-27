@@ -23,6 +23,9 @@ test('a collapsed panel (0px, block overflow hidden or clipped) is not warned, n
 test('a 0px panel that shows its overflow, or whose padding shows content, still warns', () => {
   assert.deepEqual(warned('<div class="panel"><p class="row">Details text</p></div>', '.panel{display:block;height:0;padding:8px 0;overflow:hidden}.row{display:block;height:24px}'), ['.row']);
   assert.deepEqual(warned('<div class="panel"><p class="row">Details text</p></div>', '.panel{display:block;height:0}.row{display:block;height:24px}'), ['.row']);
+  // A min-height raises the used height (100px here): the panel is open, its rows still warn.
+  assert.deepEqual(warned('<div class="panel"><p class="row">Details text</p></div>', '.panel{display:block;height:0;min-height:100px;overflow:hidden}.row{display:block;height:24px}'), ['.row']);
+  assert.deepEqual(warned('<div class="panel"><p class="row">Details text</p></div>', '.panel{display:block;height:0;min-height:1px;overflow:hidden}.row{display:block;height:24px}'), ['.row']);
   // Clipped sideways only: the text still shows below.
   assert.deepEqual(warned('<div class="panel"><p class="row">Details text</p></div>', '.panel{display:block;height:0;overflow-x:clip}.row{display:block;height:24px}'), ['.row']);
 });

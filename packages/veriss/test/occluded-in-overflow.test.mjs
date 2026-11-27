@@ -129,3 +129,33 @@ test('a fixed box inside a scroll container escapes it: its link is not content 
   const report = analyzeHTML(html, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 480, max: 900}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}], scrollIntent: 'css', boxes: {'.i': {minInlineSize: 0, intrinsicBlockSize: 24}, '.l': {minInlineSize: 0, intrinsicBlockSize: 24}}});
   assert.deepEqual(report.diagnostics.filter(d => d.code === 'E_A11Y_SCROLL_START_UNREACHABLE').map(d => d.box), ['.i.first']);
 });
+
+// The text-cover Unknown for an overflow box, per viewport range and with the cover's own clipping applied.
+const textRun = (css, body = '<div class="w"><p class="t">Hello</p></div><div class="sh"></div>') => analyzeHTML(`<html lang="en"><body>${body}</body></html>`, {
+  name: 'P', viewport: {min: 375, max: 800, height: {min: 667, max: 667}}, accessibility: true, boxes: {'.t': {minInlineSize: 0, intrinsicBlockSize: 24}}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}],
+  css: `*{margin:0}html{overflow:hidden}body{display:block;background:#fff}.w{height:350px;overflow:clip;padding-top:320px;box-sizing:border-box}.t{display:block;font-size:16px;line-height:24px;color:#000;text-align:left}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9}${css}`,
+});
+const textCovers = report => report.diagnostics.filter(d => d.code === 'U_A11Y_SCROLLED_COVER').map(d => `${d.path} ${d.range.min}-${d.range.max}`);
+
+test('text-cover Unknown: only in the viewport range where the box holds the text', () => {
+  // The text shows below 600px, the sheet from 600px: they never meet.
+  assert.deepEqual(textCovers(textRun('.sh{display:none}@media (min-width:600px){.sh{display:block}.t{display:none}}')), []);
+  // Control: both everywhere.
+  assert.deepEqual(textCovers(textRun('')), ['P/0/0 375-800']);
+});
+
+test('text-cover Unknown: a cover its own overflow: clip ancestor cuts away is no cover', () => {
+  // .sh reaches up over .w, but .c clips it to its 10px box below .w: Chromium, Firefox and WebKit hit-test the text
+  // at (10, 330), not the sheet.
+  const body = '<div class="w"><p class="t">Hello</p></div><div class="c"><div class="sh"></div></div>';
+  assert.deepEqual(textCovers(textRun('.c{overflow:clip;height:10px;position:relative}.sh{position:absolute;top:-30px;left:0;right:0;height:20px;bottom:auto}', body)), []);
+});
+
+test('an invisible cover outside a scroll container: the initial-scroll invisible-blocker finding is kept', () => {
+  // The sheet is opacity 0: Chromium, Firefox and WebKit hit-test it at the third button's centre (288px).
+  const report = run(wrapped.replace(buttons(8), buttons(3)), 'html{overflow:hidden}.w{overflow:auto}.sh{opacity:0}', {scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
+  const found = report.diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER');
+  assert.deepEqual(found.map(d => d.path), ['P/0/0/2'], JSON.stringify(report.diagnostics.map(d => `${d.code} ${d.path}`)));
+  assert.match(found[0].message, /initial scroll position/);
+  assert.ok(report.diagnostics.some(d => d.code === 'U_A11Y_SCROLLED_COVER'), 'other scroll offsets stay Unknown');
+});

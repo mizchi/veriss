@@ -54,6 +54,16 @@ test('on the baseline, with the block font\'s ascent and descent declared: the d
   assert.equal(top(short, 'iframe'), 3);
 });
 
+test('a min-height or max-height on the frame: its used height is not the one placed on the baseline, Unknown', () => {
+  // 12px raised to 30px reaches above the strut's ascent (15px): the 3px drop for a 12px frame would be wrong.
+  for (const css of ['iframe{min-height:30px}', 'iframe{max-height:5px}']) {
+    const report = run('font-family:Roboto;font-size:16px;line-height:20px', 'height="12"', {css, boxes: {'.slot': {font: roboto(20)}}});
+    assert.ok(unknowns(report).some(m => /U_LAYOUT_INLINE/.test(m) && /min-height|max-height/.test(m)), `${css}: ${JSON.stringify(unknowns(report))}`);
+  }
+  // With an empty strut (font-size: 0) the height does not move it: still placed.
+  assert.deepEqual(unknowns(run('font-size:0', 'height="12"', {css: 'iframe{min-height:30px}'})), []);
+});
+
 test('text-align: center centres it on its line', () => {
   const report = run('font-size:0;text-align:center', 'height="250"');
   assert.deepEqual(unknowns(report), []);
