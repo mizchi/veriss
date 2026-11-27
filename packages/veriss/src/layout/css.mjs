@@ -260,10 +260,10 @@ function expand(property, value) {
   if (property==='scrollbar-color') return [];
   if (property === 'all') {
     if (!wide.has(value)) throw new Error('Unsupported all reset');
-    // (Each side's border width and style ($bw-/$bs-) too: without them a later border-width alone kept an iframe's UA
-    // style, and all: revert dropped its UA border (measured 304x254 for frameborder="0"; revert is Unknown there).
-    // inherit takes the side's used border as a whole, as before.)
-    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`, ...(value === 'inherit' ? [] : [`$bw-${side}`, `$bs-${side}`])])].filter(key => key !== 'direction').map(key => [key, value]);
+    // (Each side's border width and style ($bw-/$bs-) too, for every keyword: without them a later border-width alone
+    // kept an iframe's UA style, all: revert dropped its UA border (measured 304x254 for frameborder="0"; revert is
+    // Unknown there), and all: var(--x, inherit) wrote keys its inherit expansion did not.)
+    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`, `$bw-${side}`, `$bs-${side}`])].filter(key => key !== 'direction').map(key => [key, value]);
   }
   if (property === 'flex') return flexShorthand(value);
   // grid-area: <name> places the item in the named area of its parent's grid-template-areas (grid.mjs resolves it);
@@ -335,9 +335,9 @@ function expand(property, value) {
     // initial and unset set the side's width and style too (medium, none). A shorthand with var() is expanded as 'initial'
     // to find the longhands it writes: without its width and style here, a later border-width read its style as none.
     // revert and revert-layer too: revert rolls an iframe back to its UA border past the frameborder hint (304x254
-    // measured in all three engines, where it was verified at 300x250), which the side's pair keeps Unknown.
-    // (inherit takes the side's used border as a whole, as before.)
-    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value], ...(value !== 'inherit' ? [[`$bw-${side}`, value], [`$bs-${side}`, value]] : [])]);
+    // measured in all three engines, where it was verified at 300x250), which the side's pair keeps Unknown. inherit
+    // takes the parent's width and style (a later border: inherit replaces an earlier reset's pair).
+    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value], [`$bw-${side}`, value], [`$bs-${side}`, value]]);
     const styles = new Set(['none', 'hidden', 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
     const lengthLike = /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/;
     let width, style, color;
@@ -1589,6 +1589,14 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     if (value === 'revert') value = ua[property];
     if (value === 'unset') value = inheritedProperties.has(property) ? 'inherit' : 'initial';
     if (value === 'initial') value = initial[property];
+    // A side's width and style inherit the parent's computed border: its used width (zero under style none, as the
+    // computed width is) and the style its own pair resolved ($borderStyle-side, below).
+    const borderSide = /^\$b([ws])-(top|right|bottom|left)$/.exec(property);
+    if (value === 'inherit' && borderSide && !box.documentRoot) {
+      const from = borderSide[1] === 'w' ? inherited[`border-${borderSide[2]}`] : inherited[`$borderStyle-${borderSide[2]}`];
+      if (from === undefined || from === 'ua') throw Object.assign(new Error(`border-${borderSide[2]}-${borderSide[1] === 'w' ? 'width' : 'style'}: inherit from a parent whose border is not known here`), { code: 'U_LAYOUT_CSS' });
+      values[property] = String(from); continue;
+    }
     if (value === 'inherit') {
       if (Object.hasOwn(inherited, property)) value = inherited[property];
       else if (box.documentRoot) value = initial[property];
@@ -1676,7 +1684,9 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // an unset style is the initial none. Sides no author rule touched keep their value (UA borders stay 'ua').
   for (const side of ['top', 'right', 'bottom', 'left']) {
     const bw = `$bw-${side}`, bs = `$bs-${side}`;
-    if (!sources[bw] && !sources[bs]) { delete values[bw]; delete values[bs]; continue; }
+    // (The style each side resolves to, for a child's border-style: inherit: 'ua' when it is a control's own.)
+    const uaSide = () => values[`border-${side}`] === 'ua' || values.$uaBorderStyled || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
+    if (!sources[bw] && !sources[bs]) { values[`$borderStyle-${side}`] = uaSide() ? 'ua' : 'none'; delete values[bw]; delete values[bs]; continue; }
     // CSS-wide keywords: initial and unset resolved in the cascade (medium, none); revert is not modeled.
     for (const [key, property] of [[bw, 'width'], [bs, 'style']]) if (sources[key] && (values[key] === undefined || wide.has(String(values[key]))))
       throw Object.assign(new Error(`border-${side}-${property}: ${values[key] ?? 'a CSS-wide keyword'} is not modeled here`), { code: 'U_LAYOUT_CSS', css: { file: sources[key].file, line: sources[key].line } });
@@ -1685,6 +1695,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     // (An iframe's border keeps its inset style when frameborder zeroed the width: $uaBorderStyled.)
     const uaStyled = values[`border-${side}`] === 'ua' || values.$uaBorderStyled || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
     const style = sources[bs] ? values[bs] : (uaStyled ? 'ua' : 'none');
+    values[`$borderStyle-${side}`] = style === 'none-implied' ? 'none' : style;
     const width = sources[bw] ? values[bw] : (uaStyled ? values[`border-${side}`] : '3px');
     values[`border-${side}`] = ['none', 'hidden', 'none-implied'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
     // For the border rule (F14): a non-zero width the author wrote, and a style written none or hidden (no border on

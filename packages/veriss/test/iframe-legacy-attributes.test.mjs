@@ -108,6 +108,26 @@ test('all: initial / unset resets the border width and style too (measured: 300x
   assert.equal(run('width="300" height="250" frameborder="0"', 'iframe{border:revert}').status, 'unknown');
 });
 
+test('inherit on the border properties takes the parent\'s border (measured in all three engines)', () => {
+  const sized = 'iframe{display:block;width:300px;height:250px}';
+  const cases = [
+    // all through a var() fallback is all: inherit: the parent has no border.
+    ['', 'iframe{all:var(--missing,inherit)}', [300, 250]],
+    ['.slot{border:5px solid}', 'iframe{all:inherit}', [310, 260]],
+    // A later border: inherit replaces the reset all: initial made.
+    ['.slot{border:5px solid}', 'iframe{all:initial}iframe{border:inherit}', [310, 260]],
+    ['.slot{border:5px solid}', 'iframe{border-width:inherit;border-style:solid}', [310, 260]],
+    ['.slot{border:5px solid}', 'iframe{border-style:inherit;border-width:2px}', [304, 254]],
+    // The parent's style is inherited, not its (zero) width.
+    ['.slot{border:0 solid}', 'iframe{border-style:inherit;border-width:2px}', [304, 254]],
+  ];
+  for (const [parent, own, expected] of cases) {
+    const report = run('frameborder="0"', `${parent}${own}${sized}`);
+    assert.deepEqual(unknowns(report), [], `${parent}${own}`);
+    assert.deepEqual(frame(report), expected, `${parent}${own}`);
+  }
+});
+
 test('frame attributes on an element they do not apply to do nothing', () => {
   const report = analyzeHTML('<html lang="en"><body><main><div class="d" frameborder="0" scrolling="no" marginwidth="0"></div></main></body></html>', {name: 'P', viewport: vp, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: 'body{margin:0}.d{height:10px}'});
   assert.deepEqual(unknowns(report), []);
