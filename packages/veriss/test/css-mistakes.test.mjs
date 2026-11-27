@@ -183,6 +183,10 @@ test('F17, F18: a :focus rule on an element that cannot take focus, a :hover on 
     assert.equal(st('<div class="a"><p class="b">x</p></div>', css).length, 0, css);
   // A subject with a class still is.
   assert.equal(st('<div class="a"><p class="b">x</p></div>', '.b:focus-visible{outline:2px solid}').length, 1);
+  // A scroll container takes keyboard focus in Chromium and Firefox when it scrolls and holds nothing focusable
+  // (measured with Tab); whether it scrolls is layout: not reported.
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.a{overflow-x:auto}.a:focus-visible{outline:2px solid}').length, 0);
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.a{overflow:hidden}.a:focus-visible{outline:2px solid}').length, 1);
 });
 
 test('F19: :checked on an element that is never checked, ::placeholder on one that shows none', () => {

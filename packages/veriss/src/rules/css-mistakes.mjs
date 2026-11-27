@@ -680,7 +680,10 @@ export function createCssMistakes({ report, facts, tools }) {
           // tree does not record: frames, media with controls, image map areas, editable content.) Any tabindex, -1 too,
           // makes an element focusable by a click or focus() (measured in Chromium, Firefox and WebKit).
           const unrecordedBox = b => ['iframe', 'video', 'audio', 'embed', 'object', 'area', 'details'].includes(b.tag) || b.focusable === 'dynamic' || b.tabIndex === 'dynamic' || b.contentEditable !== undefined || b.attributes?.contenteditable !== undefined;
-          const unrecorded = unrecordedBox(box);
+          // A scroll container is focusable by keyboard in Chromium and Firefox when it scrolls and holds nothing focusable
+          // (measured with Tab): whether it scrolls is layout, so its focus is not known here.
+          const scroller = ['overflow-x', 'overflow-y'].some(key => ['auto', 'scroll'].includes(String(style[key])));
+          const unrecorded = unrecordedBox(box) || (sel.state !== 'focus-within' && scroller);
           const takesFocus = b => focusableBox(b) || Number.isInteger(b.tabIndex) || unrecordedBox(b);
           // F35: :focus-within holds when the element or one inside it has focus; with none that can take focus (and no
           // slot or children passed in, whose content is not known) it never does.
@@ -693,7 +696,7 @@ export function createCssMistakes({ report, facts, tools }) {
           }
           // F19: :checked holds only for a checkbox, a radio button or an option.
           const checkable = (box.tag === 'input' && ['checkbox', 'radio', 'dynamic'].includes(box.inputType)) || box.tag === 'option';
-          const never = ['hover', 'active'].includes(sel.state) ? style['pointer-events'] === 'none' && !(box.children ?? []).length && !box.inline?.length : sel.state === 'checked' ? !checkable : !takesFocus(box);
+          const never = ['hover', 'active'].includes(sel.state) ? style['pointer-events'] === 'none' && !(box.children ?? []).length && !box.inline?.length : sel.state === 'checked' ? !checkable : !takesFocus(box) && !unrecorded;
           if (!never || layoutWarnings.some(w => w.code === 'W_CSS_STATE_UNREACHABLE' && w.path === box.path && w.selector === sel.source)) continue;
           layoutWarnings.push({ code: 'W_CSS_STATE_UNREACHABLE', severity: 'warning', box: box.label, path: box.path, selector: sel.source, state: sel.state, css: [{ property: `:${sel.state}`, file: rule.file, line: rule.line, selector: sel.source }],
             message: sel.state === 'checked' ? `${sel.source} never applies to ${box.label}: only a checkbox, a radio button or an option is ever :checked. Use a class or an aria-checked / aria-pressed attribute selector for a custom control` : ['hover', 'active'].includes(sel.state) ? `${sel.source} never applies to ${box.label}: it has pointer-events: none, so the pointer never ${sel.state === 'hover' ? 'hovers' : 'activates'} it. Remove pointer-events: none, or put the :hover on an element the pointer reaches` : `${sel.source} never applies to ${box.label}: it cannot take focus (no tabindex, and it is not a link, button or form control). Make it focusable (a button, or tabindex="0"), or use :focus-within on its container` });
