@@ -420,3 +420,12 @@ test('a way out placed only at some widths keeps the trap Unknown where its posi
   const unknown = find(r, 'U_A11Y_CLICK_TRAP');
   assert.ok(unknown.length && unknown.every(d => d.range.max < 600), JSON.stringify(r.diagnostics.map(d => [d.code, d.box, d.range])));
 });
+
+// An inert page under a transparent layer whose painted child shows only at 600px and wider: the trap holds where the
+// layer shows, not over its whole region.
+test('an inert-page trap is reported only where the layer shows', () => {
+  const host = '<main class="w" inert><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>';
+  const r = page('<div class="ad" role="dialog" aria-label="Ad"><div class="pane"></div></div>', '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;z-index:9;display:block}.pane{display:none;width:300px;height:200px;background:#ffe}@media (min-width:600px){.pane{display:block}}', {host});
+  const traps = find(r, 'E_A11Y_CLICK_TRAP');
+  assert.ok(traps.length > 0 && traps.every(t => t.box === '.ad' && t.range.min >= 600), JSON.stringify(traps.map(t => t.range)));
+});

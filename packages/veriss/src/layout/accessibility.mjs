@@ -2441,7 +2441,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         && (shownWhere(row).length || unplacedPaint(row)));
       const covered = new Map(inertShown.sort((a, b) => treeOrder(a.path, b.path)).map(r => [r.path, r]));
       for (const layerRow of layers) {
-        const pieces = minus(meet([layerRow.region], inertShown.map(r => r.region)), []);
+        // Only where the layer shows (a layer whose descendant without a position paints may show anywhere in its region).
+        const inertWhere = meet([layerRow.region], inertShown.map(r => r.region));
+        const pieces = unplacedPaint(layerRow) ? inertWhere : meet(inertWhere, shownWhere(layerRow));
         if (!pieces.length) continue;
         const candidates = hitPlaced.filter(row => candidate(row, layerRow) && !inertAt(row));
         const unplaced = geometry.filter(row => candidate(row, layerRow) && !inertAt(row) && !hitRows.has(row) && row.region);
