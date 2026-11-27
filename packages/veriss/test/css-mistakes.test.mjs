@@ -1651,3 +1651,24 @@ test('F14: a border shorthand with var() keeps its style under a later border-wi
   // A var() that leaves the style out still draws nothing, and a later width is reported.
   assert.deepEqual(block(':root{--c:red}.a{border:5px var(--c)}.a{border-width:0 0 5px}'), ['verified', '20', 1]);
 });
+
+test('F135: duplicate @keyframes inside one unconditional @layer are reported; across layers or under a condition they are not', () => {
+  const [w] = codes(run('@layer a{@keyframes k{to{opacity:.5}}@keyframes k{to{transform:none}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE');
+  assert.ok(w); assert.deepEqual(w.lost, ['opacity']);
+  assert.equal(codes(run('@layer a{@keyframes k{to{opacity:.5}}}@layer b{@keyframes k{to{transform:none}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+  assert.equal(codes(run('@layer a{@keyframes k{to{opacity:.5}}}@media (min-width:600px){@keyframes k{to{opacity:.2}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+});
+
+test('F136: an unregistered custom property with allow-discrete does transition (discretely)', () => {
+  assert.equal(codes(run('.a{--x:0;transition:--x 1s allow-discrete}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  assert.equal(codes(run('.a{--x:0;transition-property:--x;transition-duration:1s;transition-behavior:allow-discrete}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  assert.equal(codes(run('.a{--x:0;transition:--x 1s normal}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 1);
+});
+
+test('F138: a var() with a fallback is reported only when a bare-number definition reaches every element', () => {
+  // .a does not get --d, so the fallback .2s is used.
+  assert.equal(codes(run('.other{--d:300}.a{transition:opacity var(--d,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--d:300}.a{transition:opacity var(--d,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  // Defined on :root only under a query: elsewhere the fallback is used.
+  assert.equal(codes(run('@media (min-width:600px){:root{--d:300}}.a{transition:opacity var(--d,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+});

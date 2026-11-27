@@ -853,7 +853,8 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       if (node.type === 'atrule' && /^(?:-webkit-)?keyframes$/i.test(node.name)) {
         const name = node.params.trim().replace(/^["']|["']$/g, ''); keyframes.add(name);
         // F135: an unconditional, unprefixed @keyframes of a name already defined replaces it whole (frames are not merged).
-        if (depth === 0 && node.name === 'keyframes') { const animated = new Set(); node.walkDecls(d => { if (d.prop.toLowerCase() !== 'animation-timing-function') animated.add(d.prop.toLowerCase()); });
+        // Unconditional: at the top, or directly in a layer block (layers are flat; a conditional one is Unknown above).
+        if (contexts.length === 0 && depth === (layer !== null ? 1 : 0) && node.name === 'keyframes') { const animated = new Set(); node.walkDecls(d => { if (d.prop.toLowerCase() !== 'animation-timing-function') animated.add(d.prop.toLowerCase()); });
           keyframeRules.set(name, [...(keyframeRules.get(name) ?? []), { animated, layer, file: filename, line: node.source.start.line }]); }
         // The paint of each frame (for the flash rule): offsets with their background-color and opacity.
         const frames = [];
@@ -1166,6 +1167,8 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         for (const item of postcss.list.comma(d.value)) {
           const word = d.prop.toLowerCase() === 'transition-property' ? item.trim() : postcss.list.space(item).find(t => /^(?:--|-?[a-z_])[\w-]*$/i.test(t) && !transitionKeywords.has(t.toLowerCase()));
           if (!word || ['all', 'none'].includes(word.toLowerCase()) || wide.has(word.toLowerCase())) continue;
+          // With allow-discrete (in the item, or a transition-behavior of the rule) it does transition, discretely (measured).
+          if (word.startsWith('--') && (/(?:^|\s)allow-discrete(?:\s|$)/i.test(item) || authored.some(b => /^transition-behavior$/i.test(b.prop) && /allow-discrete/i.test(b.value)))) continue;
           if (word.startsWith('--')) { transitionedCustom.push({ property: word, selector: node.selector, file: filename, line: d.source.start.line }); continue; }
           const suggestion = propertyTypo(word);
           if (suggestion) note('W_CSS_TRANSITION_PROPERTY_UNKNOWN', { property: word, suggestion, selector: node.selector, file: filename, line: d.source.start.line });
@@ -1385,7 +1388,8 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       let root; try { root = postcss.parse(sheet.css, { from: sheet.file }); } catch { continue; }
       root.walkDecls(d => {
         const prop = d.prop.toLowerCase();
-        if (prop.startsWith('--')) definitions.set(d.prop, [...(definitions.get(d.prop) ?? []), d.value.trim()]);
+        // universal: on :root, html or *, outside any at-rule, so it reaches every element that does not set its own.
+        if (prop.startsWith('--')) definitions.set(d.prop, [...(definitions.get(d.prop) ?? []), { value: d.value.trim(), universal: d.parent?.type === 'rule' && d.parent.parent?.type === 'root' && (d.parent.selectors ?? []).some(sel => /^(?::root|html|\*)$/i.test(sel.trim())) }]);
         if (/^(?:transition|animation)(?:-duration|-delay)?$/.test(prop)) {
           // Outside calc(): there a bare number is a multiplier.
           let outside = '', depth = 0; for (let i = 0; i < d.value.length; i++) { if (depth === 0 && /^calc\(/i.test(d.value.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (d.value[i] === '(') depth++; else if (d.value[i] === ')') depth--; continue; } outside += d.value[i]; }
@@ -1397,7 +1401,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
             const fn = /^([\w-]+)\(/.exec(outside.slice(i));
             if (!fn) { top += outside[i]; continue; }
             const v = /^var\(\s*(--[^\s,()]+)\s*[,)]/i.exec(outside.slice(i));
-            top += v ? `var(${v[1]})` : `${fn[1]}()`;
+            top += v ? `var(${v[1]}${/^var\(\s*--[\w-]+\s*,/i.test(outside.slice(i)) ? ',' : ''})` : `${fn[1]}()`;
             let depth = 0, k = i + fn[0].length - 1;
             for (; k < outside.length; k++) { if (outside[k] === '(') depth++; else if (outside[k] === ')' && --depth === 0) break; }
             i = k;
@@ -1405,12 +1409,13 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           for (const item of postcss.list.comma(top)) {
             // In the animation shorthand a bare number is its iteration count, unless the item already has one.
             if (prop === 'animation' && !postcss.list.space(item).some(t => /^(?:infinite|[+-]?(?:\d+\.?\d*|\.\d+))$/i.test(t))) continue;
-            for (const m of item.matchAll(/var\(\s*(--[^\s,()]+)\s*[,)]/g)) uses.push({ variable: m[1], property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
+            for (const m of item.matchAll(/var\(\s*(--[^\s,()]+)\s*[,)]/g)) uses.push({ variable: m[1], fallback: m[0].endsWith(','), property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
           }
         }
       });
     }
-    for (const use of uses) { const values = definitions.get(use.variable) ?? []; if (values.length && values.every(v => /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(v))) note('W_CSS_DURATION_UNITLESS', { ...use, value: values[0] }); }
+    // With a fallback, an element no definition reaches takes the fallback: reported only when one reaches every element.
+    for (const { fallback, ...use } of uses) { const values = definitions.get(use.variable) ?? []; if (values.length && values.every(v => /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(v.value)) && (!fallback || values.some(v => v.universal))) note('W_CSS_DURATION_UNITLESS', { ...use, value: values[0].value }); }
   }
   // An animation-name without @keyframes runs no animation.
   // (Checklist F1: the names without @keyframes are kept for a warning — a typo or a missing rule.)
