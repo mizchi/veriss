@@ -1661,3 +1661,13 @@ test('F139: a misspelled media feature makes the query never match', async ({pag
     else expect(applied, query).toBe(true);
   }
 });
+
+test('F14: a border shorthand with var() keeps its style under a later border-width', async ({page}) => {
+  for (const css of [':root{--c:red}.a{border:5px solid var(--c)}.a{border-width:0 0 5px}', ':root{--c:red}.a{border:5px solid var(--c)}.a{border-bottom-width:2px}', ':root{--c:red}.a{border:5px var(--c)}.a{border-width:0 0 5px}']) {
+    await load(page, css);
+    const height = await page.evaluate(() => document.querySelector('.a').getBoundingClientRect().height);
+    const r = analyzeHTML('<html lang="en"><body><div class="a"></div></body></html>', {name: 'P', css: base + css, viewport: {min: 320, max: 1200, height: {min: 300, max: 900}}});
+    expect(r.status, css).toBe('verified');
+    expect(String(height), css).toBe(r.sizes.find(s => s.box === '.a').rect.blockSize.constant);
+  }
+});

@@ -63,7 +63,8 @@ export interface ContractProof {
   placementTransfers?:readonly LayoutPlacementTransfer[];
 }
 export function createContractIR(input:ContractInput):ContractIR;
-export function createLayoutIR(report:LayoutSummary):LayoutIR;
+/** options.pageScroll: accept the document root's block check that is waived only because the viewport scrolls. */
+export function createLayoutIR(report:LayoutSummary,options?:{pageScroll?:boolean}):LayoutIR;
 export function createObligationIR(contract:ContractIR,implementation:LayoutIR,options?:{children?:readonly ChildLayoutBinding[]}):ObligationIR;
 /** Instance checking uses actual deployment inputs, and checks Requires as a guarantee of the parent allocation. */
 export function createInstanceObligationIR(contract:ContractIR,implementation:LayoutIR,options:{path:string;cases?:readonly LayoutScenarioIdentity[]}):ObligationIR;

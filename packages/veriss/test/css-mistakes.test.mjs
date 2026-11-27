@@ -1639,3 +1639,15 @@ test('F138: a non-ASCII variable name is read whole, never as its ASCII prefix',
   assert.equal(w?.variable, '--délai');
   assert.equal(codes(run(':root{--d:2;--délai:.2s}.a{transition-duration:var(--d)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
 });
+
+test('F14: a border shorthand with var() keeps its style under a later border-width (the used widths, and no false F14)', () => {
+  const block = css => { const r = run(css); return [r.status, (r.sizes ?? []).find(s => s.box === '.a')?.rect?.blockSize?.constant, codes(r, 'W_CSS_BORDER_NO_STYLE').length]; };
+  // height 20px + the top and bottom borders that are drawn (measured in Chromium, Firefox and WebKit: e2e F14).
+  assert.deepEqual(block(':root{--c:red}.a{border:5px solid var(--c)}.a{border-width:0 0 5px}'), ['verified', '25', 0]);
+  assert.deepEqual(block(':root{--c:red}.a{border:5px solid var(--c)}.a{border-bottom-width:2px}'), ['verified', '27', 0]);
+  assert.deepEqual(block(':root{--c:red}.a{border:5px solid var(--c)}'), ['verified', '30', 0]);
+  // The same without var(): unchanged.
+  assert.deepEqual(block('.a{border:5px solid red}.a{border-width:0 0 5px}'), ['verified', '25', 0]);
+  // A var() that leaves the style out still draws nothing, and a later width is reported.
+  assert.deepEqual(block(':root{--c:red}.a{border:5px var(--c)}.a{border-width:0 0 5px}'), ['verified', '20', 1]);
+});

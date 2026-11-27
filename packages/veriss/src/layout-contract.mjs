@@ -33,13 +33,20 @@ export function createContractIR(input) {
 }
 
 /** Extract implementation facts without consulting a ContractIR. */
-export function createLayoutIR(report) {
+// options.pageScroll: accept the document root's block check that is waived only because the viewport scrolls (a page
+// taller than the viewport). Geometry at scroll position 0 does not depend on it; a component contract (the default)
+// still requires the root to fit.
+export function createLayoutIR(report,options={}) {
   createLayoutModel(report); // Validate the existing exact SMT boundary too.
   if(!Array.isArray(report.sizes) || !Array.isArray(report.policies) || report.elements!==undefined && !Array.isArray(report.elements) || report.sizes.length+report.checks.length+report.policies.length+(report.elements?.length ?? 0)>32768) throw new TypeError('Invalid layout fact count');
   for(const element of report.elements ?? []) validateTargetMetadata(element);
   const diagnostics=report.diagnostics.filter(d=>d.severity==='unknown');
   if(report.scope.axis!=='both' || !report.scope.blockSizing) diagnostics.push(unknown('U_LAYOUT_AXES','SafeGrid contracts require both dimensions'));
-  if(report.policies.some(row=>row.overflow!=='fit') || report.checks.some(row=>!row.enforced)) diagnostics.push(unknown('U_LAYOUT_PROFILE','safe-grid/1 cannot import weakened overflow policies'));
+  const weakened=[...report.policies.filter(row=>row.overflow!=='fit'),...report.checks.filter(row=>!row.enforced && !(options.pageScroll && row.pageScroll))];
+  if(weakened.length) {
+    const named=[...new Set(weakened.map(row=>row.box))].slice(0,3).join(', ');
+    diagnostics.push(unknown('U_LAYOUT_PROFILE',`safe-grid/1 cannot import weakened overflow policies: ${named}${weakened.length>3 ? ', …' : ''} may outgrow its box (an overflow policy, or a fit check the layout waived)${weakened.some(row=>row.pageScroll) ? '; the document root outgrowing the viewport is the page scroll, accepted by noshift/1' : ''}`));
+  }
   const variants=report.structure?.variants.map(({id})=>({variant:id})) ?? [{}];
   const platforms=report.scope.scrollbarProfiles?.map(({name})=>({scrollbarProfile:name})) ?? [{}];
   const cases=variants.flatMap(variant=>platforms.map(platform=>({...variant,...platform})));
