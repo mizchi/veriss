@@ -926,6 +926,22 @@ test('inline links in one measured line: occlusion and obscured focus from their
   assert.deepEqual(codes('left: 105.75px; inline-size: 40px;'), ['U_A11Y_OCCLUDED']);
 });
 
+test('inline links: an inert cover takes no click, and a pointer-events: none box that paints still hides the link', () => {
+  const font = {family: 'Roboto', size: 16, lineHeight: 24, weight: 400};
+  const contract = {minInlineSize: 140, intrinsicBlockSize: 24, wrap: 'nowrap', font,
+    textMetrics: {kind: 'content', text: 'Read the guide first.', width: 139, inline: {'.u': {start: [66.5, 66.6], end: [105.7, 105.8], top: [1.6, 3.7], bottom: [20.3, 22.4]}}}};
+  const tree = extra => ({tag: 'main', classes: ['page'], children: [{tag: 'p', classes: ['p'], text: true, children: [{tag: 'a', classes: ['u'], focusable: true, href: '/x', text: true}]}, {tag: 'div', classes: ['cover'], ...extra}, {tag: 'div', classes: ['sheet']}]});
+  const css = (cover, sheet = 'display: none;') => `.page { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 24px; position: relative; background: #fff; color: #000; }\n.p { font-family: Roboto; font-size: 16px; line-height: 24px; font-weight: 400; white-space: nowrap; }\n.u { color: #000; }\n.cover { position: absolute; top: 0; left: 0; inline-size: 300px; block-size: 24px; ${cover} }\n.sheet { position: absolute; top: 0; left: 0; inline-size: 300px; block-size: 24px; ${sheet} }`;
+  const codes = (extra, cover, sheet) => run(tree(extra), css(cover, sheet), {boxes: {'.p': contract}}).diagnostics.filter(d => d.path === 'Page/0/0').map(d => d.code).sort();
+  // Control: a transparent cover over the link takes its click.
+  assert.deepEqual(codes({}, ''), ['E_A11Y_INVISIBLE_BLOCKER']);
+  // Inert, it takes no click (the link gets it): no blocker; painted and inert, it still hides the link when focused.
+  assert.deepEqual(codes({inert: true}, ''), []);
+  assert.deepEqual(codes({inert: true}, 'background: #eee;'), ['E_A11Y_FOCUS_OBSCURED']);
+  // An opaque pointer-events: none sheet over both: the link is not seen, so the transparent cover is an occlusion.
+  assert.deepEqual(codes({}, '', 'background: #000; pointer-events: none;'), ['E_A11Y_FOCUS_OBSCURED', 'E_A11Y_OCCLUDED']);
+});
+
 test('automatic tables whose content fits their px columns are laid out like fixed ones', () => {
   const tableView = {min: 420, max: 1280, height: {min: 400, max: 900}};
   const value = text => { const [n, d = '1'] = text.split('/'); return Number(n) / Number(d); };

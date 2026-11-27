@@ -533,6 +533,10 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     return hitPlaced.filter(cover => !related(cover.path, target.path) && visible(cover) && cover.paint.pointerEvents !== 'none' && !inertAt(cover) && paintsAbove(cover, layer(cover), target, own))
       .map(cover => ({ cover, region: overlap(target, cover) })).filter(c => c.region);
   };
+  // The regions where a box that paints lies over the target (any box: what it shows, not what takes the click; one with
+  // pointer-events: none or inert too), each where both are under the pointer. Where a clipping ancestor has no known
+  // position, the whole overlap is taken: the click lands on a cover there either way.
+  const paintedOver = target => { const own = layer(target); return occlusionRows.filter(c => !related(c.path, target.path) && visible(c) && !paintsNothing(c) && paintsAbove(c, layer(c), target, own)).flatMap(c => visibleOverlap(target, c) ?? [overlap(target, c)].filter(Boolean)); };
   const hitTargets = new Set(targets);
   // occluded-target and invisible-blocker: every located box (inside an overflow: clip box too, and at scroll offset 0
   // inside a scroll container), each cover counted only where both are under the pointer (visibleOverlap).
@@ -553,8 +557,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       });
     // (The click-trap rule reads the pairs of the hit-testable boxes: not those a user scrolls, at scroll offset 0.)
     if (hitTargets.has(target)) for (const c of coversOf(target)) coverPairs.push({ target, ...c });
-    // Where something that paints covers the target, it is not seen as it is: the covers are occlusions there.
-    const seenOver = covers.filter(c => !paintsNothing(c.cover)).map(c => c.region);
+    // Where something that paints covers the target, it is not seen as it is: the covers are occlusions there. Every box
+    // painted over it counts, one with pointer-events: none or inert too (it takes no click, but hides the target).
+    const seenOver = paintedOver(target);
     const targetShows = !invisible(target);
     for (const { cover, region } of covers) {
       let fresh = [region];
@@ -565,7 +570,10 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         for (const r of seenOver) ghost = ghost.flatMap(piece => subtract(piece, r));
         let occluded = [whole];
         for (const g of ghost) occluded = occluded.flatMap(piece => subtract(piece, g));
-        for (const piece of ghost) {
+        // Each ghost piece is split along the covers' regions first, so one set of covers (and one top cover) holds over
+        // the whole of each part.
+        const parts = ghost.flatMap(piece => covers.reduce((list, c) => list.flatMap(p => { const inside = intersect(p, c.region); return inside ? [inside, ...subtract(p, c.region)] : [p]; }), [piece]));
+        for (const piece of parts) {
           const over = [...new Set(covers.filter(c => intersect(c.region, piece)).map(c => c.cover))];
           const top = topmost(over);
           if (!ownStretch(top, target) && !unplacedPaint(top)) { report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', blockerMessage(target, top), target, piece, { rule: 'invisible-blocker', cover: top.path, why: paintsNothing(top) }); continue; }
@@ -629,14 +637,17 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         r = below(r, c.origin.inline, right(target)); r = below(r, target.origin.inline, right(c));
         // A box with no area takes no click, and a control with none is not seen (as in overlap()).
         for (const size of [c.inline, c.block, target.inline, target.block]) r = below(r, scalar(0), size);
-        // On screen, and below the control's place at s = 0; reached before the largest scroll offset.
+        // On screen, and below the control's place at s = 0; reached before the largest scroll offset. The box's bottom
+        // is taken where the viewport cuts it: past the viewport bottom, the control first meets it entering the viewport.
         r = below(r, c.origin.block, viewportBlock); r = below(r, scalar(0), bottom(c));
-        r = atMost(r, bottom(c), target.origin.block);
-        r = below(r, target.origin.block, sum(bottom(c), diff(bottom(scrolledPage), viewportBlock)));
-        if (!r) continue;
-        const p = sample(r), from = number(evaluate(diff(target.origin.block, bottom(c)), p)), to = Math.min(number(evaluate(diff(bottom(target), c.origin.block), p)), number(evaluate(diff(bottom(scrolledPage), viewportBlock), p)));
-        report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', `${target.box.label} scrolls under the fixed ${c.box.label}, which ${invisible(c) ? 'is invisible (opacity 0)' : 'paints nothing'} but takes the pointer: once the page is scrolled past ${Math.round(from)}px (to ${Math.round(to)}px, at the witness viewport), clicks on ${target.box.label} land on ${c.box.label}, which the user cannot see. Give ${c.box.label} pointer-events: none, or display: none while it is not shown`,
-          target, r, { rule: 'invisible-blocker', cover: c.path, why: paintsNothing(c), scrolled: { from, to } });
+        for (const [part, edge] of [[atMost(r, bottom(c), viewportBlock), bottom(c)], [below(r, viewportBlock, bottom(c)), viewportBlock]]) {
+          let q = atMost(part, edge, target.origin.block);
+          q = below(q, target.origin.block, sum(edge, diff(bottom(scrolledPage), viewportBlock)));
+          if (!q) continue;
+          const p = sample(q), from = number(evaluate(diff(target.origin.block, edge), p)), to = Math.min(number(evaluate(diff(bottom(target), c.origin.block), p)), number(evaluate(diff(bottom(scrolledPage), viewportBlock), p)));
+          report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', `${target.box.label} scrolls under the fixed ${c.box.label}, which ${invisible(c) ? 'is invisible (opacity 0)' : 'paints nothing'} but takes the pointer: once the page is scrolled past ${Math.round(from)}px (to ${Math.round(to)}px, at the witness viewport), clicks on ${target.box.label} land on ${c.box.label}, which the user cannot see. Give ${c.box.label} pointer-events: none, or display: none while it is not shown`,
+            target, q, { rule: 'invisible-blocker', cover: c.path, why: paintsNothing(c), scrolled: { from, to } });
+        }
       }
     }
   }
@@ -769,11 +780,12 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const own = layer(target), inner = target.bounds.inner && { ...target, ...target.bounds.inner }, outer = { ...target, ...target.bounds.outer };
     // Where a box that paints is over the link, it is not seen as it is (an occlusion); elsewhere a cover that paints
     // nothing is an invisible blocker (see invisible-blocker above).
-    const seenOver = hitPlaced.filter(c => !related(c.path, target.path) && c.path !== target.parentText && visible(c) && c.paint.pointerEvents !== 'none' && !paintsNothing(c) && paintsAbove(c, layer(c), target, own)).map(c => overlap(outer, c)).filter(Boolean);
+    const seenOver = hitPlaced.filter(c => !related(c.path, target.path) && c.path !== target.parentText && visible(c) && !paintsNothing(c) && paintsAbove(c, layer(c), target, own)).map(c => overlap(outer, c)).filter(Boolean);
     for (const cover of hitPlaced) {
       if (related(cover.path, target.path) || cover.path === target.parentText || !visible(cover)) continue;
       if (!paintsAbove(cover, layer(cover), target, own)) continue;
-      if (cover.paint.pointerEvents !== 'none') {
+      // (An inert cover takes no click either: the click reaches what is under it. It still paints: seenOver above.)
+      if (cover.paint.pointerEvents !== 'none' && !inertAt(cover)) {
         const sure = inner && overlap(inner, cover);
         let ghost = sure && paintsNothing(cover) && !ownStretch(cover, target) && !unplacedPaint(cover) && !invisible(target) ? [sure] : [];
         for (const r of seenOver) ghost = ghost.flatMap(piece => subtract(piece, r));
@@ -2411,7 +2423,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       const short = atMost(below(region, viewportBlock, bottom(scrolledPage)), sum(layerRow.origin.block, range), target.origin.block);
       return [still, short].filter(Boolean);
     };
-    // Where the target stays under the layer at every scroll position.
+    // Where the target stays under the cover at every scroll position.
     const stuck = (layerRow, target, region) => {
       if (stillPage) return [region];
       const lp = meet([region], pinnedFixed(layerRow)), tp = meet([region], pinnedFixed(target));
@@ -2476,7 +2488,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       if (!layerRow || inControl(layerRow)) continue;
       const whole = contains(cover, target, pair.region);
       if (!whole) continue;
-      const pieces = stuck(layerRow, target, whole);
+      // Whether scrolling frees the target is the cover's geometry (a fixed sheet in a relative wrapper stays put); the
+      // layer only groups the exits.
+      const pieces = stuck(cover, target, whole);
       if (!pieces.length) continue;
       if (!byLayer.has(layerRow.path)) byLayer.set(layerRow.path, { layerRow, pieces: [], covered: new Map() });
       const entry = byLayer.get(layerRow.path);
@@ -2485,7 +2499,8 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     }
     // Candidates: controls, focusable boxes, boxes that look clickable, and frames.
     const candidate = (row, layerRow) => !row.box.pseudo && row.path !== layerRow.path && visible(row) && (interactive(row) || takesFocus(row) || ownPointer(row) || isFrame(row));
-    const hitPaths = new Set(hitPlaced.map(row => row.path));
+    // By row, not path: rows of one path differ by region, and a candidate placed at some widths is not at others.
+    const hitRows = new Set(hitPlaced);
     // Judges one layer: where none of the candidates is a way out over the pieces, an error (or Unknown where a frame
     // or a candidate without a position may be one). how: { lead, leadMaybe } words the finding.
     const judge = ({ layerRow, pieces, covered }, candidates, unplaced, how) => {
@@ -2529,7 +2544,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       // In the layer, or painted above it where they overlap it.
       const inside = hitPlaced.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path));
       // Candidates in the layer whose position is not known (inside a box that scrolls): one may be the way out.
-      const unplaced = geometry.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path) && !hitPaths.has(row.path) && row.region);
+      const unplaced = geometry.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path) && !hitRows.has(row) && row.region);
       const above = hitPlaced.filter(row => candidate(row, layerRow) && !related(row.path, layerRow.path) && !covered.has(row.path) && paintsAbove(row, layer(row), layerRow, layer(layerRow)) && overlap(row, layerRow))
         .map(row => ({ ...row, region: overlap(row, layerRow) }));
       const inFlow = [...covered.values()].some(t => !pinnedFixed(t).length);
@@ -2546,10 +2561,12 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         && (shownWhere(row).length || unplacedPaint(row)));
       const covered = new Map(inertShown.sort((a, b) => treeOrder(a.path, b.path)).map(r => [r.path, r]));
       for (const layerRow of layers) {
-        const pieces = minus(meet([layerRow.region], inertShown.map(r => r.region)), []);
+        // Only where the layer shows (a layer whose descendant without a position paints may show anywhere in its region).
+        const inertWhere = meet([layerRow.region], inertShown.map(r => r.region));
+        const pieces = unplacedPaint(layerRow) ? inertWhere : meet(inertWhere, shownWhere(layerRow));
         if (!pieces.length) continue;
         const candidates = hitPlaced.filter(row => candidate(row, layerRow) && !inertAt(row));
-        const unplaced = geometry.filter(row => candidate(row, layerRow) && !inertAt(row) && !hitPaths.has(row.path) && row.region);
+        const unplaced = geometry.filter(row => candidate(row, layerRow) && !inertAt(row) && !hitRows.has(row) && row.region);
         const plural = covered.size === 1 ? 'is' : 'are';
         judge({ layerRow, pieces, covered }, candidates, unplaced, { lead: named => `${named} ${plural} inert (they take no click or focus) while ${layerRow.box.label} shows`, scope: 'outside the inert part', none: 'no control outside the inert part', extra: { inert: true } });
       }
