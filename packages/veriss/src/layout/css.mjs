@@ -1374,11 +1374,12 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           let outside = '', depth = 0; for (let i = 0; i < d.value.length; i++) { if (depth === 0 && /^calc\(/i.test(d.value.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (d.value[i] === '(') depth++; else if (d.value[i] === ')') depth--; continue; } outside += d.value[i]; }
           // Only a var() at parenthesis depth 0 is a time for sure: one inside steps() or cubic-bezier() is that function's
           // number, and a fallback is used only when its variable has no value. Every other function is kept as its name.
+          // A name is read whole (CSS allows non-ASCII), never as its ASCII prefix: --délai is not --d.
           let top = '';
           for (let i = 0; i < outside.length; i++) {
             const fn = /^([\w-]+)\(/.exec(outside.slice(i));
             if (!fn) { top += outside[i]; continue; }
-            const v = /^var\(\s*(--[\w-]+)/i.exec(outside.slice(i));
+            const v = /^var\(\s*(--[^\s,()]+)\s*[,)]/i.exec(outside.slice(i));
             top += v ? `var(${v[1]})` : `${fn[1]}()`;
             let depth = 0, k = i + fn[0].length - 1;
             for (; k < outside.length; k++) { if (outside[k] === '(') depth++; else if (outside[k] === ')' && --depth === 0) break; }
@@ -1387,7 +1388,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
           for (const item of postcss.list.comma(top)) {
             // In the animation shorthand a bare number is its iteration count, unless the item already has one.
             if (prop === 'animation' && !postcss.list.space(item).some(t => /^(?:infinite|[+-]?(?:\d+\.?\d*|\.\d+))$/i.test(t))) continue;
-            for (const m of item.matchAll(/var\(\s*(--[\w-]+)\s*[,)]/g)) uses.push({ variable: m[1], property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
+            for (const m of item.matchAll(/var\(\s*(--[^\s,()]+)\s*[,)]/g)) uses.push({ variable: m[1], property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
           }
         }
       });

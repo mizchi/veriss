@@ -1631,3 +1631,11 @@ test('F138: a var() inside another function (steps(), cubic-bezier()) is that fu
   assert.equal(codes(run(':root{--x1:.4}.a{transition:opacity 1s cubic-bezier(var(--x1),0,0,1)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
   assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
 });
+
+test('F138: a non-ASCII variable name is read whole, never as its ASCII prefix', () => {
+  assert.equal(codes(run(':root{--d:2;--délai:.2s}.a{transition-duration:var(--délai)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--d:2;--délai:.2s}.a{transition:opacity var(--délai)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  const [w] = codes(run(':root{--délai:300}.a{transition-duration:var(--délai)}'), 'W_CSS_DURATION_UNITLESS');
+  assert.equal(w?.variable, '--délai');
+  assert.equal(codes(run(':root{--d:2;--délai:.2s}.a{transition-duration:var(--d)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+});
