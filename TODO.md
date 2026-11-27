@@ -190,6 +190,7 @@ CSS × DOM の静的検査パターンを、**カテゴリごとに洗う**。�
 
 - [x] 後の規則に負けて見えない `:hover` / `:focus` / `:active`(F131。LVHA の順)
 - [x] セレクタリストの中の `-moz-` / `-ms-` の擬似で規則全体が捨てられる(F132)
+- [x] vlmkit `check animation` の CSS の規則の静的な版: 同じ名前の `@keyframes`(F134)、`@property` のないカスタムプロパティの transition(F135)、綴り違いの transition のプロパティ(F136)、単位のない数の変数の時間(F137)、綴り違いの media feature(F138)
 - 確かめて既存で足りていたもの: flex / grid コンテナの `text-overflow`(効かない宣言として報告済み)、中身のある `aspect-ratio`(理由付きの Unknown)
 
 ## 座標計算サブセット L1 の参照仕様([ADR-0018](docs/adr/0018-coordinate-subset.md)、`models/layout/`)

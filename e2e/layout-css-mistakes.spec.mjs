@@ -1617,3 +1617,47 @@ test('F133: a container query unit with no container for its axis is the small-v
     expect((r.layoutWarnings ?? []).some(w => w.code === 'W_CSS_CONTAINER_UNIT_VIEWPORT'), `${ctx} ${cq}`).toBe(reported);
   }
 });
+
+// F134-F138 (the static half of vlmkit check animation's CSS rules): each warning holds exactly where the browser shows
+// no effect, and each control (a registered property, the right spelling, calc(), another name) has one.
+const started = async (page, css) => { await load(page, css); return page.evaluate(() => { const a = document.querySelector('.a'); a.getBoundingClientRect(); a.classList.add('on'); getComputedStyle(a).width; getComputedStyle(a).opacity; getComputedStyle(a).getPropertyValue('--x'); return document.getAnimations().length; }); };
+
+test('F134: a second @keyframes of one name replaces the first whole', async ({page}) => {
+  for (const [css, dup] of [['@keyframes k{from{opacity:0}to{opacity:1}}@keyframes k{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 10s linear -5s paused}', true],
+    ['@keyframes k{from{opacity:0}to{opacity:1}}@keyframes j{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 10s linear -5s paused,j 10s linear -5s paused}', false]]) {
+    await load(page, css);
+    const opacity = await page.evaluate(() => getComputedStyle(document.querySelector('.a')).opacity);
+    expect(warns(css, 'W_CSS_KEYFRAMES_DUPLICATE'), css).toBe(dup);
+    // Half way through: the first rule's opacity animation shows only when it was not replaced.
+    expect(opacity === '1', `${css}: ${opacity}`).toBe(dup);
+  }
+});
+
+test('F135, F136, F137: a transition that never starts', async ({page}) => {
+  for (const [css, code] of [['.a{--x:0;transition:--x 1s}.a.on{--x:1}', 'W_CSS_TRANSITION_UNREGISTERED'], ['@property --x{syntax:"<number>";inherits:false;initial-value:0}.a{--x:0;transition:--x 1s}.a.on{--x:1}', null],
+    ['.a{width:10px;transition:widht 1s}.a.on{width:100px}', 'W_CSS_TRANSITION_PROPERTY_UNKNOWN'], ['.a{width:10px;transition:width 1s}.a.on{width:100px}', null],
+    [':root{--d:300}.a{transition:opacity var(--d)}.a.on{opacity:.5}', 'W_CSS_DURATION_UNITLESS'], [':root{--d:300}.a{transition:opacity calc(var(--d) * 1ms)}.a.on{opacity:.5}', null], [':root{--d:300ms}.a{transition:opacity var(--d)}.a.on{opacity:.5}', null]]) {
+    const running = await started(page, css);
+    for (const c of ['W_CSS_TRANSITION_UNREGISTERED', 'W_CSS_TRANSITION_PROPERTY_UNKNOWN', 'W_CSS_DURATION_UNITLESS']) expect(warns(css, c), `${css} ${c}`).toBe(c === code);
+    expect(running > 0, `${css}: ${running} running`).toBe(!code);
+  }
+  // An animation's duration from a bare number: no animation runs.
+  for (const [css, unitless] of [[':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}', true], [':root{--d:2s}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}', false]]) {
+    await load(page, css);
+    expect(warns(css, 'W_CSS_DURATION_UNITLESS'), css).toBe(unitless);
+    expect(await page.evaluate(() => document.getAnimations().length) === 0, css).toBe(unitless);
+  }
+});
+
+test('F138: a misspelled media feature makes the query never match', async ({page}) => {
+  await page.setViewportSize({width: 800, height: 600});
+  for (const [query, typo] of [['(min-widht: 1px)', true], ['(widht > 1px)', true], ['screen and (hovr: hover)', true], ['not (prefers-reduced-motoin: reduce)', true], ['(prefers-color-schema: light)', true],
+    ['(min-width: 1px)', false], ['(scripting: enabled)', false], ['(update: fast)', false], ['(-webkit-min-device-pixel-ratio: 1)', false]]) {
+    const css = `.a{color:rgb(0, 0, 255)}@media ${query}{.a{color:rgb(255, 0, 0)}}`;
+    await load(page, css);
+    const applied = await page.evaluate(() => getComputedStyle(document.querySelector('.a')).color === 'rgb(255, 0, 0)');
+    expect(warns(css, 'W_CSS_MEDIA_FEATURE_UNKNOWN'), query).toBe(typo);
+    if (typo) expect(applied, query).toBe(false);
+    else expect(applied, query).toBe(true);
+  }
+});

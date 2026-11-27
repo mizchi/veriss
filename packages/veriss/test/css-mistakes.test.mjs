@@ -1537,3 +1537,62 @@ test('F9: a pseudo-element without content on a container is reported whether th
   assert.equal(unknown.status, 'unknown');
   assert.deepEqual(codes(unknown, 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), ['.row::before']);
 });
+
+// F134-F138: the static half of `vlmkit check animation`'s CSS rules (duplicate-keyframes, unregistered-property-transition,
+// unknown-transition-property, unitless-duration-var, unknown-media-feature), decided from the CSS alone.
+test('F134: a second @keyframes of one name replaces the first whole', () => {
+  const [w] = codes(run('@keyframes k{from{opacity:0}to{opacity:1}}@keyframes k{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE');
+  assert.ok(w); assert.equal(w.keyframes, 'k'); assert.deepEqual(w.lost, ['opacity']); assert.match(w.message, /opacity/);
+  // Names are case-sensitive: k and K are two animations.
+  assert.equal(codes(run('@keyframes k{to{opacity:.5}}@keyframes K{to{opacity:.5}}.a{animation:k 1s,K 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+  // One inside a condition replaces the other only where it applies: not reported.
+  assert.equal(codes(run('@keyframes k{to{opacity:.5}}@media (min-width:600px){@keyframes k{to{opacity:.2}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+  // The same frames twice: the repeat does nothing, nothing is lost.
+  const [same] = codes(run('@keyframes k{to{opacity:.5}}@keyframes k{to{opacity:.5}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE');
+  assert.ok(same); assert.deepEqual(same.lost, []);
+});
+
+test('F135: a transition of a custom property with no @property does not animate', () => {
+  const [w] = codes(run('.a{--x:0;transition:--x 1s}.a:hover{--x:1}'), 'W_CSS_TRANSITION_UNREGISTERED');
+  assert.ok(w); assert.equal(w.property, '--x'); assert.match(w.message, /@property --x/);
+  assert.equal(codes(run('@property --x{syntax:"<number>";inherits:false;initial-value:0}.a{--x:0;transition:--x 1s}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  // A valid @property whose syntax the analysis does not model still registers it in the browser.
+  assert.equal(codes(run('@property --c{syntax:"<color>";inherits:false;initial-value:red}.a{transition:--c 1s}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  assert.equal(codes(run('.a{transition-property:opacity,--y;transition-duration:1s}'), 'W_CSS_TRANSITION_UNREGISTERED').map(w => w.property).join(), '--y');
+  assert.equal(codes(run('.a{transition:all 1s}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+});
+
+test('F136: a misspelled property in a transition transitions nothing', () => {
+  const [w] = codes(run('.a{transition:widht 1s}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN');
+  assert.ok(w); assert.equal(w.property, 'widht'); assert.equal(w.suggestion, 'width');
+  assert.equal(codes(run('.a{transition-property:opacity,backgroud-color;transition-duration:1s}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').map(w => w.suggestion).join(), 'background-color');
+  for (const css of ['.a{transition:width 1s ease-in-out}', '.a{transition:opacity .2s, transform .3s linear 0s}', '.a{transition:all 1s}', '.a{transition:none}', '.a{transition:1s}', '.a{transition:-webkit-transform 1s}', '.a{transition:display 1s allow-discrete}', '.a{transition:anchor-name 1s}', '.a{transition:--x 1s}'])
+    assert.equal(codes(run(css), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 0, css);
+  // A name far from every property is not called a typo (it may be newer than the data).
+  assert.equal(codes(run('.a{transition:zzqqxx 1s}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 0);
+});
+
+test('F137: a duration given by a var() that holds a bare number is invalid', () => {
+  const [w] = codes(run(':root{--d:300}.a{transition:opacity var(--d)}'), 'W_CSS_DURATION_UNITLESS');
+  assert.ok(w); assert.equal(w.variable, '--d'); assert.match(w.message, /calc\(var\(--d\) \* 1ms\)/);
+  assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  assert.equal(codes(run(':root{--d:300}.a{transition-duration:var(--d)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  // A multiplier inside calc() is what a bare number is for; a value with a unit is a time.
+  for (const css of [':root{--d:300}.a{transition:opacity calc(var(--d) * 1ms)}', ':root{--d:300ms}.a{transition:opacity var(--d)}', '.a{transition:opacity var(--d, .2s)}'])
+    assert.equal(codes(run(css), 'W_CSS_DURATION_UNITLESS').length, 0, css);
+  // Defined with a unit somewhere too: which one applies depends on the element.
+  assert.equal(codes(run(':root{--d:300}.a{--d:.3s;transition:opacity var(--d)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+});
+
+test('F138: a misspelled media feature makes the query never match', () => {
+  const r = run('.a{width:10px}@media (min-widht: 1px){.a{width:20px}}');
+  const [w] = codes(r, 'W_CSS_MEDIA_FEATURE_UNKNOWN');
+  assert.ok(w); assert.equal(w.feature, 'min-widht'); assert.equal(w.suggestion, 'min-width');
+  // The rule never applies: the analysis is not Unknown for it.
+  assert.equal(r.status, 'verified', JSON.stringify(r.diagnostics.filter(d => d.severity !== 'info')));
+  for (const [css, suggestion] of [['@media (prefers-reduced-motoin: reduce){.a{color:red}}', 'prefers-reduced-motion'], ['@media (widht > 600px){.a{color:red}}', 'width'], ['@media screen and (hovr: hover){.a{color:red}}', 'hover']])
+    assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN')[0]?.suggestion, suggestion, css);
+  // Known features (also ones the analysis does not model, and specified ones no browser has) and vendor ones are not typos.
+  for (const css of ['@media (min-width: 600px){.a{color:red}}', '@media (scripting: enabled){.a{color:red}}', '@media (prefers-reduced-data: reduce){.a{color:red}}', '@media (-webkit-min-device-pixel-ratio: 2){.a{color:red}}', '@media (update: fast){.a{color:red}}'])
+    assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 0, css);
+});
