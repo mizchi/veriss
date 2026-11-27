@@ -410,3 +410,13 @@ test('a fixed sheet inside a relative wrapper: scrolling frees the links, unless
   const [trap] = find(wrapped('html{overflow:hidden}', 0), 'E_A11Y_CLICK_TRAP');
   assert.ok(trap && trap.box === '.wr', JSON.stringify(wrapped('html{overflow:hidden}', 0).diagnostics.map(d => [d.code, d.box])));
 });
+
+// One candidate placed at some widths and not at others (its panel scrolls only below 600px): where it is placed it is
+// the way out; where it is not, the trap is Unknown, not an error.
+test('a way out placed only at some widths keeps the trap Unknown where its position is not known', () => {
+  const r = page('<div class="ov"><div class="s"><button class="x" aria-label="Close">x</button></div></div>',
+    overlay + '.s{position:absolute;top:0;right:0;width:60px;height:60px;overflow:visible}@media (max-width:599px){.s{overflow:auto}}.x{width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
+  assert.equal(find(r, 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(r, 'E_A11Y_CLICK_TRAP').map(d => [d.range, d.message])));
+  const unknown = find(r, 'U_A11Y_CLICK_TRAP');
+  assert.ok(unknown.length && unknown.every(d => d.range.max < 600), JSON.stringify(r.diagnostics.map(d => [d.code, d.box, d.range])));
+});

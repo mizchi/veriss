@@ -2379,7 +2379,8 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     }
     // Candidates: controls, focusable boxes, boxes that look clickable, and frames.
     const candidate = (row, layerRow) => !row.box.pseudo && row.path !== layerRow.path && visible(row) && (interactive(row) || takesFocus(row) || ownPointer(row) || isFrame(row));
-    const hitPaths = new Set(hitPlaced.map(row => row.path));
+    // By row, not path: rows of one path differ by region, and a candidate placed at some widths is not at others.
+    const hitRows = new Set(hitPlaced);
     // Judges one layer: where none of the candidates is a way out over the pieces, an error (or Unknown where a frame
     // or a candidate without a position may be one). how: { lead, leadMaybe } words the finding.
     const judge = ({ layerRow, pieces, covered }, candidates, unplaced, how) => {
@@ -2423,7 +2424,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       // In the layer, or painted above it where they overlap it.
       const inside = hitPlaced.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path));
       // Candidates in the layer whose position is not known (inside a box that scrolls): one may be the way out.
-      const unplaced = geometry.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path) && !hitPaths.has(row.path) && row.region);
+      const unplaced = geometry.filter(row => candidate(row, layerRow) && isAncestor(layerRow.path, row.path) && !hitRows.has(row) && row.region);
       const above = hitPlaced.filter(row => candidate(row, layerRow) && !related(row.path, layerRow.path) && !covered.has(row.path) && paintsAbove(row, layer(row), layerRow, layer(layerRow)) && overlap(row, layerRow))
         .map(row => ({ ...row, region: overlap(row, layerRow) }));
       const inFlow = [...covered.values()].some(t => !pinnedFixed(t).length);
@@ -2443,7 +2444,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         const pieces = minus(meet([layerRow.region], inertShown.map(r => r.region)), []);
         if (!pieces.length) continue;
         const candidates = hitPlaced.filter(row => candidate(row, layerRow) && !inertAt(row));
-        const unplaced = geometry.filter(row => candidate(row, layerRow) && !inertAt(row) && !hitPaths.has(row.path) && row.region);
+        const unplaced = geometry.filter(row => candidate(row, layerRow) && !inertAt(row) && !hitRows.has(row) && row.region);
         const plural = covered.size === 1 ? 'is' : 'are';
         judge({ layerRow, pieces, covered }, candidates, unplaced, { lead: named => `${named} ${plural} inert (they take no click or focus) while ${layerRow.box.label} shows`, scope: 'outside the inert part', none: 'no control outside the inert part', extra: { inert: true } });
       }
