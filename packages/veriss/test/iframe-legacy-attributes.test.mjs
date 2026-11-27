@@ -83,6 +83,18 @@ test('a CSS-wide keyword on the border width or style resolves to its value, not
   }
 });
 
+test('a CSS-wide border shorthand resets the style too; revert-layer rolls back to an earlier author layer', () => {
+  // border: initial / unset sets every side's width (medium) and style (none): a later border-width alone draws nothing.
+  for (const value of ['initial', 'unset']) for (const attrs of ['width="300" height="250"', 'width="300" height="250" frameborder="0"']) {
+    assert.deepEqual(frame(run(attrs, `iframe{border:${value}}iframe{border-width:initial}`)), [300, 250], `${value} ${attrs}`);
+    assert.deepEqual(frame(run(attrs, `iframe{border:${value}}iframe{border-width:4px}`)), [300, 250], `${value} ${attrs}`);
+  }
+  // revert-layer takes the declaration of an earlier layer when there is one (CSS Cascade 5 §7.3); with none it is
+  // revert, Unknown above.
+  assert.deepEqual(frame(run('width="300" height="250" frameborder="0"', '@layer a{iframe{border-width:5px}}iframe{border-width:revert-layer}')), [310, 260]);
+  assert.deepEqual(frame(run('width="300" height="250"', '@layer a{iframe{border-style:none}}iframe{border-style:revert-layer}')), [300, 250]);
+});
+
 test('frame attributes on an element they do not apply to do nothing', () => {
   const report = analyzeHTML('<html lang="en"><body><main><div class="d" frameborder="0" scrolling="no" marginwidth="0"></div></main></body></html>', {name: 'P', viewport: vp, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: 'body{margin:0}.d{height:10px}'});
   assert.deepEqual(unknowns(report), []);

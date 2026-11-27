@@ -329,7 +329,10 @@ function expand(property, value) {
   const borderSides = { border: ['left', 'right', 'top', 'bottom'], 'border-inline': ['left', 'right'], 'border-block': ['top', 'bottom'], 'border-top': ['top'], 'border-right': ['right'], 'border-bottom': ['bottom'], 'border-left': ['left'] };
   if (property in borderSides) {
     const sides = borderSides[property];
-    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value]]);
+    // initial and unset set the side's width and style too (medium, none). A shorthand with var() is expanded as 'initial'
+    // to find the longhands it writes: without its width and style here, a later border-width read its style as none.
+    // (inherit and revert take the side's used border as a whole, as before.)
+    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value], ...(['initial', 'unset'].includes(value) ? [[`$bw-${side}`, value], [`$bs-${side}`, value]] : [])]);
     const styles = new Set(['none', 'hidden', 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
     const lengthLike = /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/;
     let width, style, color;
