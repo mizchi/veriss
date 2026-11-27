@@ -414,6 +414,26 @@ test('F35: :focus-within with nothing focusable inside; F17: tabindex="-1" takes
   }
 });
 
+test('F17, F35: a scroll container takes Tab focus (Chromium, Firefox), so :focus and :focus-within on it or around it are not reported', async ({page, browserName}) => {
+  // [the scroller's overflow, whether the rule's element is the scroller itself]
+  for (const [overflow, self] of [['auto', true], ['scroll', true], ['auto', false], ['scroll', false], ['hidden', true], ['hidden', false]]) {
+    const inner = `<div class="s" style="height:40px"><p class="a" style="height:200px">t</p></div>`;
+    const html = self ? `<div class="x s" style="height:40px"><p class="a" style="height:200px">t</p></div>` : `<div class="x">${inner}</div>`;
+    const css = `.s{overflow:${overflow}}.x:focus-within{outline:2px solid}.x:focus{color:red}`;
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body><button id="b">b</button>${html}</body></html>`);
+    await page.focus('#b'); await page.keyboard.press('Tab');
+    const [within, focused] = await page.evaluate(() => { const x = document.querySelector('.x'); return [x.matches(':focus-within'), x.matches(':focus')]; });
+    const warnings = (analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: `*{margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.a{height:20px}${css}`, viewport: {min: 320, max: 1200, height: {min: 300, max: 900}}}).layoutWarnings ?? []).filter(w => w.code === 'W_CSS_STATE_UNREACHABLE');
+    const where = `${overflow} ${self ? 'itself' : 'inside'}`;
+    // (overflow, both axes: overflow-y: hidden alone computes overflow-x to auto, a scroller again.)
+    // A warning only where Tab never lands (overflow: hidden is not scrolled by the keyboard, in every engine).
+    if (within) expect(warnings.some(w => w.state === 'focus-within'), where).toBe(false);
+    if (focused) expect(warnings.some(w => w.state === 'focus'), where).toBe(false);
+    if (browserName !== 'webkit') expect(within, where).toBe(overflow !== 'hidden');
+    if (overflow === 'hidden') { expect(within, where).toBe(false); expect(warnings.some(w => w.state === 'focus-within'), where).toBe(true); }
+  }
+});
+
 test('F36: a :hover transform on an inline link does not move it', async ({page}) => {
   for (const [css, html, inert] of [['.x:hover{transform:translateY(-8px)}', '<p class="a">text <a class="x" href="/y">link</a></p>', true], ['.x:hover{scale:2}', '<p class="a">text <span class="x" tabindex="0">s</span></p>', true],
     ['.x{display:inline-block}.x:hover{transform:translateY(-8px)}', '<p class="a">text <a class="x" href="/y">link</a></p>', false], ['.x:hover{transform:translateY(-8px)}', '<div class="x a">block</div>', false]]) {

@@ -176,6 +176,17 @@ test('F17, F18: a :focus rule on an element that cannot take focus, a :hover on 
   assert.equal(st('<a class="a">No href</a>', '.a:focus{color:red}').length, 1);
   assert.equal(st('<div class="a"></div>', '.a{pointer-events:none}.a:hover{color:red}').length, 1);
   assert.equal(st('<div class="a"></div>', '.a:hover{color:red}').length, 0);
+  // A state rule whose subject is anything (:focus-visible { outline } for the whole page, *:focus, main :focus) is written
+  // for whatever can take the state, not for each element it would match: not reported on the ones that cannot.
+  // (Found running veriss on a rendered page: 350 warnings for one global focus ring.)
+  for (const css of [':focus-visible{outline:2px solid}', '*:focus{outline:2px solid}', '.a :focus-visible{outline:2px solid}', ':checked{color:red}'])
+    assert.equal(st('<div class="a"><p class="b">x</p></div>', css).length, 0, css);
+  // A subject with a class still is.
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.b:focus-visible{outline:2px solid}').length, 1);
+  // A scroll container takes keyboard focus in Chromium and Firefox when it scrolls and holds nothing focusable
+  // (measured with Tab); whether it scrolls is layout: not reported.
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.a{overflow-x:auto}.a:focus-visible{outline:2px solid}').length, 0);
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.a{overflow:hidden}.a:focus-visible{outline:2px solid}').length, 1);
 });
 
 test('F19: :checked on an element that is never checked, ::placeholder on one that shows none', () => {
@@ -404,6 +415,16 @@ test('F35: :focus-within on an element with nothing focusable inside', () => {
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x"><p class="a">t <a href="/y">y</a></p></div>').length, 0);
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x" tabindex="-1"><p class="a">t</p></div>').length, 0);
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x"><div class="a" tabindex="0"></div></div>').length, 0);
+  // A scroll container, the element itself or one inside it, can take keyboard focus (Chromium and Firefox Tab to one
+  // that scrolls and holds nothing focusable): whether it scrolls is layout, so :focus-within is not reported.
+  assert.equal(w('.x{overflow:auto}.x:focus-within{outline:2px solid}', '<div class="x"><p class="a">t</p></div>').length, 0);
+  assert.equal(w('.s{overflow-y:scroll}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 0);
+  // overflow: hidden is not one the user scrolls with the keyboard: still reported.
+  assert.equal(w('.s{overflow:hidden}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 1);
+  // A descendant's style is computed in its parent's viewport range, not the whole one: --ov is auto only from 600px,
+  // where .leaf is hidden, so nothing scrolls at any width.
+  assert.equal(w('.m{--ov:hidden}.s{overflow:hidden}@media (min-width:600px){.m{--ov:auto}}@media (max-width:599px){.s{overflow:var(--ov)}}.x:focus-within{outline:2px solid}',
+    '<div class="x"><div class="m"><div class="s"><p class="a">t</p></div></div></div>').length > 0, true);
 });
 
 test('F17: :focus on a tabindex="-1" element is reachable (a click or focus() focuses it)', () => {
