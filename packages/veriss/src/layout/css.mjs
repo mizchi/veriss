@@ -1069,9 +1069,18 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       {
         const newer = /(?:\b(?:var|env|calc|min|max|clamp|color-mix|oklch|oklab|lab|lch|light-dark|round|mod|rem|anchor|attr)\(|-webkit-|-moz-|-ms-|\d(?:dvh|svh|lvh|dvw|svw|lvw|dvi|svi|dvb|svb|cqi|cqw|cqh|cqb|cqmin|cqmax|rlh|lh|ic|cap)\b|\b(?:fit-content|max-content|min-content|stretch|-webkit-fill-available|subgrid|contents|clip|anchor-size)\b)/i;
         const seenProps = new Map();
+        // A declaration the browser drops (an image that is not an <image>, a stray ':' — both dropped below) overrides
+        // nothing: the earlier one still applies.
+        const droppedLater = (d, prop) => {
+          if (prop === 'background-image' && imageProblem(d.value.trim())) return true;
+          if (prop === 'background' && shorthandImageToken(d.value.trim())) return true;
+          const start = d.source?.start?.offset, end = d.source?.end?.offset;
+          return d.value.includes(STRAY_COLON) && repairedOffsets.length > 0 && (start === undefined || end === undefined || repairedOffsets.some(o => o >= start && o <= end));
+        };
         for (const d of node.nodes ?? []) {
           if (d.type !== 'decl') continue;
           const prop = d.prop.toLowerCase(), earlier = seenProps.get(prop);
+          if (!prop.startsWith('--') && droppedLater(d, prop)) continue;
           if (earlier && !newer.test(d.value) && !newer.test(earlier.value) && !notesOf('W_CSS_DUPLICATE_DECLARATION').some(n => n.file === filename && n.line === d.source.start.line && n.property === prop)) {
             const dead = earlier.important && !d.important ? d : earlier;
             note('W_CSS_DUPLICATE_DECLARATION', { property: prop, selector: node.selector, file: filename, line: dead.source.start.line, dead: dead.value.trim(), kept: (dead === d ? earlier : d).value.trim(), same: earlier.value.trim() === d.value.trim() });
