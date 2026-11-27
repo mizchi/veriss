@@ -169,6 +169,10 @@ export const dependentProperty = {
   'text-decoration-color': ['text-decoration-line', 'none'], 'text-decoration-style': ['text-decoration-line', 'none'], 'text-decoration-thickness': ['text-decoration-line', 'none'],
 };
 export const paintProperties = ['hyphens', 'object-fit', 'scroll-behavior', 'overscroll-behavior-x', 'overscroll-behavior-y', 'scroll-snap-type', 'scroll-snap-align', 'resize', 'text-wrap-mode', 'text-wrap-style', 'text-overflow', 'line-clamp', 'box-orient', 'touch-action', 'color', 'visibility', 'pointer-events', 'opacity', 'text-decoration-line', 'outline-style', 'outline-width', 'outline-color', 'outline-offset', 'box-shadow', 'cursor', 'list-style-type', 'animation-name', 'animation-duration', 'animation-iteration-count', 'animation-play-state', 'animation-direction', 'animation-timing-function', 'animation-delay', 'animation-fill-mode', 'animation-timeline', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'color-scheme', 'z-index', 'isolation', 'transform-style', 'backface-visibility', 'transform', 'transform-origin', 'translate', 'rotate', 'scale', 'backdrop-filter', 'filter', 'will-change', 'justify-self', 'justify-items', 'fill', 'stroke', 'list-style-position', 'caret-color', 'content-visibility', 'contain-intrinsic-block-size'];
+// #46: the SVG-only pointer-events keywords. On a non-SVG element each behaves as auto (CSS UI 4 §5.2.2, SVG 2 §15.6):
+// kept as declared (inherited as such) and read as "not none" by the hit tests. On an svg they choose which painted
+// parts take the pointer, which is not modeled: computeStyle keeps that Unknown.
+const svgPointerEvents = new Set(['all', 'visiblepainted', 'visiblefill', 'visiblestroke', 'visible', 'painted', 'fill', 'stroke']);
 const inheritedPaint = ['color', 'fill', 'stroke', 'list-style-position', 'caret-color', 'visibility', 'pointer-events', 'cursor', 'list-style-type', 'color-scheme', 'text-wrap-style', 'text-wrap-mode'];
 // Inherited text properties. They are kept as specified strings and only
 // interpreted for boxes whose contract derives text metrics from a font.
@@ -701,7 +705,11 @@ function expand(property, value) {
   if (['justify-self', 'justify-items'].includes(property) && !wide.has(value) && !/^(?:auto|normal|stretch|start|end|center|flex-start|flex-end|self-start|self-end|left|right|legacy)$/.test(value.trim().toLowerCase())) throw new Error(`Unsupported ${property}: ${value}`);
   if (paintProperties.includes(property)) {
     if (property === 'visibility' && !wide.has(value) && !['visible', 'hidden', 'collapse'].includes(value)) throw new Error(`Unsupported visibility: ${value}`);
-    if (property === 'pointer-events' && !wide.has(value) && !['auto', 'none'].includes(value)) throw new Error(`Unsupported pointer-events: ${value}`);
+    if (property === 'pointer-events' && !wide.has(value)) {
+      const keyword = value.trim().toLowerCase();
+      if (keyword !== 'auto' && keyword !== 'none' && !svgPointerEvents.has(keyword)) throw new Error(`Unsupported pointer-events: ${value}`);
+      return [[property, keyword]];
+    }
     if (property === 'opacity' && !wide.has(value) && !/^(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(value)) throw new Error(`Unsupported opacity: ${value}`);
     return [[property, value]];
   }
@@ -1808,6 +1816,8 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     for (const key of ['overflow-x', 'overflow-y']) { if (sources[key] || sources.overflow) (values.$tableOverflow ??= {})[key] = values[key]; values[key] = 'visible'; }
   // A logical side was taken as ltr; in an rtl box cascade again with the sides flipped.
   if (!rtl && flipped && values.direction === 'rtl') return computeStyle(rules, box, active, inherited, {spend, state, rtl: true});
+  if (!box.pseudo && box.tag === 'svg' && svgPointerEvents.has(String(values['pointer-events'])))
+    throw new Error(`Unsupported pointer-events: ${values['pointer-events']} on an svg (which of its painted parts take the pointer is not modeled)`);
   if (unmodeled.length) values.$unmodeled = unmodeled;
   if (droppedImages.length) values.$droppedImage = droppedImages;
   if (paintUnmodeled) values.$paintUnmodeled = true;
