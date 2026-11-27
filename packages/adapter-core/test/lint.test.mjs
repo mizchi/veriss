@@ -271,6 +271,23 @@ test('uas: a finding that holds in some browsers only says which (a button label
   assert.match(m.message, /\(in chromium, webkit; not in firefox\)$/);
 });
 
+test('lint: a click-catcher is an invisible blocker, and an overlay with no way out a click trap, each with a fix', () => {
+  const component = cover => `<template>
+  <main class="page">
+    <button class="go" aria-label="Go"></button>
+    <div class="ov"></div>
+  </main>
+</template>
+<style scoped>.page{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:40px;background:#fff}.go{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;width:40px;height:40px;background:#246}.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:10;${cover}}</style>`;
+  const run = cover => { const source = component(cover); return lint(analyzeVue(source, {pageCSS: `${pageCSS}body{margin:0}`, viewport, accessibility: true, sourceLines: true}), {file: 'Overlay.vue', source}); };
+  const blocker = run('').find(m => m.code === 'E_A11Y_INVISIBLE_BLOCKER');
+  assert.ok(blocker && blocker.severity === 'error' && blocker.fix, JSON.stringify(run('')));
+  assert.equal(blocker.line, 3);
+  const trap = run('background:#000').find(m => m.code === 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap && trap.severity === 'error' && trap.fix, JSON.stringify(run('background:#000')));
+  assert.equal(trap.line, 4);
+});
+
 // A component's CSS stays inside it: CSS that applies to the whole page (a plain Vue <style>, styled-components'
 // createGlobalStyle) may not select elements through anything but a class the component owns.
 test('scope (Vue): a plain <style> selector with no owned class matches the whole page (E_SCOPE_GLOBAL); scoped sheets are judged as scoped', () => {

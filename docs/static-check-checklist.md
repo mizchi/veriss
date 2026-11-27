@@ -417,6 +417,7 @@
 - [x] **F131. 後の規則に負けて見えない `:hover` / `:focus` / `:active`**(`W_CSS_STATE_SHADOWED`): `a:hover { color }` を `a:link { color }` の前に書くと、ホバーしても色が変わらない(Chromium・Firefox・WebKit でホバーして実測。LVHA の順)。状態を有効にして計算した値の勝者が、状態のいらない規則で、値が違うときに報告する(後に書いたものも、詳細度が高いものも)
 - [x] **F132. セレクタリストの中の `-moz-` / `-ms-` の擬似**(`W_CSS_SELECTOR_LIST_VENDOR`、解析はこの規則で Unknown のまま): 1 つでも無効なセレクタがあるとリスト全体が捨てられる。`-moz-` は Chromium と WebKit で、`-ms-` と `-o-` はどこでも無効(実測)。`-webkit-` は 3 ブラウザーとも受け付け、`:is()` / `:where()` の中は許される(実測)ので報告しない
 - [x] **F133. container のない軸の container query の単位**(`W_CSS_CONTAINER_UNIT_VIEWPORT`、解析は `cq*` の長さで Unknown のまま): `cqw`・`cqi` は祖先に `container-type: inline-size` か `size` がなければ、`cqh`・`cqb` は `size` がなければ small viewport の単位(`svw`・`svi`・`svh`・`svb`)になる(Chromium・Firefox・WebKit で、10 通りの組で `sv` の単位と同じ箱になることを実測: container のない要素、`inline-size` の container の中の `cqh`、`container-name` だけの祖先、自分自身の `container-type`、`calc()` の中、`font-size`。対照として `inline-size` の container・一括指定 `container: card / inline-size`・祖父母の container では箱が変わる)。ほかの状態や media query で祖先を container にする規則があれば報告しない。解析が読めないセレクタ(`.g:hover .p`)で container を作る規則があるときも報告しない。縦書きは対象外
+- [x] **F134. `<image>` でない `background-image` と、値の中の `:`**(`W_CSS_IMAGE_INVALID`、`W_CSS_STRAY_COLON`、以前はシート全体が `U_LAYOUT_CSS: Missed semicolon`): `url()` のない URL(`background-image: https://example.com/close.png`)や引用符の文字列(`"close.png"`)は `<image>` でないので宣言ごと捨てられ、前の `background-image` が残る(Chromium・Firefox・WebKit で `getComputedStyle` を実測)。一括指定 `background` の画像の位置にある同じものも、一括指定ごと捨てられる(色も付かない)。PostCSS は値の中の `:` で「Missed semicolon」を投げてシート全体を読まないが、ブラウザーはその宣言だけを次の `;` まで捨てて続きを読む(セミコロンの書き忘れも同じ)。解析は `:` を同じ長さの印に置き換えて読み、その宣言を捨てて報告する。`url()`・`image-set()`・グラデーション・`none`・`var()` はそのまま
   ので、`@media (min-width: var(--bp))` は無効な query になり、その規則は決して当たらない(3 つのブラウザーで 800px でも当たらない)。
   解析も当たらない規則として扱う。query を並べたもの(`print, (…var…)`)は、ほかの query が当たりうるので今までどおり。
 - 試して当てはまらなかったもの: `progress`・`input[type=range]` の `appearance: none` は、3 つのブラウザーとも何かを描く
@@ -504,6 +505,24 @@
   rtl のコンテナの鏡映(包含ブロックが一緒に動くとき)と、祖先の拡大縮小でも同じだけ動かす。任意の角度の回転では、箱の位置と同じく不明にする。
   今までは動かしておらず、rtl で右端に置いた箱の中のスキップリンク(3 ブラウザーで x = 290、画面内)や、`scale(0.5)` の中のもの(x = −5〜15)を、
   フォーカスしても画面外(`E_A11Y_FOCUS_OFFSCREEN`)と誤って報告していた。e2e `focused positions follow rtl mirroring and scales` で 5 通り
+- [x] **H21. クリックの乗っ取りと出口を塞ぐ透明な覆い**(`E_A11Y_INVISIBLE_BLOCKER`・`E_A11Y_CLICK_TRAP`): viewport 全体に fixed で張った透明な
+  `<a>`(広告のリンク)は、部品であっても見えない覆い。部品の一部が覆う組を `E_A11Y_OCCLUDED` に残すのは、覆いを張る箱の包含ブロック(html・body 以外)が
+  対象を含むとき(stretched link の `::after` が自分のカードのボタンを覆う)だけ。閉じるボタンの上に同じ層の透明な全面リンクがあると、ボタンは
+  見えてフォーカスも受けるがクリックはリンクに届く: 出口にならず、理由に「何も描かない覆いに覆われている」と書く。ページの部品が `inert` で、
+  `inert` でない層(`role="dialog"` の広告)に出口がないときも trap(`inert` の部品はクリックもフォーカスも受けない)。出口の候補の子孫が描くのが
+  一部の幅だけなら、その幅だけ出口にする。Chromium・Firefox・WebKit で `elementFromPoint` と `focus()` を照合(e2e `click traps and invisible blockers`
+  に 4 通り、stretched link は `OCCLUDED` のままで `INVISIBLE_BLOCKER` にならないことを確かめる)
+- [x] **H22. スクロールと fixed の覆い**(`E_A11Y_INVISIBLE_BLOCKER` の `scrolled`、`E_A11Y_CLICK_TRAP`): 何も描かない fixed の箱(opacity 0 のまま
+  残った広告)は、ページをスクロールすると流れの中のリンクがその下を通り、そのあいだクリックは見えない箱に届く(375×667 で 3 ブラウザーとも、
+  スクロール位置 0 では当たらず 300 で当たる。`pointer-events: none` の対照では当たらない)。位置 0 で箱より下にあり、スクロールの範囲
+  (0〜ページの高さ − viewport の高さ)の中で箱に重なる部品を報告し、重なり始めと終わりのスクロール位置を `scrolled` に書く。描く fixed の箱は
+  見えているので、スクロールを続ければ抜けられる(報告しない)。ページがスクロールしないとき: html と body の overflow の 16 通りを、ホイールと
+  PageDown で 3 ブラウザーで測った。html が hidden / clip ならスクロールしない(body が visible・hidden・clip のとき。body が auto だと body が
+  スクロールする箱になる)。html が visible で body が hidden / clip でもしない(body の値が viewport に移る)。html が auto ならいつもする。
+  html の overflow が両方の軸で hidden / clip のとき、fixed の層の下の流れの中の部品はスクロールで抜けられないので trap に数え、
+  `E_A11Y_OCCLUDED` の文言に「スクロールでは抜けられない」と書く。あわせて、html の hidden / clip は viewport に移るので fixed の箱を
+  閉じ込めない(以前は Unknown)。body の hidden / clip(html が visible のとき、または html も hidden のとき)は解析が Unknown のまま。
+  e2e `fixed covers and scrolling` で 3 ブラウザー
 - 未対応(Unknown のまま): `<dialog open>`・`showModal()`・`popover` の top layer と `::backdrop`、
   `onclick` などのイベント属性(クリックできることは DOM に出ないので、利用者が `role="button"` などで示す)。flex アイテムの中の、文字の幅で決まる flex アイテム
 
@@ -577,8 +596,73 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   block の流れの中の block は、min-content と max-content がその幅、fit-content が min(max-content, max(min-content, 使える幅))
   (CSS Sizing 3 §3.2)。中身で大きさの決まる親(flex の item)へは、auto の幅と同じく min-content と max-content を渡す。
   3 ブラウザーで 500 / 150 / 50px を実測して一致(content-box も同じ)。自分の min-width か max-width がある場合
-  (clamp の入れ子の順が変わる)と、auto margins で中央に寄せる場合は Unknown のまま。
-- [x] **I19. overflow の箱の中の操作部品とテキストを覆うもの**(見逃し): `html, body { overflow: hidden }`(スクロールの止め方)の body の中のボタンに、
+  (clamp の入れ子の順が変わる)は Unknown のまま(auto margins で寄せる場合は I19)。
+- [x] **I19. `width: fit-content` を auto margins で寄せる**: `.f { width: fit-content; margin: 0 auto }` で中央に寄せる書き方を、
+  auto margins は px か % の幅に限っていたので Unknown にしていた。I18 の block の流れの中の block では、auto margins が使った幅の
+  残り(fit-content と max-content は max-content の幅、min-content は min-content の幅を引いたもの)を取り、両方 auto なら半分ずつ、
+  片方なら全部。残りが負(箱が親より広い)ならどちらの margin も 0 で、箱は終わりの側へはみ出す。3 ブラウザーで、fit-content /
+  min-content / max-content を `margin: 0 auto`・`margin-left: auto`・`margin-right: auto` で、800 / 500 / 300 / 209 / 208 / 207 /
+  190 / 150 / 79 / 78 / 77 / 60 / 50 / 30px を実測して一致(content-box も同じ。中身の min 60 / max 190px、padding 0 8px、border 1px
+  で、fit-content の中央寄せは 500px で幅 208・left 146、150px で 150・0、50px で 78・0。min-content は 500px で left 211、
+  max-content は 150px でも幅 208・left 0)。反対側の margin が 0 でも auto でもない場合(`margin-left: auto; margin-right: 10px` は
+  79px で WebKit が left -9、Chromium と Firefox が 0 と分かれる)と rtl は Unknown のまま。I18 と I19 とも、`container-type:
+  inline-size` / `size` の箱は中身を幅に数えない(CSS Containment 3 §3.1)ので Unknown のまま。
+- [x] **I20. 中身で大きさの決まる flex の item の中の img・svg・フォーム部品**(#40): px の幅のない置換要素・フォーム部品があると、
+  item の幅を Unknown にしていた。実ページで当たっていたのは、高さを決めて幅を auto にしたロゴの img(幅は画像ファイルの比で決まる)と、
+  幅 auto の text input だった。3 ブラウザーで、行の幅 2000px(max-content)と 0px(min-content)の item の幅を測った
+  (`packages/veriss/test/replaced-content-size.test.mjs` に同じ形)。
+  - 一致したので判定する: 幅 auto の img は、高さ × 比(画像ファイルの大きさ、なければ width / height 属性の `aspect-ratio: auto w / h`)を
+    content box の幅にする。120×30 の画像で高さ 24px → 96px(min も max も)。border-box で padding 0 4px・border 1px → 98px、
+    content-box で padding 2px → 100px、max-width 50px → 50px(高さは 24px のまま。max-width 48px で 48×24 になり、object-fit: fill で絵がつぶれるので
+    `W_LAYOUT_IMAGE_DISTORTED` を出す)、min-width 150px → 150px、高さ 24px の親の `height: 100%` → 96px、
+    高さも auto でファイルの大きさが分かれば 120px。幅 300px の block の親の中でも 96px(block の置換要素は伸びない)
+  - Unknown のまま: 比が分からない img(属性もファイルの大きさもない。読み込んだファイルが幅を決める)。属性とファイルで比が違う img
+    (属性 120×30 で正方形のファイル: 読み込み前 96px、読み込み後 24px)。min-height / max-height のある img(max-height 12px → 48px で
+    3 ブラウザー一致したが、モデルにしていない)。明示の `aspect-ratio`。px の高さのない親に対する % の高さ。min-height / max-height で高さが変わる親に対する % の高さ(24px で min-height 48px の親 →
+    192px、max-height 12px → 48px。3 ブラウザー一致したが、使われた高さは求めていない)。srcset のある img の自然な幅(1 つだけの
+    2x の候補で 120×30 のファイルは 60px。候補が複数なら読み込むものが決まらない。px の高さからの幅は 2x でも 96px で、判定する)。block の流れの外
+    (縦の flex の container と `justify-items: stretch` の grid では、伸びて 300px になる)
+  - フォーム部品はブラウザーで違うので Unknown のまま: text input は Chromium 153px / Firefox 189px / WebKit 155.875px
+    (`appearance: none`・padding 0・border 0 でも 145 / 181 / 141.875px、`size="10"` で 83 / 105 / 85.938px、14px・padding 0 10px・
+    border 1px の実ページの形で 168 / 190 / 172px)、select は 53 / 65.2 / 63px、textarea は 182 / 164.667 / 152px、
+    checkbox は 13 / 14 / 12px。幅 100% の input の min-content も 8 / 8 / 14px で違う
+  - 健全性の修正: 幅も viewBox の比もない svg(既定の 300px 幅)は、Chromium・WebKit の min-content が 300px、Firefox は 0。
+    これまで 300px として判定していた。min-content を使うところ(中身で大きさの決まる item、grid の fr の列の最小)では Unknown にする
+    (max-content は 3 ブラウザーとも 300px。幅 100px の `1fr 1fr` の grid で、Chromium・WebKit は列が 300 / 0px、Firefox は 50 / 50px)。
+    width 属性だけの svg(100px)は一致するので判定する
+  - 実ページの重み: 16.7% と見えていたのは `tools/blocker-weights.mjs` の数え方の誤り(アダプターのクラス `__ph0` で箱を見つけられず、
+    ページの残りを数えていた)。直すと 0.7%(ロゴの img 41 か所と text input 14 か所)。どちらも上の理由で Unknown のまま
+- [x] **I21. 中身で高さの決まる block の容器の px の `max-height`**: 開閉するナビゲーションの区画(`max-height: 168.75px` のように
+  開いたときの高さを書いたもの)で、子のある auto の高さの block の `max-height` を Unknown にしていた(引き伸ばされる箱と葉だけを扱っていた)。
+  block の流れの中の block(と、引き伸ばさずに揃える grid の item)は、高さが min(中身の高さ, max-height)、min-height はその後に掛かる
+  (CSS 2 §10.7)。中身は上に詰めたまま、はみ出しは overflow のとおり(visible なら報告、auto ならスクロール)。行の高さと後ろの兄弟は
+  clamp した高さで決まる。3 ブラウザーで、掛からない場合(200px)と掛かる場合(100px)を、content-box と border-box、overflow
+  visible / hidden / auto、下端に置いた absolute の子、max-height より大きい min-height、2 列の grid の行で測って一致
+  (`e2e/layout-max-clamp.spec.mjs`)。最後の子の下の margin が箱を突き抜ける形は、掛かると WebKit だけが margin を外へ出す
+  (Chromium と Firefox は出さない)ので Unknown のまま。% と `calc()` の max-height、flex の item の max-height も Unknown のまま。
+- [x] **I22. block の中にただ 1 つの inline-level の箱(div の中のボタン)**: `inline-flex` / `inline-block` / `inline-grid` の箱が
+  block の唯一の中身のとき、`Unsupported display` などで Unknown にしていた。箱は 1 行に単独で載る: 中身は block-level の display
+  (inline-flex は flex、inline-block は block、inline-grid は grid)で組み、幅は shrink-to-fit(I18 の fit-content と同じ)、
+  位置は内容の始点(text-align が start / left、ltr)。中身で大きさの決まる親へも block-level の display と同じ幅を渡す。
+  行の高さは、親の strut(親のフォントの ascent と descent を親の line-height で上下に配ったもの)が箱の baseline(中のテキストの
+  baseline。inline-block は自分のテキストの最後の行、inline-flex は 1 つのテキストの item の最初の行)の上下に収まれば箱の高さに
+  なる。親の strut は、テキストの契約が持つフォントの値(丸めた ascent / descent に加えて、フォントの単位の ascender / descender と
+  その値が成り立つ weight の範囲)から求める。親が同じ family で、その weight で値が成り立つときに限る。可変フォントは wght の
+  範囲すべてで成り立つが、typo の値(USE_TYPO_METRICS)を使い MVAR の hasc / hdsc で instance ごとに変わるフォントは、既定の
+  instance の weight だけにする(テキスト自身の weight も同じ。fixture の Roboto と日本語フォントは hhea の値を使い MVAR もないので
+  400 以外の weight でも決まる)。
+  3 ブラウザーで、親の font-size(0〜24px)と line-height(1、1.5、16〜40px)、テキストの font-size・line-height・weight、
+  padding を組み合わせた 840 通りを、inline-block / inline-flex(item、中央寄せ、直接のテキスト、アイコンの後)/ inline-grid と
+  ボタンの各形で、Roboto と ascent の高い日本語フォントで測った。strut が 0.5px 以上の余りで収まる組はすべて 3 ブラウザーで
+  親が箱の高さ(34px の箱で 34px)、余りが 0.2px 以下では Firefox だけ 0.5px 高い。解析は 1px の余り(親とテキストの大きさが違い
+  丸めが別になるときは 2px)を求める。収まらない対照(親の line-height 40px)は、箱の位置が 3 / 4 / 3.6875px と 3 ブラウザーで違う。
+  Unknown のまま: 中にテキストのない箱と `overflow` が visible でない inline-block(baseline が下端で、strut の descent が下に
+  はみ出し、親が 41 / 40.5 / 40.53px と違う)、親のフォントが分からないとき(`line-height: normal`、フォントのファイルのない
+  family、別の大きさで単位のない契約)、`vertical-align` が baseline 以外(middle は余りがあってもブラウザーで違う)、
+  text-align が start / left 以外、箱の上下の margin、auto の左右 margin、箱自身の min-width / max-width、
+  `container-type: inline-size | size` の箱(size containment で shrink-to-fit の幅が中身を見ない)、inline-grid の
+  block 方向、直接テキストを持つ inline-flex(匿名の flex item)、2 つ以上の inline-level の箱が並ぶ行。
+- [x] **I23. overflow の箱の中の操作部品とテキストを覆うもの**(見逃し): `html, body { overflow: hidden }`(スクロールの止め方)の body の中のボタンに、
   body を抜け出る fixed のシートが重なっても `E_A11Y_OCCLUDED` が出ず、何も報告しなかった。body が html に overflow を渡さずスクロールコンテナになり、
   中の箱の位置が決まらない(スクロール位置による)ので、覆いの判定が位置のない箱を飛ばしていた。fixed が抜け出る変更の前からある穴で、
   overflow: hidden の箱の外の absolute の兄弟でも同じだった。今は、overflow: clip の中は位置が決まるのでそのまま判定し、スクロールコンテナの中は

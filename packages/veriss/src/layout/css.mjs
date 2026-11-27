@@ -2,7 +2,7 @@ import postcss from 'postcss';
 import { calcOperatorProblem } from './calc-syntax.mjs';
 import { drop } from './dropped.mjs';
 import { colorSyntaxProblem, parseColor } from '../color/index.mjs';
-import { backgroundProblem } from './background-syntax.mjs';
+import { backgroundProblem, imageProblem, imageURL, shorthandImageToken, STRAY_COLON } from './background-syntax.mjs';
 import { sizeKeywordSplits } from './size-keyword-syntax.mjs';
 import { familyProblem, fontShorthandProblem } from './font-syntax.mjs';
 import { gridTrackProblem } from './grid-syntax.mjs';
@@ -169,6 +169,10 @@ export const dependentProperty = {
   'text-decoration-color': ['text-decoration-line', 'none'], 'text-decoration-style': ['text-decoration-line', 'none'], 'text-decoration-thickness': ['text-decoration-line', 'none'],
 };
 export const paintProperties = ['hyphens', 'object-fit', 'scroll-behavior', 'overscroll-behavior-x', 'overscroll-behavior-y', 'scroll-snap-type', 'scroll-snap-align', 'resize', 'text-wrap-mode', 'text-wrap-style', 'text-overflow', 'line-clamp', 'box-orient', 'touch-action', 'color', 'visibility', 'pointer-events', 'opacity', 'text-decoration-line', 'outline-style', 'outline-width', 'outline-color', 'outline-offset', 'box-shadow', 'cursor', 'list-style-type', 'animation-name', 'animation-duration', 'animation-iteration-count', 'animation-play-state', 'animation-direction', 'animation-timing-function', 'animation-delay', 'animation-fill-mode', 'animation-timeline', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'color-scheme', 'z-index', 'isolation', 'transform-style', 'backface-visibility', 'transform', 'transform-origin', 'translate', 'rotate', 'scale', 'backdrop-filter', 'filter', 'will-change', 'justify-self', 'justify-items', 'fill', 'stroke', 'list-style-position', 'caret-color', 'content-visibility', 'contain-intrinsic-block-size'];
+// #46: the SVG-only pointer-events keywords. On a non-SVG element each behaves as auto (CSS UI 4 §5.2.2, SVG 2 §15.6):
+// kept as declared (inherited as such) and read as "not none" by the hit tests. On an svg they choose which painted
+// parts take the pointer, which is not modeled: computeStyle keeps that Unknown.
+const svgPointerEvents = new Set(['all', 'visiblepainted', 'visiblefill', 'visiblestroke', 'visible', 'painted', 'fill', 'stroke']);
 const inheritedPaint = ['color', 'fill', 'stroke', 'list-style-position', 'caret-color', 'visibility', 'pointer-events', 'cursor', 'list-style-type', 'color-scheme', 'text-wrap-style', 'text-wrap-mode'];
 // Inherited text properties. They are kept as specified strings and only
 // interpreted for boxes whose contract derives text metrics from a font.
@@ -701,7 +705,11 @@ function expand(property, value) {
   if (['justify-self', 'justify-items'].includes(property) && !wide.has(value) && !/^(?:auto|normal|stretch|start|end|center|flex-start|flex-end|self-start|self-end|left|right|legacy)$/.test(value.trim().toLowerCase())) throw new Error(`Unsupported ${property}: ${value}`);
   if (paintProperties.includes(property)) {
     if (property === 'visibility' && !wide.has(value) && !['visible', 'hidden', 'collapse'].includes(value)) throw new Error(`Unsupported visibility: ${value}`);
-    if (property === 'pointer-events' && !wide.has(value) && !['auto', 'none'].includes(value)) throw new Error(`Unsupported pointer-events: ${value}`);
+    if (property === 'pointer-events' && !wide.has(value)) {
+      const keyword = value.trim().toLowerCase();
+      if (keyword !== 'auto' && keyword !== 'none' && !svgPointerEvents.has(keyword)) throw new Error(`Unsupported pointer-events: ${value}`);
+      return [[property, keyword]];
+    }
     if (property === 'opacity' && !wide.has(value) && !/^(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(value)) throw new Error(`Unsupported opacity: ${value}`);
     return [[property, value]];
   }
@@ -743,7 +751,45 @@ function flexShorthand(value) {
   return [['flex-grow', factors[0] ?? '1'], ['flex-shrink', factors[1] ?? '1'], ['flex-basis', basis ?? '0%']];
 }
 
+// A declaration value with a ':' outside brackets and strings (background-image: https://…, or a missing semicolon:
+// "color: red\n background: blue") is one invalid declaration to the browser: it is dropped up to the next ';' and the
+// rest of the rule applies (CSS Syntax 3 §5.4.6; measured in Chromium, Firefox and WebKit). PostCSS throws "Missed
+// semicolon" for the whole sheet instead; the stray ':' is replaced with STRAY_COLON (same length, so lines and
+// columns stay) and the declaration loop drops the declaration and reports it.
+export function tolerateStrayColons(css) { return repairStrayColons(css).css; }
+// The repaired text and the offsets of the colons replaced: a U+E000 the author wrote (in a string) is not a repair.
+export function repairStrayColons(css) {
+  let text = String(css);
+  const repaired = [];
+  const done = () => ({ css: text, repaired });
+  for (let round = 0; round < 10000; round++) {
+    try { postcss.parse(text); return done(); }
+    catch (error) {
+      if (error?.reason !== 'Missed semicolon' || !error.line) return done();
+      let offset = 0;
+      for (let line = 1; line < error.line; line++) { const next = text.indexOf('\n', offset); if (next === -1) return done(); offset = next + 1; }
+      offset += (error.column ?? 1) - 1;
+      let depth = 0, quote = null, at = -1;
+      for (let i = offset; i < text.length; i++) {
+        const ch = text[i];
+        if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = null; continue; }
+        if (ch === '"' || ch === "'") quote = ch;
+        else if (ch === '(') depth++;
+        else if (ch === ')') depth = Math.max(0, depth - 1);
+        else if (ch === ';' || ch === '{' || ch === '}') break;
+        else if (ch === ':' && depth === 0) { at = i; break; }
+      }
+      if (at === -1) return done();
+      text = text.slice(0, at) + STRAY_COLON + text.slice(at + 1);
+      repaired.push(at);
+    }
+  }
+  return done();
+}
+
 export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error' } = {}) {
+  sheets = sheets.map(sheet => { const { css, repaired } = repairStrayColons(sheet.css); return { ...sheet, css, repaired }; });
+  let repairedOffsets = [];
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
   const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
@@ -1125,6 +1171,21 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
             for (const name of names) { const flip = logicalFlip(property, name); declarations.push({ property: name, value: 'initial', ...(flip ? { flip } : {}), dynamic: { id: Number(dynamic[1]), written: `${declaration.prop}: ${declaration.value.trim()}` }, important: declaration.important ? 1 : 0, line: declaration.source.start.line, file: filename }); }
             continue;
           } }
+        // A stray ':' in the value (tolerateStrayColons) or a background-image that is not an <image> (a bare URL without
+        // url(), a quoted string): the browser drops the declaration (measured in Chromium, Firefox and WebKit).
+        { const start = declaration.source?.start?.offset, end = declaration.source?.end?.offset;
+          const repaired = repairedOffsets.length > 0 && (start === undefined || end === undefined || repairedOffsets.some(o => o >= start && o <= end));
+          const prop = declaration.prop.toLowerCase(), raw = declaration.value.trim(), value = repaired ? raw.replaceAll(STRAY_COLON, ':') : raw;
+          const line = declaration.source.start.line;
+          if (!prop.startsWith('--') && ['background-image', 'background'].includes(prop)) {
+            const problem = prop === 'background-image' ? imageProblem(raw) : (t => t && { token: t })(shorthandImageToken(raw));
+            if (problem) { const token = prop === 'background' ? problem.token : postcss.list.comma(value).find(l => imageProblem(l)) ?? value;
+              note('W_CSS_IMAGE_INVALID', { property: prop, value, token: token.replaceAll(STRAY_COLON, ':'), url: imageURL(token), selector: node.selector, file: filename, line });
+              // Kept as a marker on the boxes the rule matches: why such a box may paint nothing (the accessibility rules say so).
+              declarations.push({ property: '$droppedImage', droppedImage: { property: prop, value }, file: filename, line });
+              continue; }
+          }
+          if (!prop.startsWith('--') && repaired && raw.includes(STRAY_COLON)) { note('W_CSS_STRAY_COLON', { property: prop, value: value.replace(/\s+/g, ' '), selector: node.selector, file: filename, line }); continue; } }
         // F86: a "!word" other than !important at the end of a value makes the declaration invalid: the browser drops it
         // (measured in Chromium, Firefox and WebKit). PostCSS keeps it in the value; it is dropped here and reported.
         { const bang = !declaration.prop.startsWith('--') && !declaration.important && /!\s*([a-z][\w-]*)\s*$/i.exec(declaration.value);
@@ -1248,6 +1309,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
     }
     if (rootSizing && !elsewhere && affected) note('W_CSS_BOX_SIZING_NOT_INHERITED', { ...rootSizing, affected }); }
   for (const sheet of sheets) {
+    repairedOffsets = sheet.repaired ?? [];
     try { const root = flattenNesting(postcss.parse(sheet.css, { from: sheet.file })); visit(root.nodes, [], null, sheet.file); }
     catch (error) { diagnostic('U_LAYOUT_CSS', error.reason ?? error.message, error.line, sheet.file); }
   }
@@ -1422,6 +1484,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions), and
   // whether a rule the analysis cannot read may repaint the box.
   const unmodeled = [];
+  const droppedImages = [];
   let paintUnmodeled = false;
   const conditions = rule => rule.contexts.length ? {conditions: rule.contexts.map(c => ({kind: c.kind, ...(c.name ? {name: c.name} : {}), params: c.params, css: c.css}))} : {};
   // A preference rule holds when the state names its value, or the value is the default.
@@ -1439,6 +1502,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
         // Not modeled: the declaration is dropped from the style, and the layout of this box is Unknown (the style checks
         // still read the rest).
         if (declaration.paintUnmodeled) { paintUnmodeled = true; continue; }
+        if (declaration.droppedImage) { droppedImages.push({ ...declaration.droppedImage, selector: selector.source, file: declaration.file, line: declaration.line }); continue; }
         if (declaration.unmodeled) { if (!unmodeled.some(u => u.line === declaration.line && u.message === declaration.unmodeled)) unmodeled.push({ message: declaration.unmodeled, code: declaration.code, file: declaration.file, line: declaration.line }); continue; }
         const layer = rule.layer === null ? (declaration.important ? -Infinity : Infinity) : declaration.important ? -rule.layer : rule.layer;
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
@@ -1772,7 +1836,10 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     for (const key of ['overflow-x', 'overflow-y']) { if (sources[key] || sources.overflow) (values.$tableOverflow ??= {})[key] = values[key]; values[key] = 'visible'; }
   // A logical side was taken as ltr; in an rtl box cascade again with the sides flipped.
   if (!rtl && flipped && values.direction === 'rtl') return computeStyle(rules, box, active, inherited, {spend, state, rtl: true});
+  if (!box.pseudo && box.tag === 'svg' && svgPointerEvents.has(String(values['pointer-events'])))
+    throw new Error(`Unsupported pointer-events: ${values['pointer-events']} on an svg (which of its painted parts take the pointer is not modeled)`);
   if (unmodeled.length) values.$unmodeled = unmodeled;
+  if (droppedImages.length) values.$droppedImage = droppedImages;
   if (paintUnmodeled) values.$paintUnmodeled = true;
   return values;
 }

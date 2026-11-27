@@ -6,6 +6,9 @@ import {test, expect} from '@playwright/test';
 import {analyzeHTML} from '../packages/veriss/src/html.mjs';
 import {generateOcclusionCase} from './support/occlusion-fuzz.mjs';
 import {viewports} from './support/visibility-fuzz.mjs';
+// A control that does not take the click: covered by a box that paints (E_A11Y_OCCLUDED) or by one that paints nothing
+// (E_A11Y_INVISIBLE_BLOCKER, which replaces the former for that pair).
+const blocks = d => d.code === 'E_A11Y_OCCLUDED' || d.code === 'E_A11Y_INVISIBLE_BLOCKER';
 
 const seeds = Number(process.env.FUZZ_SEEDS ?? 20), first = Number(process.env.FUZZ_FIRST ?? 1);
 const inRange = (range, v) => !range || ((range.minInclusive ? v >= range.min : v > range.min) && (range.maxInclusive ? v <= range.max : v < range.max));
@@ -46,7 +49,7 @@ test('fuzz: covered buttons — the static occluded-target verdicts agree with C
         return [b, covered];
       })), c.buttons);
       for (const b of c.buttons) {
-        const staticCovered = report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === `.${b}` && inRegion(d, w, h));
+        const staticCovered = report.diagnostics.some(d => blocks(d) && d.box === `.${b}` && inRegion(d, w, h));
         tally.compared++; if (hits[b]) tally.covered++;
         expect(staticCovered, `seed ${seed} .${b} at ${w}×${h}: static ${staticCovered}, Chromium ${hits[b]}\n${c.css}`).toBe(hits[b]);
       }

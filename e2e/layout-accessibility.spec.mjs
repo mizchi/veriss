@@ -17,6 +17,9 @@ const up64 = v => Math.ceil(v * 64 - 1e-9) / 64;
 const chromiumOnly = page => { test.skip(test.info().project.name !== 'chromium', 'uses the Chrome DevTools Protocol (Chromium only)'); return page.context().newCDPSession(page); };
 
 
+// A control that does not take the click: covered by a box that paints (E_A11Y_OCCLUDED) or by one that paints nothing
+// (E_A11Y_INVISIBLE_BLOCKER, which replaces the former for that pair).
+const blocks = d => d.code === 'E_A11Y_OCCLUDED' || d.code === 'E_A11Y_INVISIBLE_BLOCKER';
 const results = new URL('../evals/results/layout-accessibility/', import.meta.url);
 const widths = [1280, 768, 375], height = 800;
 const reset = '*{box-sizing:border-box;margin:0;padding:0}html,body{margin:0}';
@@ -1037,7 +1040,9 @@ for (const sample of cases) {
     const css = reset + sample.css;
     const report = analyzeHTML(sample.html, {name: 'Page', css, viewport: {min: sample.min ?? 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: sample.accessibility ?? true, ...(sample.boxes ? {boxes: sample.boxes} : {})});
     expect(report.status === 'unknown', JSON.stringify(report.diagnostics)).toBe(false);
-    const rows = [...report.diagnostics, ...report.accessibility.warnings].filter(row => rules.includes(row.rule) && !row.preference);
+    // The hit-test oracle does not tell what covers a control: an invisible blocker (a cover that paints nothing) is an
+    // occluded target to it.
+    const rows = [...report.diagnostics, ...report.accessibility.warnings].map(row => row.rule === 'invisible-blocker' ? {...row, rule: 'occluded-target'} : row).filter(row => rules.includes(row.rule) && !row.preference);
     const darkRows = report.diagnostics.filter(row => row.rule === 'text-contrast' && (row.preference === 'prefers-color-scheme: dark' || row.alsoUnder?.includes('prefers-color-scheme: dark')));
     const document = `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>${css}</style></head><body>${sample.html}</body></html>`;
     const row = {name: sample.name, static: {}, runtime: {}};
@@ -1117,7 +1122,7 @@ test('generated ::after overlays occlude like Chromium hit testing', async ({pag
     const css = `${reset}.page{display:grid;grid-template-columns:200px;grid-auto-rows:40px;position:relative;background:#fff}.card{display:grid;grid-template-columns:minmax(0,1fr)}.b1,.b2{${button}}.card::after{content:"";position:absolute;left:0;top:0;${cover}}`;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', JSON.stringify(report.diagnostics)).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.path))].sort();
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.path))].sort();
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const browser = await page.evaluate(() => [...document.querySelectorAll('button')].filter(b => { const r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }).map(b => `Page/${[...b.parentElement.children].indexOf(b)}`));
@@ -1134,7 +1139,7 @@ test('z-index and opacity stacking decide occlusion like Chromium', async ({page
     const css = base + extra;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics)}`).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.path))].sort();
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.path))].sort();
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const browser = await page.evaluate(() => [...document.querySelectorAll('button')].filter(b => { const r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }).map(b => `Page/${[...b.parentElement.children].indexOf(b)}`));
@@ -1150,7 +1155,7 @@ test('z-index and opacity stacking decide occlusion like Chromium', async ({page
     const css = nestedBase + extra;
     const report = analyzeHTML(nestedHtml, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics)}`).toBe(false);
-    const statics = report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED');
+    const statics = report.diagnostics.some(d => blocks(d));
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${nestedHtml}</body></html>`);
     const browser = await page.evaluate(() => { const b = document.querySelector('.b'), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; });
     expect(statics, extra).toBe(browser);
@@ -1169,7 +1174,7 @@ test('what covers a dialog close button decides occlusion as hit testing does', 
     const css = base + extra;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${extra}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))];
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.box))];
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const blocked = await page.evaluate(() => ['.open', '.x'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
@@ -1188,7 +1193,7 @@ test('filter traps a z-index and keeps the hit area, as hit testing does', async
     const css = `${base}.a{filter:${filter}}`;
     const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', `${filter}: ${JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))}`).toBe(false);
-    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))].sort();
+    const statics = [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.box))].sort();
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const blocked = await page.evaluate(() => ['.b', '.c'].filter(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); for (let x = r.left + 0.5; x < r.right; x += 4) for (let y = r.top + 0.5; y < r.bottom; y += 4) if (document.elementFromPoint(x, y) !== b) return true; return false; }));
@@ -1208,7 +1213,7 @@ test('inert layers and controls match hit testing; an inert control on top is re
   for (const [layerInert, pageInert, occluded, shown] of [[false, false, ['.under'], []], [true, false, [], ['.x']], [false, true, [], []], [true, true, [], ['.x']]]) {
     const report = analyzeHTML(html(layerInert, pageInert), {name: 'Page', css, viewport: {min: 375, max: 1280, height: {min: 600, max: 1000}}, accessibility: true});
     expect(report.status === 'unknown', JSON.stringify(report.diagnostics.filter(d => d.severity === 'unknown'))).toBe(false);
-    const statics = {occluded: [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.box))], shown: [...new Set(report.accessibility.warnings.filter(d => d.code === 'W_A11Y_INERT_SHOWN').map(d => d.box))]};
+    const statics = {occluded: [...new Set(report.diagnostics.filter(d => blocks(d)).map(d => d.box))], shown: [...new Set(report.accessibility.warnings.filter(d => d.code === 'W_A11Y_INERT_SHOWN').map(d => d.box))]};
     await page.setViewportSize({width: 800, height: 800});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html(layerInert, pageInert)}</body></html>`);
     // Which buttons take a click at their centre (the browser's verdict).
@@ -1738,7 +1743,9 @@ test('stretched link: Chromium hits the link\'s ::after at the button exactly wh
   for (const [fix, covered] of [['', true], ['.l::after{pointer-events:none}', false]]) {
     const css = base + fix;
     const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 480, max: 900}}, accessibility: true});
+    // A cover that belongs to the card's own link stays an occlusion (the click reaches the link the card stands for).
     expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.b'), fix || 'bare').toBe(covered);
+    expect(report.diagnostics.some(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER' && d.box === '.b'), fix || 'bare').toBe(false);
     await page.setViewportSize({width: 400, height: 300});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     const hit = await page.evaluate(() => { const b = document.querySelector('.b').getBoundingClientRect(); return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.className; });
@@ -2424,5 +2431,124 @@ test('occlusion inside overflow hidden / clip boxes matches hit testing (fixed s
     // Neither the wheel nor PageDown scrolls anything here.
     await page.mouse.move(100, 100); await page.mouse.wheel(0, 300); await page.keyboard.press('PageDown'); await page.waitForTimeout(100);
     expect(await page.evaluate(() => [scrollY, document.body.scrollTop, document.querySelector('.w')?.scrollTop ?? 0]), name).toEqual([0, 0, 0]);
+  }
+});
+
+// A layer with no way out (E_A11Y_CLICK_TRAP) and a box that paints nothing over a control (E_A11Y_INVISIBLE_BLOCKER):
+// in the browser, every control the trap names is not the element at its centre, every way-out candidate paints
+// nothing or cannot take focus, and the blocker is the element at the control's centre while painting nothing.
+test('click traps and invisible blockers match hit testing and what the browser paints', async ({page}) => {
+  const viewport = {min: 320, max: 800, height: {min: 600, max: 900}};
+  const line = {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20};
+  const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#fff;color:#000}main{display:block}.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px;font-family:sans-serif}button{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;font-size:16px;line-height:20px}';
+  const host = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>';
+  const overlay = '.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#000}';
+  const frame = '<iframe class="f" title="Advertisement" srcdoc="<p>ad</p>"></iframe>';
+  const slot = frameCSS => `.w{width:300px;height:250px;position:absolute;display:block;z-index:2147483647;overflow:hidden;top:0;left:10px}.f{display:block;width:300px;height:250px;position:relative;top:0;left:0;overflow:hidden;border:0;${frameCSS}}.x{width:42px;height:42px;position:absolute;overflow:hidden;cursor:pointer;top:0;right:0}`;
+  const cases = [
+    {name: 'invisible close control', layer: '<div class="ov"><div class="x"></div></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-image:https://example.com/close.png}', trap: true},
+    {name: 'visible close button', layer: '<div class="ov"><button class="x" aria-label="Close">x</button></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff;color:#000}', boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}, trap: false, exit: '.x'},
+    {name: 'opacity-0 frame', layer: `<div class="ov">${frame}</div>`, css: overlay + '.f{display:block;position:absolute;top:100px;left:10px;width:300px;height:250px;border:0;opacity:0}', trap: true},
+    {name: 'stuck transparent box', layer: `<div class="box">${frame}</div>`, css: '.box{position:fixed;top:0;left:0;width:300px;height:250px;z-index:2147483647}.f{display:block;width:300px;height:250px;border:0;opacity:0}', trap: false, blocker: true},
+    {name: 'click-catcher', layer: '<div class="catch"></div>', css: '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}', trap: false, blocker: true},
+    // overflow: hidden layers: their content hit-tests where it sits at scroll offset 0.
+    {name: 'clipping slot, painting frame', layer: '<div class="w"><iframe class="f" title="Advertisement" width="300" height="250" srcdoc="<p>ad</p>"></iframe><div class="x"></div></div>', css: slot(''), trap: false, occluded: true},
+    {name: 'clipping slot, opacity-0 frame', layer: '<div class="w"><iframe class="f" title="Advertisement" width="300" height="250" srcdoc="<p>ad</p>"></iframe><div class="x"></div></div>', css: slot('opacity:0'), trap: false, blocker: true},
+    // An ad's transparent link over the whole viewport: a click hijack, like the click-catcher.
+    {name: 'transparent link catcher', layer: '<a class="catch" href="https://adv.example/"></a>', css: '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;display:block}', trap: false, blocker: true},
+    // The visible close button is under a transparent link of the same overlay: the click lands on the link.
+    {name: 'close button under a transparent link', layer: '<div class="ov"><button class="x" aria-label="Close"></button><a class="lp" href="https://adv.example/"></a></div>', css: overlay + '.x{position:absolute;top:0;right:0;width:44px;height:44px;background:#fff}.lp{position:absolute;top:0;left:0;right:0;bottom:0;display:block}', trap: true, coveredBy: {'.x': '.lp'}},
+    // An inert page and a shown layer without a way out; with a named close button, the button is the way out.
+    {name: 'inert page, layer without a way out', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}', trap: true, inert: true},
+    {name: 'inert page, layer with a close button', host: host.replace('<main>', '<main inert>'), layer: '<div class="ad" role="dialog" aria-label="Ad"><button class="x" aria-label="Close">x</button></div>', css: '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;background:#ffe;z-index:9;display:block}.x{width:44px;height:44px;background:#fff;color:#000}', boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}, trap: false, exit: '.x'},
+    {name: 'clipping overlay, invisible close control', layer: `<div class="ov">${frame}<div class="x"></div></div>`, css: overlay.replace('}', ';overflow:hidden}') + '.f{display:block;width:300px;height:250px;border:0;opacity:0}.x{position:absolute;top:0;right:0;width:42px;height:42px;cursor:pointer;background-size:42px 42px;background-image:https://example.com/close.png}', trap: true},
+  ];
+  await page.setViewportSize({width: 800, height: 800});
+  for (const c of cases) {
+    const css = base + c.css, html = `<html lang="en"><body>${c.host ?? host}${c.layer}</body></html>`;
+    const report = analyzeHTML(html, {name: 'P', viewport, accessibility: true, boxes: {'.l': line, '.m': line, ...(c.boxes ?? {})}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css});
+    const traps = report.diagnostics.filter(d => d.code === 'E_A11Y_CLICK_TRAP'), blockers = report.diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER');
+    expect(traps.length > 0, c.name).toBe(c.trap);
+    expect(blockers.length > 0, c.name).toBe(Boolean(c.blocker));
+    await page.setContent(`<!doctype html>${html.replace('<body>', `<head><style>${css}</style></head><body>`)}`);
+    const facts = await page.evaluate(() => {
+      const opacity = e => { for (let n = e; n; n = n.parentElement) if (getComputedStyle(n).opacity === '0') return 0; return 1; };
+      const paints = e => { const s = getComputedStyle(e); return opacity(e) > 0 && s.visibility === 'visible' && (s.backgroundImage !== 'none' || !/^(?:transparent|rgba\(0, 0, 0, 0\))$/.test(s.backgroundColor) || ['Top', 'Right', 'Bottom', 'Left'].some(side => parseFloat(s[`border${side}Width`]) > 0) || e.textContent.trim() !== '' || ['IFRAME', 'IMG', 'VIDEO', 'CANVAS'].includes(e.tagName)); };
+      const at = sel => { const e = document.querySelector(sel), r = e.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); };
+      const label = e => e ? `.${e.className}` : null;
+      const layer = document.querySelector('.ov, .box, .catch, .w, .ad');
+      const candidates = [...layer.querySelectorAll('*')].map(e => ({box: label(e), paints: paints(e), focusable: e.tabIndex >= 0 && !e.closest('[inert]'), role: e.getAttribute('role'), hitBy: label(at(`.${e.className}`)), takesClick: (() => { const r = e.getBoundingClientRect(); return r.width > 0 && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === e; })()}));
+      const focuses = sel => { const e = document.querySelector(sel); e.focus(); const ok = document.activeElement === e; e.blur(); return ok; };
+      return {hit: {'.l': label(at('.l')), '.m': label(at('.m'))}, focus: {'.l': focuses('.l'), '.m': focuses('.m')}, candidates, blockerPaints: Object.fromEntries(['.l', '.m'].map(sel => [sel, at(sel) && at(sel) !== document.querySelector(sel) ? paints(at(sel)) : null]))};
+    });
+    for (const t of traps) for (const covered of t.covered) {
+      expect(facts.hit[covered], `${c.name}: ${covered} does not take the click`).not.toBe(covered);
+      // No candidate in the layer shows, can take focus (or has a role) and takes the click.
+      expect(facts.candidates.filter(e => e.paints && (e.focusable || e.role) && e.takesClick), c.name).toEqual([]);
+      // Inert: the page's controls take no focus either.
+      if (c.inert) expect(facts.focus[covered], `${c.name}: ${covered} takes no focus`).toBe(false);
+    }
+    for (const [box, cover] of Object.entries(c.coveredBy ?? {})) {
+      expect(traps.some(t => t.exits.some(e => e.box === box && e.why.includes(`covered by ${cover}, which paints nothing`))), c.name).toBe(true);
+      expect(facts.candidates.find(e => e.box === box), c.name).toMatchObject({paints: true, focusable: true, takesClick: false, hitBy: cover});
+      expect(facts.candidates.find(e => e.box === cover)?.paints, c.name).toBe(false);
+    }
+    if (c.occluded) {
+      expect(report.diagnostics.some(d => d.code === 'E_A11Y_OCCLUDED' && d.box === '.l'), c.name).toBe(true);
+      expect(facts.hit['.l'], `${c.name}: .l does not take the click`).not.toBe('.l');
+      expect(facts.blockerPaints['.l'], `${c.name}: what takes .l's click (${facts.hit['.l']}) paints`).toBe(true);
+    }
+    if (c.exit) expect(facts.candidates.find(e => e.box === c.exit), c.name).toMatchObject({paints: true, focusable: true, takesClick: true});
+    for (const b of blockers) {
+      expect(facts.hit[b.box], `${c.name}: ${b.box} does not take the click`).not.toBe(b.box);
+      expect(facts.blockerPaints[b.box], `${c.name}: what takes ${b.box}'s click (${facts.hit[b.box]}, static ${b.cover}) paints nothing`).toBe(false);
+    }
+  }
+});
+
+// Scrolling and fixed covers: a fixed box that paints nothing catches clicks on the in-flow controls that scroll under
+// it (E_A11Y_INVISIBLE_BLOCKER with the scroll offsets), and a fixed sheet over in-flow controls of a page whose root is
+// overflow: hidden is a click trap (the user cannot scroll them free).
+test('fixed covers and scrolling: the offsets where a transparent fixed box takes the click, and a page that does not scroll', async ({page}) => {
+  const viewport = {min: 375, max: 375, height: {min: 667, max: 667}};
+  const line = {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20};
+  const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#fff;color:#000}main{display:block}.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px;font-family:sans-serif}';
+  const run = (html, css) => analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', viewport, accessibility: true, boxes: {'.l': line, '.m': line}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: base + css});
+  await page.setViewportSize({width: 375, height: 667});
+  const open = async (html, css) => page.setContent(`<!doctype html><html lang="en"><head><style>${base}${css}</style></head><body>${html}</body></html>`);
+  // The element hit at the point of the control nearest to the fixed box's middle (the part that may be under it).
+  const hitAt = (sel, y) => page.evaluate(([sel, y]) => {
+    scrollTo(0, y); const r = document.querySelector(sel).getBoundingClientRect(), ad = document.querySelector('.ad, .sh').getBoundingClientRect();
+    const py = Math.min(Math.max((ad.top + ad.bottom) / 2, r.top + 1), r.bottom - 1);
+    const px = Math.min(Math.max((ad.left + ad.right) / 2, r.left + 1), r.right - 1);
+    const e = document.elementFromPoint(px, py); return e ? e.className : null;
+  }, [sel, y]);
+
+  const wipeHTML = '<main><a class="l" href="/a">First</a><div class="gap"></div><a class="m" href="/b">Second</a><div class="tail"></div></main><div class="ad"></div>';
+  const wipeCSS = extra => `.gap{display:block;height:960px}.tail{display:block;height:400px}.ad{position:fixed;right:0;bottom:120px;width:320px;height:180px;z-index:2147483000;opacity:0;background:#fff}${extra}`;
+  const blockers = run(wipeHTML, wipeCSS('')).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER');
+  expect(blockers.map(d => d.box)).toEqual(['.m']);
+  const {from, to} = blockers[0].scrolled;
+  await open(wipeHTML, wipeCSS(''));
+  expect(await hitAt('.m', from - 10), 'before the offsets').toBe('m');
+  for (const y of [from + 2, (from + to) / 2, to - 2]) expect(await hitAt('.m', y), `scrolled ${y}`).toBe('ad');
+  for (const y of [0, (from + to) / 2, to]) expect(await hitAt('.l', y) ?? 'off', `.l at ${y}`).not.toBe('ad');
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('.ad')).opacity)).toBe('0');
+  // pointer-events: none: nothing reported, and the click reaches the link.
+  expect(run(wipeHTML, wipeCSS('.ad{pointer-events:none}')).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER')).toEqual([]);
+  await open(wipeHTML, wipeCSS('.ad{pointer-events:none}'));
+  expect(await hitAt('.m', (from + to) / 2)).toBe('m');
+
+  const sheetHTML = '<main><div class="gap"></div><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="tail"></div></main><div class="sh"></div>';
+  const sheetCSS = root => `.gap{display:block;height:500px}.tail{display:block;height:800px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`;
+  for (const [root, trapped] of [['html{overflow:hidden}', true], ['html{overflow:clip}', true], ['', false]]) {
+    const report = run(sheetHTML, sheetCSS(root));
+    expect(report.diagnostics.some(d => d.code === 'E_A11Y_CLICK_TRAP'), root || 'scrolls').toBe(trapped);
+    await open(sheetHTML, sheetCSS(root));
+    expect(await hitAt('.l', 0), root || 'scrolls').toBe('sh');
+    await page.mouse.move(100, 100); await page.mouse.wheel(0, 300); await page.waitForTimeout(300);
+    const scrolled = await page.evaluate(() => scrollY);
+    expect(scrolled > 0, `${root || 'scrolls'}: the wheel scrolls the page`).toBe(!trapped);
+    if (!trapped) expect(await page.evaluate(() => { const r = document.querySelector('.l').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; })).toBe('l');
   }
 });
