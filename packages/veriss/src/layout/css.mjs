@@ -260,7 +260,10 @@ function expand(property, value) {
   if (property==='scrollbar-color') return [];
   if (property === 'all') {
     if (!wide.has(value)) throw new Error('Unsupported all reset');
-    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`])].filter(key => key !== 'direction').map(key => [key, value]);
+    // (Each side's border width and style ($bw-/$bs-) too, for every keyword: without them a later border-width alone
+    // kept an iframe's UA style, all: revert dropped its UA border (measured 304x254 for frameborder="0"; revert is
+    // Unknown there), and all: var(--x, inherit) wrote keys its inherit expansion did not.)
+    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`, `$bw-${side}`, `$bs-${side}`])].filter(key => key !== 'direction').map(key => [key, value]);
   }
   if (property === 'flex') return flexShorthand(value);
   // grid-area: <name> places the item in the named area of its parent's grid-template-areas (grid.mjs resolves it);
@@ -329,7 +332,12 @@ function expand(property, value) {
   const borderSides = { border: ['left', 'right', 'top', 'bottom'], 'border-inline': ['left', 'right'], 'border-block': ['top', 'bottom'], 'border-top': ['top'], 'border-right': ['right'], 'border-bottom': ['bottom'], 'border-left': ['left'] };
   if (property in borderSides) {
     const sides = borderSides[property];
-    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value]]);
+    // initial and unset set the side's width and style too (medium, none). A shorthand with var() is expanded as 'initial'
+    // to find the longhands it writes: without its width and style here, a later border-width read its style as none.
+    // revert and revert-layer too: revert rolls an iframe back to its UA border past the frameborder hint (304x254
+    // measured in all three engines, where it was verified at 300x250), which the side's pair keeps Unknown. inherit
+    // takes the parent's width and style (a later border: inherit replaces an earlier reset's pair).
+    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value], [`$bw-${side}`, value], [`$bs-${side}`, value]]);
     const styles = new Set(['none', 'hidden', 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
     const lengthLike = /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/;
     let width, style, color;
@@ -1400,6 +1408,17 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // their appearance: it stays 'ua' until the author sets the margin.
   // With a UA profile the margins are known (WebKit: 3px 2px on both).
   if (!box.pseudo && box.tag === 'input' && ['checkbox', 'radio'].includes(box.inputType)) ['top', 'right', 'bottom', 'left'].forEach((side, i) => { values[`margin-${side}`] = uaProfile ? uaProfile[box.inputType].margin[i] : 'ua'; });
+  // An iframe's UA border: 2px inset on every side (Chromium, Firefox and WebKit, measured). frameborder is a
+  // presentational hint that zeroes the widths (not the style): "0" and "no" (any case) in all three engines; other
+  // values the integer parse reads as non-zero keep the border; the rest (an integer error such as "yes", "" or "0px")
+  // drops it in Chromium and WebKit and keeps it in Firefox, so it needs a UA profile that names the engine.
+  if (!box.pseudo && box.tag === 'iframe') {
+    values.$uaBorder = true; values.$uaBorderStyled = true;
+    const fb = box.frameBorder, zero = fb === undefined ? false : fb === 'dynamic' ? null : /^(?:0|no)$/i.test(fb) ? true
+      : /^\s*[+-]?\d/.test(fb) && Number.parseInt(fb, 10) !== 0 ? false : uaProfile ? uaProfile.engine !== 'firefox' : null;
+    if (zero === null) throw Object.assign(new Error(fb === 'dynamic' ? `${box.label}: a dynamic frameborder may or may not drop the iframe's UA border` : `${box.label}: frameborder="${fb}" drops the iframe's UA border in Chromium and WebKit but not in Firefox; write frameborder="0" (or "no"), or pass a ua profile that names the engine`), { code: 'U_LAYOUT_HTML' });
+    for (const side of ['left', 'right', 'top', 'bottom']) values[`border-${side}`] = zero ? '0' : '2px';
+  }
   // The control's UA box rules are not its ::before/::after's.
   if(!box.pseudo && ['button', 'input', 'select', 'textarea'].includes(box.tag)) {
     values.$uaBorder = true;
@@ -1465,7 +1484,9 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   if(box.popover==='dynamic') throw Object.assign(new Error('A dynamic popover attribute decides whether it renders'),{code:'U_LAYOUT_ELEMENT'});
   if(box.hiddenAttr==='until-found' || box.hiddenAttr==='dynamic') throw Object.assign(new Error(`hidden=${box.hiddenAttr === 'dynamic' ? '(dynamic)' : 'until-found'} is outside the modeled rendering`),{code:'U_LAYOUT_ELEMENT'});
   const ua = { ...values };
-  const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0' };
+  const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0',
+    // A side's border width and style as the border properties keep them ($bw-/$bs-side): medium and none.
+    ...Object.fromEntries(['top', 'right', 'bottom', 'left'].flatMap(side => [[`$bw-${side}`, '3px'], [`$bs-${side}`, 'none']])) };
   const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'word-break', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
   const priorities = new Map(), sources = {},custom=new Map(),dormant={},overridden={}, candidates = {};
   // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions), and
@@ -1562,9 +1583,20 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
         if(value===undefined) throw new Error('CSS variable shorthand does not produce the required property');
       } catch(error) {error.css={file:declaration.file,line:declaration.line};throw error;}
     }
+    // A side's border width or style ($bw-/$bs-, kept for the pair below): revert rolls back past author-level
+    // presentational hints (an iframe's frameborder) to the UA border, which is not modeled (kept, Unknown below).
+    if (/^\$b[ws]-/.test(property) && ['revert', 'revert-layer'].includes(value)) { values[property] = value; continue; }
     if (value === 'revert') value = ua[property];
     if (value === 'unset') value = inheritedProperties.has(property) ? 'inherit' : 'initial';
     if (value === 'initial') value = initial[property];
+    // A side's width and style inherit the parent's computed border: its used width (zero under style none, as the
+    // computed width is) and the style its own pair resolved ($borderStyle-side, below).
+    const borderSide = /^\$b([ws])-(top|right|bottom|left)$/.exec(property);
+    if (value === 'inherit' && borderSide && !box.documentRoot) {
+      const from = borderSide[1] === 'w' ? inherited[`border-${borderSide[2]}`] : inherited[`$borderStyle-${borderSide[2]}`];
+      if (from === undefined || from === 'ua') throw Object.assign(new Error(`border-${borderSide[2]}-${borderSide[1] === 'w' ? 'width' : 'style'}: inherit from a parent whose border is not known here`), { code: 'U_LAYOUT_CSS' });
+      values[property] = String(from); continue;
+    }
     if (value === 'inherit') {
       if (Object.hasOwn(inherited, property)) value = inherited[property];
       else if (box.documentRoot) value = initial[property];
@@ -1652,11 +1684,18 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // an unset style is the initial none. Sides no author rule touched keep their value (UA borders stay 'ua').
   for (const side of ['top', 'right', 'bottom', 'left']) {
     const bw = `$bw-${side}`, bs = `$bs-${side}`;
-    if (!sources[bw] && !sources[bs]) { delete values[bw]; delete values[bs]; continue; }
+    // (The style each side resolves to, for a child's border-style: inherit: 'ua' when it is a control's own.)
+    const uaSide = () => values[`border-${side}`] === 'ua' || values.$uaBorderStyled || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
+    if (!sources[bw] && !sources[bs]) { values[`$borderStyle-${side}`] = uaSide() ? 'ua' : 'none'; delete values[bw]; delete values[bs]; continue; }
+    // CSS-wide keywords: initial and unset resolved in the cascade (medium, none); revert is not modeled.
+    for (const [key, property] of [[bw, 'width'], [bs, 'style']]) if (sources[key] && (values[key] === undefined || wide.has(String(values[key]))))
+      throw Object.assign(new Error(`border-${side}-${property}: ${values[key] ?? 'a CSS-wide keyword'} is not modeled here`), { code: 'U_LAYOUT_CSS', css: { file: sources[key].file, line: sources[key].line } });
     // A control's UA border has a style of its own (known widths from a UA profile included): an author width alone
     // keeps that style and draws at the author width (a reset's border-width: 1px on a textarea).
-    const uaStyled = values[`border-${side}`] === 'ua' || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
+    // (An iframe's border keeps its inset style when frameborder zeroed the width: $uaBorderStyled.)
+    const uaStyled = values[`border-${side}`] === 'ua' || values.$uaBorderStyled || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
     const style = sources[bs] ? values[bs] : (uaStyled ? 'ua' : 'none');
+    values[`$borderStyle-${side}`] = style === 'none-implied' ? 'none' : style;
     const width = sources[bw] ? values[bw] : (uaStyled ? values[`border-${side}`] : '3px');
     values[`border-${side}`] = ['none', 'hidden', 'none-implied'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
     // For the border rule (F14): a non-zero width the author wrote, and a style written none or hidden (no border on

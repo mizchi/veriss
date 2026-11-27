@@ -46,7 +46,8 @@ export interface LayoutBoxContract {
   overflow?: 'fit' | 'scroll' | 'clip' | 'visible';
   overflowBlock?: 'fit' | 'scroll' | 'clip' | 'visible';
   /** Font the size bounds were measured with (`/text`); the computed CSS font must match or the box is Unknown. */
-  font?: { family: string; size: number; lineHeight: number; weight?: number; style?: 'normal' };
+  /** ascent / descent: the font's whole-px ascent and descent as Chromium rounds them (both or neither), for the strut of a line that holds only an inline replaced box. */
+  font?: { family: string; size: number; lineHeight: number; weight?: number; style?: 'normal'; ascent?: number; descent?: number };
   /** Provenance of font-derived bounds. A domain bound table indexed by character count. */
   textMetrics?: { kind: 'content'; text: string; width: number; font?: object; allowance?: string }
     | { kind: 'domain'; characters: string; maxLength: number; perCharacter: number; pairAdjustment: number; widest: string; bounds: number[]; font?: object; allowance?: string }
@@ -180,7 +181,7 @@ export interface LayoutSummary {
   styleSources: { kind: 'reset' | 'app'; file: string }[];
   diagnostics: LayoutDiagnostic[];
   policies: (LayoutScenarioIdentity & { box: string; path: string; axis: 'inline' | 'block'; overflow: 'fit' | 'scroll' | 'clip' | 'visible'; range: LayoutRange; heightRange?: LayoutRange; region?: LayoutRegion })[];
-  checks: (LayoutScenarioIdentity & { box: string; path: string; code: string; axis: 'inline' | 'block'; range: LayoutRange; heightRange?: LayoutRange; region?: LayoutRegion; available: LayoutAffine; required: LayoutAffine; enforced: boolean })[];
+  checks: (LayoutScenarioIdentity & { box: string; path: string; code: string; axis: 'inline' | 'block'; range: LayoutRange; heightRange?: LayoutRange; region?: LayoutRegion; available: LayoutAffine; required: LayoutAffine; enforced: boolean; /** Waived only because the viewport scrolls (the document root taller than the viewport). */ pageScroll?: boolean })[];
   sizes: (LayoutScenarioIdentity & LayoutPosition & { box: string; path: string; /** The author's display (a block container is laid out as a one-column grid inside; it is reported as block). */ display?: string; float?: string; alignContent?: string; range: LayoutRange; heightRange?: LayoutRange; region?: LayoutRegion; allocatedInlineSize:LayoutAffine;allocatedBlockSize?:LayoutAffine;inlineSize: LayoutAffine; blockSize?: LayoutAffine;contentInlineSize:LayoutAffine;contentBlockSize?:LayoutAffine;paddingInlineSize?:LayoutAffine;paddingBlockSize?:LayoutAffine; boxSizing: 'border-box' | 'content-box'; boxSizingSource?: { file: string; line: number; selector: string; layer?: string; specified: string } })[];
   queries: (LayoutScenarioIdentity & { box: string; path: string; range: LayoutRange; heightRange?:LayoutRange;region?:LayoutRegion;name?: string; target?: string; targetPath?: string; matched: boolean })[];
   /** Resolved shared tracks, local line numbering, effective gap and edge insets. Build-only. */

@@ -44,7 +44,8 @@ function environment(scope) {
 /** Extract both states before consulting any target contract. */
 export function createTransitionIR(input) {
   if(!object(input,['before','after'])) throw new TypeError('Invalid transition input');
-  const before=createLayoutIR(input.before),after=createLayoutIR(input.after);
+  // A page taller than the viewport scrolls; noshift compares positions at scroll position 0, which that does not move.
+  const before=createLayoutIR(input.before,{pageScroll:true}),after=createLayoutIR(input.after,{pageScroll:true});
   const diagnostics=[...before.diagnostics,...after.diagnostics];
   if(input.before.status!=='verified' || input.after.status!=='verified') diagnostics.push(unknown('U_NOSHIFT_LAYOUT','Both endpoint layouts must satisfy their static layout checks'));
   if(before.cases.length!==1 || after.cases.length!==1) diagnostics.push(unknown('U_NOSHIFT_CASES','Supply one concrete structural/platform case per endpoint; case correspondence is not inferred'));

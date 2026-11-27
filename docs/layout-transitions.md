@@ -257,6 +257,18 @@ root基準の矩形は別の `rect` factとして記録します。
 host/platform条件が異なる場合はUnknownにします。片方だけの共通部分を切り出して
 成功にすることはありません。
 
+`<html>` から始まる文書全体も検査できます。viewport がスクロールする(overlay の
+スクロールバー、または html の `overflow-y: auto` / `scroll`)場合、root が viewport より
+高くなることはページのスクロールであり、root の block の fit 検査は enforced: false に
+なります(`pageScroll: true` の印が付く)。スクロール位置 0 の配置はこれに依存しないので、
+noshift はこの検査を「弱めた overflow 方針」と数えず、内容が viewport より短くても長くても
+判定します(以前は常に `U_LAYOUT_PROFILE`)。classic のスクロールバーで html が
+`overflow-y: visible` のまま viewport より高くなる場合は、スクロールバーがページを狭める
+配置をモデル化しないので、その状態が `U_LAYOUT_SCROLLBAR` になり、noshift も Unknown です。
+それ以外の弱めた方針(box の `overflow` 契約など)は、該当する box の名前を添えて
+`U_LAYOUT_PROFILE` のままです。safe-grid/1 のコンポーネント契約は、従来どおり root が
+viewport に収まることを要求します。Chromium と WebKit の照合は `e2e/layout-noshift-document.spec.mjs`。
+
 汎用APIの初版は一状態につき具体的な一つの構造・platform caseに限定します。複数の状態候補を
 まとめたreport同士を渡すとUnknownです。adapterは必要な状態遷移を列挙し、それぞれを
 検査する必要があります。その列挙がUIのすべての遷移を覆うことは、このAPIだけでは
