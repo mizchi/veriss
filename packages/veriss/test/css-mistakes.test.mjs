@@ -176,6 +176,17 @@ test('F17, F18: a :focus rule on an element that cannot take focus, a :hover on 
   assert.equal(st('<a class="a">No href</a>', '.a:focus{color:red}').length, 1);
   assert.equal(st('<div class="a"></div>', '.a{pointer-events:none}.a:hover{color:red}').length, 1);
   assert.equal(st('<div class="a"></div>', '.a:hover{color:red}').length, 0);
+  // A state rule whose subject is anything (:focus-visible { outline } for the whole page, *:focus, main :focus) is written
+  // for whatever can take the state, not for each element it would match: not reported on the ones that cannot.
+  // (Found running veriss on a rendered page: 350 warnings for one global focus ring.)
+  for (const css of [':focus-visible{outline:2px solid}', '*:focus{outline:2px solid}', '.a :focus-visible{outline:2px solid}', ':checked{color:red}'])
+    assert.equal(st('<div class="a"><p class="b">x</p></div>', css).length, 0, css);
+  // A subject with a class still is.
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.b:focus-visible{outline:2px solid}').length, 1);
+  // A scroll container takes keyboard focus in Chromium and Firefox when it scrolls and holds nothing focusable
+  // (measured with Tab); whether it scrolls is layout: not reported.
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.a{overflow-x:auto}.a:focus-visible{outline:2px solid}').length, 0);
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.a{overflow:hidden}.a:focus-visible{outline:2px solid}').length, 1);
 });
 
 test('F19: :checked on an element that is never checked, ::placeholder on one that shows none', () => {
@@ -404,6 +415,16 @@ test('F35: :focus-within on an element with nothing focusable inside', () => {
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x"><p class="a">t <a href="/y">y</a></p></div>').length, 0);
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x" tabindex="-1"><p class="a">t</p></div>').length, 0);
   assert.equal(w('.x:focus-within{outline:2px solid}', '<div class="x"><div class="a" tabindex="0"></div></div>').length, 0);
+  // A scroll container, the element itself or one inside it, can take keyboard focus (Chromium and Firefox Tab to one
+  // that scrolls and holds nothing focusable): whether it scrolls is layout, so :focus-within is not reported.
+  assert.equal(w('.x{overflow:auto}.x:focus-within{outline:2px solid}', '<div class="x"><p class="a">t</p></div>').length, 0);
+  assert.equal(w('.s{overflow-y:scroll}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 0);
+  // overflow: hidden is not one the user scrolls with the keyboard: still reported.
+  assert.equal(w('.s{overflow:hidden}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 1);
+  // A descendant's style is computed in its parent's viewport range, not the whole one: --ov is auto only from 600px,
+  // where .leaf is hidden, so nothing scrolls at any width.
+  assert.equal(w('.m{--ov:hidden}.s{overflow:hidden}@media (min-width:600px){.m{--ov:auto}}@media (max-width:599px){.s{overflow:var(--ov)}}.x:focus-within{outline:2px solid}',
+    '<div class="x"><div class="m"><div class="s"><p class="a">t</p></div></div></div>').length > 0, true);
 });
 
 test('F17: :focus on a tabindex="-1" element is reachable (a click or focus() focuses it)', () => {
@@ -1536,4 +1557,147 @@ test('F9: a pseudo-element without content on a container is reported whether th
   const unknown = analyzeLayout(tree, {name: 'Row', css: css + '.cell { min-width: var(--x); }\n', viewport: {min: 160, max: 640}});
   assert.equal(unknown.status, 'unknown');
   assert.deepEqual(codes(unknown, 'W_CSS_PSEUDO_NO_CONTENT').map(w => w.box), ['.row::before']);
+});
+
+// F135-F139: the static half of `vlmkit check animation`'s CSS rules (duplicate-keyframes, unregistered-property-transition,
+// unknown-transition-property, unitless-duration-var, unknown-media-feature), decided from the CSS alone.
+test('F135: a second @keyframes of one name replaces the first whole', () => {
+  const [w] = codes(run('@keyframes k{from{opacity:0}to{opacity:1}}@keyframes k{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE');
+  assert.ok(w); assert.equal(w.keyframes, 'k'); assert.deepEqual(w.lost, ['opacity']); assert.match(w.message, /opacity/);
+  // Names are case-sensitive: k and K are two animations.
+  assert.equal(codes(run('@keyframes k{to{opacity:.5}}@keyframes K{to{opacity:.5}}.a{animation:k 1s,K 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+  // One inside a condition replaces the other only where it applies: not reported.
+  assert.equal(codes(run('@keyframes k{to{opacity:.5}}@media (min-width:600px){@keyframes k{to{opacity:.2}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+  // The same frames twice: the repeat does nothing, nothing is lost.
+  const [same] = codes(run('@keyframes k{to{opacity:.5}}@keyframes k{to{opacity:.5}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE');
+  assert.ok(same); assert.deepEqual(same.lost, []);
+});
+
+test('F136: a transition of a custom property with no @property does not animate', () => {
+  const [w] = codes(run('.a{--x:0;transition:--x 1s}.a:hover{--x:1}'), 'W_CSS_TRANSITION_UNREGISTERED');
+  assert.ok(w); assert.equal(w.property, '--x'); assert.match(w.message, /@property --x/);
+  assert.equal(codes(run('@property --x{syntax:"<number>";inherits:false;initial-value:0}.a{--x:0;transition:--x 1s}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  // A valid @property whose syntax the analysis does not model still registers it in the browser.
+  assert.equal(codes(run('@property --c{syntax:"<color>";inherits:false;initial-value:red}.a{transition:--c 1s}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  assert.equal(codes(run('.a{transition-property:opacity,--y;transition-duration:1s}'), 'W_CSS_TRANSITION_UNREGISTERED').map(w => w.property).join(), '--y');
+  assert.equal(codes(run('.a{transition:all 1s}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+});
+
+test('F137: a misspelled property in a transition transitions nothing', () => {
+  const [w] = codes(run('.a{transition:widht 1s}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN');
+  assert.ok(w); assert.equal(w.property, 'widht'); assert.equal(w.suggestion, 'width');
+  assert.equal(codes(run('.a{transition-property:opacity,backgroud-color;transition-duration:1s}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').map(w => w.suggestion).join(), 'background-color');
+  for (const css of ['.a{transition:width 1s ease-in-out}', '.a{transition:opacity .2s, transform .3s linear 0s}', '.a{transition:all 1s}', '.a{transition:none}', '.a{transition:1s}', '.a{transition:-webkit-transform 1s}', '.a{transition:display 1s allow-discrete}', '.a{transition:anchor-name 1s}', '.a{transition:--x 1s}'])
+    assert.equal(codes(run(css), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 0, css);
+  // A name far from every property is not called a typo (it may be newer than the data).
+  assert.equal(codes(run('.a{transition:zzqqxx 1s}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 0);
+});
+
+test('F138: a duration given by a var() that holds a bare number is invalid', () => {
+  const [w] = codes(run(':root{--d:300}.a{transition:opacity var(--d)}'), 'W_CSS_DURATION_UNITLESS');
+  assert.ok(w); assert.equal(w.variable, '--d'); assert.match(w.message, /calc\(var\(--d\) \* 1ms\)/);
+  assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  assert.equal(codes(run(':root{--d:300}.a{transition-duration:var(--d)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  // A multiplier inside calc() is what a bare number is for; a value with a unit is a time.
+  for (const css of [':root{--d:300}.a{transition:opacity calc(var(--d) * 1ms)}', ':root{--d:300ms}.a{transition:opacity var(--d)}', '.a{transition:opacity var(--d, .2s)}'])
+    assert.equal(codes(run(css), 'W_CSS_DURATION_UNITLESS').length, 0, css);
+  // Defined with a unit somewhere too: which one applies depends on the element.
+  assert.equal(codes(run(':root{--d:300}.a{--d:.3s;transition:opacity var(--d)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+});
+
+test('F139: a misspelled media feature makes the query never match', () => {
+  const r = run('.a{width:10px}@media (min-widht: 1px){.a{width:20px}}');
+  const [w] = codes(r, 'W_CSS_MEDIA_FEATURE_UNKNOWN');
+  assert.ok(w); assert.equal(w.feature, 'min-widht'); assert.equal(w.suggestion, 'min-width');
+  // The rule never applies: the analysis is not Unknown for it.
+  assert.equal(r.status, 'verified', JSON.stringify(r.diagnostics.filter(d => d.severity !== 'info')));
+  for (const [css, suggestion] of [['@media (prefers-reduced-motoin: reduce){.a{color:red}}', 'prefers-reduced-motion'], ['@media (widht > 600px){.a{color:red}}', 'width'], ['@media screen and (hovr: hover){.a{color:red}}', 'hover']])
+    assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN')[0]?.suggestion, suggestion, css);
+  // Known features (also ones the analysis does not model, and specified ones no browser has) and vendor ones are not typos.
+  for (const css of ['@media (min-width: 600px){.a{color:red}}', '@media (scripting: enabled){.a{color:red}}', '@media (prefers-reduced-data: reduce){.a{color:red}}', '@media (-webkit-min-device-pixel-ratio: 2){.a{color:red}}', '@media (update: fast){.a{color:red}}'])
+    assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 0, css);
+});
+
+test('F137: a CSS-wide keyword in transition-property is not a typo', () => {
+  for (const css of ['.a{transition-property:unset}', '.a{transition-property:initial}', '.a{transition-property:revert-layer}'])
+    assert.equal(codes(run(css), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 0, css);
+  assert.equal(codes(run('.a{transition-property:widht}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 1);
+});
+
+test('F138: a bare number in an animation shorthand may be its iteration count; a fallback not taken is not used', () => {
+  // The number is the iteration count here: valid.
+  assert.equal(codes(run(':root{--n:2}@keyframes k{to{opacity:.5}}.a{animation:k 1s var(--n)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--n:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--n)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  // The fallback is not substituted while --duration has a value.
+  assert.equal(codes(run('.a{--duration:.2s;--backup:300;transition-duration:var(--duration,var(--backup))}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  // A delay longhand falls back to 0s: the motion still runs, without its delay.
+  const [delay] = codes(run(':root{--d:300}@keyframes k{to{opacity:.5}}.a{animation:k 1s;animation-delay:var(--d)}'), 'W_CSS_DURATION_UNITLESS');
+  assert.ok(delay); assert.match(delay.message, /0s/); assert.doesNotMatch(delay.message, /no animation runs/);
+});
+
+test('F139: a typo in a query that an or (or a not over a group) can still make true is not called never-matching', () => {
+  // Measured in Chromium, Firefox and WebKit: both of these match.
+  for (const css of ['.a{width:10px}@media (min-widht:1px) or (min-width:1px){.a{width:20px}}', '.a{width:10px}@media not ((min-widht:1px) and (max-width:0px)){.a{width:20px}}']) {
+    const r = run(css);
+    assert.equal(codes(r, 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 0, css);
+    assert.notEqual(r.status, 'verified', css);
+  }
+  // These never match (measured): still reported.
+  for (const css of ['@media (min-widht:1px) and (min-width:1px){.a{color:red}}', '@media not (min-widht:1px){.a{color:red}}', '@media not screen and (min-widht:1px){.a{color:red}}'])
+    assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 1, css);
+});
+
+test('F138: a var() inside another function (steps(), cubic-bezier()) is that function\'s number, not a time', () => {
+  assert.equal(codes(run(':root{--frames:8}@keyframes play{to{opacity:.5}}.a{animation:play 1s steps(var(--frames)) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--x1:.4}.a{transition:opacity 1s cubic-bezier(var(--x1),0,0,1)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+});
+
+test('F138: a non-ASCII variable name is read whole, never as its ASCII prefix', () => {
+  assert.equal(codes(run(':root{--d:2;--délai:.2s}.a{transition-duration:var(--délai)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--d:2;--délai:.2s}.a{transition:opacity var(--délai)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  const [w] = codes(run(':root{--délai:300}.a{transition-duration:var(--délai)}'), 'W_CSS_DURATION_UNITLESS');
+  assert.equal(w?.variable, '--délai');
+  assert.equal(codes(run(':root{--d:2;--délai:.2s}.a{transition-duration:var(--d)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+});
+
+test('F14: a border shorthand with var() keeps its style under a later border-width (the used widths, and no false F14)', () => {
+  const block = css => { const r = run(css); return [r.status, (r.sizes ?? []).find(s => s.box === '.a')?.rect?.blockSize?.constant, codes(r, 'W_CSS_BORDER_NO_STYLE').length]; };
+  // height 20px + the top and bottom borders that are drawn (measured in Chromium, Firefox and WebKit: e2e F14).
+  assert.deepEqual(block(':root{--c:red}.a{border:5px solid var(--c)}.a{border-width:0 0 5px}'), ['verified', '25', 0]);
+  assert.deepEqual(block(':root{--c:red}.a{border:5px solid var(--c)}.a{border-bottom-width:2px}'), ['verified', '27', 0]);
+  assert.deepEqual(block(':root{--c:red}.a{border:5px solid var(--c)}'), ['verified', '30', 0]);
+  // The same without var(): unchanged.
+  assert.deepEqual(block('.a{border:5px solid red}.a{border-width:0 0 5px}'), ['verified', '25', 0]);
+  // A var() that leaves the style out still draws nothing, and a later width is reported.
+  assert.deepEqual(block(':root{--c:red}.a{border:5px var(--c)}.a{border-width:0 0 5px}'), ['verified', '20', 1]);
+});
+
+test('F135: duplicate @keyframes inside one unconditional @layer are reported; across layers or under a condition they are not', () => {
+  const [w] = codes(run('@layer a{@keyframes k{to{opacity:.5}}@keyframes k{to{transform:none}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE');
+  assert.ok(w); assert.deepEqual(w.lost, ['opacity']);
+  assert.equal(codes(run('@layer a{@keyframes k{to{opacity:.5}}}@layer b{@keyframes k{to{transform:none}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+  assert.equal(codes(run('@layer a{@keyframes k{to{opacity:.5}}}@media (min-width:600px){@keyframes k{to{opacity:.2}}}.a{animation:k 1s}'), 'W_CSS_KEYFRAMES_DUPLICATE').length, 0);
+});
+
+test('F136: an unregistered custom property with allow-discrete does transition (discretely)', () => {
+  assert.equal(codes(run('.a{--x:0;transition:--x 1s allow-discrete}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  assert.equal(codes(run('.a{--x:0;transition-property:--x;transition-duration:1s;transition-behavior:allow-discrete}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 0);
+  assert.equal(codes(run('.a{--x:0;transition:--x 1s normal}'), 'W_CSS_TRANSITION_UNREGISTERED').length, 1);
+});
+
+test('F138: a var() with a fallback is reported only when a bare-number definition reaches every element', () => {
+  // .a does not get --d, so the fallback .2s is used.
+  assert.equal(codes(run('.other{--d:300}.a{transition:opacity var(--d,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--d:300}.a{transition:opacity var(--d,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  // Defined on :root only under a query: elsewhere the fallback is used.
+  assert.equal(codes(run('@media (min-width:600px){:root{--d:300}}.a{transition:opacity var(--d,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+});
+
+test('F138: a quoted animation name is not a var(); a non-ASCII variable keeps its fallback', () => {
+  assert.equal(codes(run(':root{--d:2}@keyframes "var(--d)"{to{opacity:.5}}.a{animation:"var(--d)" 1s infinite}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(":root{--d:2}@keyframes 'a\\'var(--d)'{to{opacity:.5}}.a{animation:'a\\'var(--d)' 1s infinite}"), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run('.other{--délai:300}.a{transition:opacity var(--délai,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--délai:300}.a{transition:opacity var(--délai,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
+  assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
 });

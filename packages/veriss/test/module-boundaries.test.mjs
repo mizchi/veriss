@@ -11,7 +11,7 @@ const files = dir => readdirSync(join(src, dir), {withFileTypes: true}).flatMap(
 const importsOf = file => [...readFileSync(join(src, file), 'utf8').matchAll(/(?:^|\n)\s*(?:import|export)\b[^'"]*?from\s*['"](\.[^'"]+)['"]/g)].map(m => relative(src, resolve(dirname(join(src, file)), m[1])));
 
 // Pure tools: they import nothing of veriss.
-const pure = ['color/index.mjs', 'layout/dropped.mjs', 'layout/linear.mjs', 'layout/calc-syntax.mjs', 'layout/font-syntax.mjs', 'layout/grid-syntax.mjs', 'layout/keyword-syntax.mjs', 'layout/timing-syntax.mjs', 'layout/background-syntax.mjs', 'layout/size-keyword-syntax.mjs', 'layout/smt.mjs', 'layout/easing.mjs', 'layout/simple-selector.mjs'];
+const pure = ['color/index.mjs', 'layout/dropped.mjs', 'layout/linear.mjs', 'layout/calc-syntax.mjs', 'layout/font-syntax.mjs', 'layout/grid-syntax.mjs', 'layout/keyword-syntax.mjs', 'layout/timing-syntax.mjs', 'layout/background-syntax.mjs', 'layout/size-keyword-syntax.mjs', 'layout/name-syntax.mjs', 'layout/smt.mjs', 'layout/easing.mjs', 'layout/simple-selector.mjs'];
 
 test('pure tools import nothing of veriss', () => {
   for (const file of pure) assert.deepEqual(importsOf(file), [], file);
@@ -23,7 +23,7 @@ test('color/ is used by the rules that judge colors and by the syntax stage (to 
 });
 
 test('the syntax validators are imported only by the syntax stage (layout/css.mjs)', () => {
-  for (const validator of ['layout/calc-syntax.mjs', 'layout/font-syntax.mjs', 'layout/grid-syntax.mjs', 'layout/keyword-syntax.mjs', 'layout/timing-syntax.mjs', 'layout/background-syntax.mjs', 'layout/size-keyword-syntax.mjs'])
+  for (const validator of ['layout/calc-syntax.mjs', 'layout/font-syntax.mjs', 'layout/grid-syntax.mjs', 'layout/keyword-syntax.mjs', 'layout/timing-syntax.mjs', 'layout/background-syntax.mjs', 'layout/size-keyword-syntax.mjs', 'layout/name-syntax.mjs'])
     assert.deepEqual(files('.').filter(file => importsOf(file).includes(validator)), ['layout/css.mjs'], validator);
 });
 

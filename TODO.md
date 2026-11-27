@@ -21,7 +21,7 @@ CSS × DOM の静的検査パターンを、**カテゴリごとに洗う**。�
    - `inert` / `popover` と CSS の `display` の組み合わせ
    - `<picture>` / `srcset` と CSS の `width` / `object-fit`
    - 実ページから出た観点(重みは [handoff](docs/handoff.md) の「次にやること」、`tools/blocker-weights.mjs`): 中身で大きさの決まる flex item の
-     中の img・フォーム部品、max-width の掛かる箱の種類、マイナスの inline margin、block の中の inline-level の箱(strut)、`text-box`、
+     中の img・フォーム部品、max-width の掛かる箱の種類、マイナスの inline margin(絶対配置・fixed の箱の px の margin は済み、I23。in-flow の箱は残り)、block の中の inline-level の箱(strut)、`text-box`、
      `border-collapse: collapse` の border、解析の作業量の上限
 2. **構成の作業 M6**: `solve` の中の「効かない宣言」の判定(engine.mjs の reasons の塊)を `rules/` に移す。今回の F118・F124・F129 の「レイアウトが Unknown だと届かない」問題がこれで減る
 3. **M7〜M9**: contrast を規則に、a11y を DOM と幾何に分ける、`packages/` に出す
@@ -190,6 +190,7 @@ CSS × DOM の静的検査パターンを、**カテゴリごとに洗う**。�
 
 - [x] 後の規則に負けて見えない `:hover` / `:focus` / `:active`(F131。LVHA の順)
 - [x] セレクタリストの中の `-moz-` / `-ms-` の擬似で規則全体が捨てられる(F132)
+- [x] vlmkit `check animation` の CSS の規則の静的な版: 同じ名前の `@keyframes`(F135)、`@property` のないカスタムプロパティの transition(F136)、綴り違いの transition のプロパティ(F137)、単位のない数の変数の時間(F138)、綴り違いの media feature(F139)
 - 確かめて既存で足りていたもの: flex / grid コンテナの `text-overflow`(効かない宣言として報告済み)、中身のある `aspect-ratio`(理由付きの Unknown)
 
 ## 座標計算サブセット L1 の参照仕様([ADR-0018](docs/adr/0018-coordinate-subset.md)、`models/layout/`)

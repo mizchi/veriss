@@ -5,7 +5,9 @@
 import {q, cmp} from './linear.mjs';
 import {fontShorthand} from './css.mjs';
 
-const fontKeys = new Set(['family', 'size', 'lineHeight', 'weight', 'style', 'letterSpacing']);
+// ascent / descent: the font's ascent and descent in px as Chromium rounds them (what /text derives as baseline), for
+// the strut of a line box that holds no text (an inline iframe alone in its block).
+const fontKeys = new Set(['family', 'size', 'lineHeight', 'weight', 'style', 'letterSpacing', 'ascent', 'descent']);
 const metricKeys = new Set(['kind', 'text', 'width', 'characters', 'maxLength', 'perCharacter', 'pairAdjustment', 'bounds', 'widest', 'font', 'allowance', 'minContent', 'overflowWrap', 'wordBreak', 'profile', 'lang', 'spacedProfile', 'inline', 'baseline', 'lineWidth', 'inlineEdges', 'inlineWeights', 'inlineAtomics']);
 export const languageTag = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 // Languages whose break opportunities were compared with Chromium (e2e). Chinese differs (e.g. !〜).
@@ -19,6 +21,7 @@ export function validateFontContract(font) {
   if (typeof font.family !== 'string' || !font.family.trim() || font.family.length > 256) throw new Error('Invalid font family');
   if (!finite(font.size, 1, 4096) || !finite(font.lineHeight, 0, 1_000_000) || (font.weight !== undefined && !finite(font.weight, 1, 1000))) throw new Error('Invalid font metrics contract');
   if (font.style !== undefined && font.style !== 'normal') throw new Error('Only normal font-style is modeled');
+  if (['ascent', 'descent'].some(key => font[key] !== undefined && !(Number.isSafeInteger(font[key]) && font[key] >= 0 && font[key] <= 100_000)) || (font.ascent === undefined) !== (font.descent === undefined)) throw new Error('Invalid font ascent/descent (whole px, both or neither)');
   if (font.letterSpacing !== undefined && !(typeof font.letterSpacing === 'number' && Number.isFinite(font.letterSpacing) && Math.abs(font.letterSpacing) <= 100)) throw new Error('Invalid font letterSpacing');
 }
 

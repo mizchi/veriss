@@ -8,6 +8,7 @@ import { familyProblem, fontShorthandProblem } from './font-syntax.mjs';
 import { gridTrackProblem } from './grid-syntax.mjs';
 import { keywordProblem } from './keyword-syntax.mjs';
 import { timingProblem } from './timing-syntax.mjs';
+import { propertyTypo, mediaFeatureTypo, mediaFeatureNames } from './name-syntax.mjs';
 import {findCSSWriteConflicts,cssWriteConflictMessage} from '../css-writes.mjs';
 import { q, cmp, add, mul, div, exact, decimal } from './linear.mjs';
 import { parseCondition, preferenceValues } from './conditions.mjs';
@@ -118,6 +119,8 @@ function propertyRuleProblem(rawSyntax, inherits, initial) {
   return null;
 }
 const wide = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
+// The words of a transition item that are not its property (easings, transition-behavior, CSS-wide keywords).
+const transitionKeywords = new Set(['ease', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end', 'allow-discrete', 'normal', ...wide]);
 const decoration = /^(?:background-(?:position|size|repeat|clip|origin|attachment)|border-radius|text-shadow|text-decoration-(?:color|style|thickness)|text-underline-offset|transition-behavior|list-style-(?:position|image))$/;
 // Properties a :hover/:focus rule may set: they repaint (or restack) without changing geometry.
 // The selector with its pseudo-classes and pseudo-elements removed (:not(), :is(), :has() and states included; tags,
@@ -260,7 +263,10 @@ function expand(property, value) {
   if (property==='scrollbar-color') return [];
   if (property === 'all') {
     if (!wide.has(value)) throw new Error('Unsupported all reset');
-    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`])].filter(key => key !== 'direction').map(key => [key, value]);
+    // (Each side's border width and style ($bw-/$bs-) too, for every keyword: without them a later border-width alone
+    // kept an iframe's UA style, all: revert dropped its UA border (measured 304x254 for frameborder="0"; revert is
+    // Unknown there), and all: var(--x, inherit) wrote keys its inherit expansion did not.)
+    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`, `$bw-${side}`, `$bs-${side}`])].filter(key => key !== 'direction').map(key => [key, value]);
   }
   if (property === 'flex') return flexShorthand(value);
   // grid-area: <name> places the item in the named area of its parent's grid-template-areas (grid.mjs resolves it);
@@ -329,7 +335,12 @@ function expand(property, value) {
   const borderSides = { border: ['left', 'right', 'top', 'bottom'], 'border-inline': ['left', 'right'], 'border-block': ['top', 'bottom'], 'border-top': ['top'], 'border-right': ['right'], 'border-bottom': ['bottom'], 'border-left': ['left'] };
   if (property in borderSides) {
     const sides = borderSides[property];
-    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value]]);
+    // initial and unset set the side's width and style too (medium, none). A shorthand with var() is expanded as 'initial'
+    // to find the longhands it writes: without its width and style here, a later border-width read its style as none.
+    // revert and revert-layer too: revert rolls an iframe back to its UA border past the frameborder hint (304x254
+    // measured in all three engines, where it was verified at 300x250), which the side's pair keeps Unknown. inherit
+    // takes the parent's width and style (a later border: inherit replaces an earlier reset's pair).
+    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value], [`$bw-${side}`, value], [`$bs-${side}`, value]]);
     const styles = new Set(['none', 'hidden', 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
     const lengthLike = /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/;
     let width, style, color;
@@ -792,7 +803,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
   let repairedOffsets = [];
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
-  const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
+  const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeRules = new Map(), declaredProperties = new Set(), transitionedCustom = [], keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
   const layerIndex = name => { if (!layers.includes(name)) layers.push(name); return layers.indexOf(name); };
   let count = 0, scope = null;
   const reportedMediaEm = new Set();
@@ -841,6 +852,10 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       }
       if (node.type === 'atrule' && /^(?:-webkit-)?keyframes$/i.test(node.name)) {
         const name = node.params.trim().replace(/^["']|["']$/g, ''); keyframes.add(name);
+        // F135: an unconditional, unprefixed @keyframes of a name already defined replaces it whole (frames are not merged).
+        // Unconditional: at the top, or directly in a layer block (layers are flat; a conditional one is Unknown above).
+        if (contexts.length === 0 && depth === (layer !== null ? 1 : 0) && node.name === 'keyframes') { const animated = new Set(); node.walkDecls(d => { if (d.prop.toLowerCase() !== 'animation-timing-function') animated.add(d.prop.toLowerCase()); });
+          keyframeRules.set(name, [...(keyframeRules.get(name) ?? []), { animated, layer, file: filename, line: node.source.start.line }]); }
         // The paint of each frame (for the flash rule): offsets with their background-color and opacity.
         const frames = [];
         for (const frame of node.nodes ?? []) if (frame.type === 'rule') for (const at of frame.selectors) {
@@ -902,6 +917,8 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         // F111: an @property the browser ignores (the property then stays unregistered) is ignored here too and reported.
         { const invalid = propertyRuleProblem(descriptor('syntax'), inherits, initial);
           if (invalid) { note('W_CSS_PROPERTY_INVALID', { name, problem: invalid, file: filename, line: node.source.start.line }); continue; } }
+        // Registered in the browser (F136), whether or not the analysis models its syntax.
+        declaredProperties.add(name);
         const problemOf = !customName(name) ? 'the name is not a custom property' : !syntax || !(syntax === '*' || typedValue[syntax]) ? `syntax ${syntax ?? '(missing)'} is not modeled` : !['true', 'false'].includes(inherits) ? 'inherits must be true or false' : syntax !== '*' && (initial === undefined || !typedValue[syntax].test(initial)) ? `initial-value ${initial ?? '(missing)'} is not a literal ${syntax}` : null;
         if (problemOf) { problem('U_LAYOUT_CSS', `@property ${name}: ${problemOf}`, node.source.start.line); continue; }
         if (depth > 0) { problem('U_LAYOUT_CSS', `@property ${name} inside a conditional rule is not modeled`, node.source.start.line); continue; }
@@ -953,6 +970,14 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         // F87: "and(", "or(" or "not(" (no space) is a function token, not the keyword: the query is invalid and never matches (measured
         // in Chromium, Firefox and WebKit). In a list only that query fails, so only a single query is handled.
         if (node.name.toLowerCase() === 'media' && /(?<![\w:-])(?:and|or|not)\(/i.test(node.params) && !postcss.list.comma(node.params).slice(1).length) { note('W_CSS_MEDIA_AND_SPACE', { params: node.params.trim(), written: /(?<![\w:-])(?:and|or|not)\(/i.exec(node.params)[0], file: filename, line: node.source.start.line }); continue; }
+        // F139: a feature name no browser knows makes the query never match (in a not () too; measured in Chromium, Firefox and
+        // WebKit). Only a name near a known feature is called a typo; in a list only that query fails, so only a single query.
+        // An unknown feature is "unknown", not false: an or with a true side matches, and so does a not over a group whose
+        // other side is false (measured in all three), so those stay with the query parser (Unknown).
+        if (node.name.toLowerCase() === 'media' && !postcss.list.comma(node.params).slice(1).length && !/(?<![\w-])or(?![\w-])/i.test(node.params) && !/(?<![\w-])not\s*\(\s*\(/i.test(node.params)) {
+          const typo = mediaFeatureNames(node.params).map(feature => ({ feature, suggestion: mediaFeatureTypo(feature) })).find(t => t.suggestion);
+          if (typo) { note('W_CSS_MEDIA_FEATURE_UNKNOWN', { params: node.params.trim(), ...typo, file: filename, line: node.source.start.line }); continue; }
+        }
         if (node.name.toLowerCase() === 'media' && /var\(/i.test(node.params) && !postcss.list.comma(node.params).slice(1).length) {
           note('W_CSS_MEDIA_VAR', { params: node.params.trim(), file: filename, line: node.source.start.line });
           continue;
@@ -1069,9 +1094,18 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       {
         const newer = /(?:\b(?:var|env|calc|min|max|clamp|color-mix|oklch|oklab|lab|lch|light-dark|round|mod|rem|anchor|attr)\(|-webkit-|-moz-|-ms-|\d(?:dvh|svh|lvh|dvw|svw|lvw|dvi|svi|dvb|svb|cqi|cqw|cqh|cqb|cqmin|cqmax|rlh|lh|ic|cap)\b|\b(?:fit-content|max-content|min-content|stretch|-webkit-fill-available|subgrid|contents|clip|anchor-size)\b)/i;
         const seenProps = new Map();
+        // A declaration the browser drops (an image that is not an <image>, a stray ':' — both dropped below) overrides
+        // nothing: the earlier one still applies.
+        const droppedLater = (d, prop) => {
+          if (prop === 'background-image' && imageProblem(d.value.trim())) return true;
+          if (prop === 'background' && shorthandImageToken(d.value.trim())) return true;
+          const start = d.source?.start?.offset, end = d.source?.end?.offset;
+          return d.value.includes(STRAY_COLON) && repairedOffsets.length > 0 && (start === undefined || end === undefined || repairedOffsets.some(o => o >= start && o <= end));
+        };
         for (const d of node.nodes ?? []) {
           if (d.type !== 'decl') continue;
           const prop = d.prop.toLowerCase(), earlier = seenProps.get(prop);
+          if (!prop.startsWith('--') && droppedLater(d, prop)) continue;
           if (earlier && !newer.test(d.value) && !newer.test(earlier.value) && !notesOf('W_CSS_DUPLICATE_DECLARATION').some(n => n.file === filename && n.line === d.source.start.line && n.property === prop)) {
             const dead = earlier.important && !d.important ? d : earlier;
             note('W_CSS_DUPLICATE_DECLARATION', { property: prop, selector: node.selector, file: filename, line: dead.source.start.line, dead: dead.value.trim(), kept: (dead === d ? earlier : d).value.trim(), same: earlier.value.trim() === d.value.trim() });
@@ -1127,6 +1161,18 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         const discrete = authored.some(d => /^transition-behavior$/i.test(d.prop) && /allow-discrete/i.test(d.value)) || named.some(d => /allow-discrete/i.test(d.value));
         if (named.length && !discrete) note('W_CSS_TRANSITION_DISPLAY', { file: filename, line: named[0].source.start.line, selector: node.selector });
       }
+      // F136, F137: the properties a transition names. A misspelled one transitions nothing; a custom property animates only
+      // once registered (@property), otherwise it flips at once (measured in Chromium, Firefox and WebKit).
+      for (const d of authored) if (/^(?:transition|transition-property)$/i.test(d.prop) && !/var\(/i.test(d.value))
+        for (const item of postcss.list.comma(d.value)) {
+          const word = d.prop.toLowerCase() === 'transition-property' ? item.trim() : postcss.list.space(item).find(t => /^(?:--|-?[a-z_])[\w-]*$/i.test(t) && !transitionKeywords.has(t.toLowerCase()));
+          if (!word || ['all', 'none'].includes(word.toLowerCase()) || wide.has(word.toLowerCase())) continue;
+          // With allow-discrete (in the item, or a transition-behavior of the rule) it does transition, discretely (measured).
+          if (word.startsWith('--') && (/(?:^|\s)allow-discrete(?:\s|$)/i.test(item) || authored.some(b => /^transition-behavior$/i.test(b.prop) && /allow-discrete/i.test(b.value)))) continue;
+          if (word.startsWith('--')) { transitionedCustom.push({ property: word, selector: node.selector, file: filename, line: d.source.start.line }); continue; }
+          const suggestion = propertyTypo(word);
+          if (suggestion) note('W_CSS_TRANSITION_PROPERTY_UNKNOWN', { property: word, suggestion, selector: node.selector, file: filename, line: d.source.start.line });
+        }
       const conflicts=findCSSWriteConflicts(authored.map(declaration=>declaration.prop));
       for(const conflict of conflicts) {
         const location=index=>({file:filename,line:authored[index].source.start.line,column:authored[index].source.start.column});
@@ -1329,6 +1375,50 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
     const seen = new Set();
     for (const d of declared) if (d.name !== 'list-item' && !read.has(d.name) && !seen.has(d.name)) { seen.add(d.name); note('W_CSS_COUNTER_UNUSED', d); }
   }
+  // F135: the earlier @keyframes of a name defined twice in one layer never runs.
+  for (const [name, defined] of keyframeRules) { const last = defined.at(-1);
+    for (const earlier of defined.slice(0, -1)) if (earlier.layer === last.layer) note('W_CSS_KEYFRAMES_DUPLICATE', { name, lost: [...earlier.animated].filter(p => !last.animated.has(p)), file: earlier.file, line: earlier.line, laterLine: last.line, laterFile: last.file }); }
+  // F136: the custom properties transitioned with no @property (CSS.registerProperty in a script is not seen here).
+  { const seen = new Set(); for (const t of transitionedCustom) if (!declaredProperties.has(t.property) && !seen.has(`${t.file}:${t.line}:${t.property}`)) { seen.add(`${t.file}:${t.line}:${t.property}`); note('W_CSS_TRANSITION_UNREGISTERED', t); } }
+  // F138: a time given by var() whose every definition is a bare number: the declaration is invalid at computed-value time
+  // (a <time> needs its unit; a transition or animation is then none — measured in Chromium, Firefox and WebKit).
+  {
+    const definitions = new Map(), uses = [];
+    for (const sheet of sheets) {
+      let root; try { root = postcss.parse(sheet.css, { from: sheet.file }); } catch { continue; }
+      root.walkDecls(d => {
+        const prop = d.prop.toLowerCase();
+        // universal: on :root, html or *, outside any at-rule, so it reaches every element that does not set its own.
+        if (prop.startsWith('--')) definitions.set(d.prop, [...(definitions.get(d.prop) ?? []), { value: d.value.trim(), universal: d.parent?.type === 'rule' && d.parent.parent?.type === 'root' && (d.parent.selectors ?? []).some(sel => /^(?::root|html|\*)$/i.test(sel.trim())) }]);
+        if (/^(?:transition|animation)(?:-duration|-delay)?$/.test(prop)) {
+          // Outside calc(): there a bare number is a multiplier.
+          // A quoted string (an animation name may be one) is opaque: its text is never a var() or a parenthesis.
+          const unquoted = d.value.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+          let outside = '', depth = 0; for (let i = 0; i < unquoted.length; i++) { if (depth === 0 && /^calc\(/i.test(unquoted.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (unquoted[i] === '(') depth++; else if (unquoted[i] === ')') depth--; continue; } outside += unquoted[i]; }
+          // Only a var() at parenthesis depth 0 is a time for sure: one inside steps() or cubic-bezier() is that function's
+          // number, and a fallback is used only when its variable has no value. Every other function is kept as its name.
+          // A name is read whole (CSS allows non-ASCII), never as its ASCII prefix: --délai is not --d.
+          let top = '';
+          for (let i = 0; i < outside.length; i++) {
+            const fn = /^([\w-]+)\(/.exec(outside.slice(i));
+            if (!fn) { top += outside[i]; continue; }
+            const v = /^var\(\s*(--[^\s,()]+)\s*[,)]/i.exec(outside.slice(i));
+            top += v ? `var(${v[1]}${v[0].endsWith(',') ? ',' : ''})` : `${fn[1]}()`;
+            let depth = 0, k = i + fn[0].length - 1;
+            for (; k < outside.length; k++) { if (outside[k] === '(') depth++; else if (outside[k] === ')' && --depth === 0) break; }
+            i = k;
+          }
+          for (const item of postcss.list.comma(top)) {
+            // In the animation shorthand a bare number is its iteration count, unless the item already has one.
+            if (prop === 'animation' && !postcss.list.space(item).some(t => /^(?:infinite|[+-]?(?:\d+\.?\d*|\.\d+))$/i.test(t))) continue;
+            for (const m of item.matchAll(/var\(\s*(--[^\s,()]+)\s*[,)]/g)) uses.push({ variable: m[1], fallback: m[0].endsWith(','), property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
+          }
+        }
+      });
+    }
+    // With a fallback, an element no definition reaches takes the fallback: reported only when one reaches every element.
+    for (const { fallback, ...use } of uses) { const values = definitions.get(use.variable) ?? []; if (values.length && values.every(v => /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(v.value)) && (!fallback || values.some(v => v.universal))) note('W_CSS_DURATION_UNITLESS', { ...use, value: values[0].value }); }
+  }
   // An animation-name without @keyframes runs no animation.
   // (Checklist F1: the names without @keyframes are kept for a warning — a typo or a missing rule.)
   for (const rule of rules) for (const declaration of rule.declarations) if (declaration.property === 'animation-name' && !wide.has(declaration.value)) declaration.value = postcss.list.comma(declaration.value).map(name => {
@@ -1400,6 +1490,17 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // their appearance: it stays 'ua' until the author sets the margin.
   // With a UA profile the margins are known (WebKit: 3px 2px on both).
   if (!box.pseudo && box.tag === 'input' && ['checkbox', 'radio'].includes(box.inputType)) ['top', 'right', 'bottom', 'left'].forEach((side, i) => { values[`margin-${side}`] = uaProfile ? uaProfile[box.inputType].margin[i] : 'ua'; });
+  // An iframe's UA border: 2px inset on every side (Chromium, Firefox and WebKit, measured). frameborder is a
+  // presentational hint that zeroes the widths (not the style): "0" and "no" (any case) in all three engines; other
+  // values the integer parse reads as non-zero keep the border; the rest (an integer error such as "yes", "" or "0px")
+  // drops it in Chromium and WebKit and keeps it in Firefox, so it needs a UA profile that names the engine.
+  if (!box.pseudo && box.tag === 'iframe') {
+    values.$uaBorder = true; values.$uaBorderStyled = true;
+    const fb = box.frameBorder, zero = fb === undefined ? false : fb === 'dynamic' ? null : /^(?:0|no)$/i.test(fb) ? true
+      : /^\s*[+-]?\d/.test(fb) && Number.parseInt(fb, 10) !== 0 ? false : uaProfile ? uaProfile.engine !== 'firefox' : null;
+    if (zero === null) throw Object.assign(new Error(fb === 'dynamic' ? `${box.label}: a dynamic frameborder may or may not drop the iframe's UA border` : `${box.label}: frameborder="${fb}" drops the iframe's UA border in Chromium and WebKit but not in Firefox; write frameborder="0" (or "no"), or pass a ua profile that names the engine`), { code: 'U_LAYOUT_HTML' });
+    for (const side of ['left', 'right', 'top', 'bottom']) values[`border-${side}`] = zero ? '0' : '2px';
+  }
   // The control's UA box rules are not its ::before/::after's.
   if(!box.pseudo && ['button', 'input', 'select', 'textarea'].includes(box.tag)) {
     values.$uaBorder = true;
@@ -1465,7 +1566,9 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   if(box.popover==='dynamic') throw Object.assign(new Error('A dynamic popover attribute decides whether it renders'),{code:'U_LAYOUT_ELEMENT'});
   if(box.hiddenAttr==='until-found' || box.hiddenAttr==='dynamic') throw Object.assign(new Error(`hidden=${box.hiddenAttr === 'dynamic' ? '(dynamic)' : 'until-found'} is outside the modeled rendering`),{code:'U_LAYOUT_ELEMENT'});
   const ua = { ...values };
-  const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0' };
+  const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0',
+    // A side's border width and style as the border properties keep them ($bw-/$bs-side): medium and none.
+    ...Object.fromEntries(['top', 'right', 'bottom', 'left'].flatMap(side => [[`$bw-${side}`, '3px'], [`$bs-${side}`, 'none']])) };
   const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'word-break', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
   const priorities = new Map(), sources = {},custom=new Map(),dormant={},overridden={}, candidates = {};
   // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions), and
@@ -1562,9 +1665,20 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
         if(value===undefined) throw new Error('CSS variable shorthand does not produce the required property');
       } catch(error) {error.css={file:declaration.file,line:declaration.line};throw error;}
     }
+    // A side's border width or style ($bw-/$bs-, kept for the pair below): revert rolls back past author-level
+    // presentational hints (an iframe's frameborder) to the UA border, which is not modeled (kept, Unknown below).
+    if (/^\$b[ws]-/.test(property) && ['revert', 'revert-layer'].includes(value)) { values[property] = value; continue; }
     if (value === 'revert') value = ua[property];
     if (value === 'unset') value = inheritedProperties.has(property) ? 'inherit' : 'initial';
     if (value === 'initial') value = initial[property];
+    // A side's width and style inherit the parent's computed border: its used width (zero under style none, as the
+    // computed width is) and the style its own pair resolved ($borderStyle-side, below).
+    const borderSide = /^\$b([ws])-(top|right|bottom|left)$/.exec(property);
+    if (value === 'inherit' && borderSide && !box.documentRoot) {
+      const from = borderSide[1] === 'w' ? inherited[`border-${borderSide[2]}`] : inherited[`$borderStyle-${borderSide[2]}`];
+      if (from === undefined || from === 'ua') throw Object.assign(new Error(`border-${borderSide[2]}-${borderSide[1] === 'w' ? 'width' : 'style'}: inherit from a parent whose border is not known here`), { code: 'U_LAYOUT_CSS' });
+      values[property] = String(from); continue;
+    }
     if (value === 'inherit') {
       if (Object.hasOwn(inherited, property)) value = inherited[property];
       else if (box.documentRoot) value = initial[property];
@@ -1652,11 +1766,18 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // an unset style is the initial none. Sides no author rule touched keep their value (UA borders stay 'ua').
   for (const side of ['top', 'right', 'bottom', 'left']) {
     const bw = `$bw-${side}`, bs = `$bs-${side}`;
-    if (!sources[bw] && !sources[bs]) { delete values[bw]; delete values[bs]; continue; }
+    // (The style each side resolves to, for a child's border-style: inherit: 'ua' when it is a control's own.)
+    const uaSide = () => values[`border-${side}`] === 'ua' || values.$uaBorderStyled || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
+    if (!sources[bw] && !sources[bs]) { values[`$borderStyle-${side}`] = uaSide() ? 'ua' : 'none'; delete values[bw]; delete values[bs]; continue; }
+    // CSS-wide keywords: initial and unset resolved in the cascade (medium, none); revert is not modeled.
+    for (const [key, property] of [[bw, 'width'], [bs, 'style']]) if (sources[key] && (values[key] === undefined || wide.has(String(values[key]))))
+      throw Object.assign(new Error(`border-${side}-${property}: ${values[key] ?? 'a CSS-wide keyword'} is not modeled here`), { code: 'U_LAYOUT_CSS', css: { file: sources[key].file, line: sources[key].line } });
     // A control's UA border has a style of its own (known widths from a UA profile included): an author width alone
     // keeps that style and draws at the author width (a reset's border-width: 1px on a textarea).
-    const uaStyled = values[`border-${side}`] === 'ua' || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
+    // (An iframe's border keeps its inset style when frameborder zeroed the width: $uaBorderStyled.)
+    const uaStyled = values[`border-${side}`] === 'ua' || values.$uaBorderStyled || (values.$uaBorder && !['0', '0px'].includes(String(values[`border-${side}`])));
     const style = sources[bs] ? values[bs] : (uaStyled ? 'ua' : 'none');
+    values[`$borderStyle-${side}`] = style === 'none-implied' ? 'none' : style;
     const width = sources[bw] ? values[bw] : (uaStyled ? values[`border-${side}`] : '3px');
     values[`border-${side}`] = ['none', 'hidden', 'none-implied'].includes(style) ? '0' : String(width) === '0' ? '0' : width;
     // For the border rule (F14): a non-zero width the author wrote, and a style written none or hidden (no border on

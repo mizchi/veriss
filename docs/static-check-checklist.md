@@ -144,6 +144,8 @@
   終わりの側(ltr では right、rtl では left、縦は bottom)が無視される(auto の margin があれば中央寄せに使われるので除く)。
   3 つのブラウザーで、無視される側を外しても位置が変わらないことを確かめた。
 - [x] **F14. 線の種類のない border の幅**(`W_CSS_BORDER_NO_STYLE`): `border-style` は初期値 none なので、`border-width: 2px`
+  - 健全性の修正(vlmkit から実ページに当てて発見): `var()` を含む `border` の一括指定(`border: 5px solid var(--c)`)の後の `border-width` で、style を none と読んで幅を 0 にしていた(verified で 20px、3 ブラウザーは 25px)。`var()` の一括指定は書く個別プロパティを `initial` で展開して決めるが、`initial` / `unset` の `border` が幅と style の内部の値を書いていなかった
+  - 誤検出の修正: 素の `:focus-visible { outline }`(主語が何でもよい状態のセレクタ)を、フォーカスできない要素ごとに `W_CSS_STATE_UNREACHABLE` と報告していた(kanban のデモで 350 件)
   だけでは線は描かれず幅も 0(解析もそう配置する)。幅を書いた辺のうち、使われる幅が 0 の辺を報告する。
 - [x] **F15. 画像のない背景の大きさ・位置**(`W_LAYOUT_DECLARATION_INERT`): `background-size`・`-position`・`-repeat`・
   `-attachment`・`-origin` は `background-image` がなければ何もしない。`:hover` などの状態や media 条件で画像を当てる規則が
@@ -152,6 +154,7 @@
   は継承せず、その要素自身の装飾の線にだけ効くので、`text-decoration-line` が none なら何もしない。3 つのブラウザーで、
   これらの宣言を外しても描画が同じことを確かめた。
 - [x] **F17. フォーカスできない要素の `:focus`**(`W_CSS_STATE_UNREACHABLE`): tabindex がなく、リンク・ボタン・フォーム部品・
+  - 誤検出の修正: `overflow: auto` / `scroll` の箱の `:focus`。スクロールしてフォーカスできる子がなければ Chromium と Firefox は Tab でフォーカスを移す(実測。WebKit は既定で Tab がボタンにも移らず判定できない)。スクロールするかは配置で決まるので報告しない。`:focus-within` も同じで、要素自身か中にスクロールする箱があれば報告しない(`overflow-y: hidden` だけでは `overflow-x` が auto に計算され、スクロールしうる箱になる。e2e で 3 ブラウザー)
   summary でもない要素の `:focus`・`:focus-visible` は当たらない(href のない `a` も)。動的な tabindex、iframe・動画などの
   フォーカスを記録していない要素は除く。3 つのブラウザーで、クリック・Tab・focus() のどれでもフォーカスされなかった。
 - [x] **F18. `pointer-events: none` の要素の `:hover`**(`W_CSS_STATE_UNREACHABLE`): 子のない要素ではポインターが当たらず、
@@ -417,7 +420,12 @@
 - [x] **F131. 後の規則に負けて見えない `:hover` / `:focus` / `:active`**(`W_CSS_STATE_SHADOWED`): `a:hover { color }` を `a:link { color }` の前に書くと、ホバーしても色が変わらない(Chromium・Firefox・WebKit でホバーして実測。LVHA の順)。状態を有効にして計算した値の勝者が、状態のいらない規則で、値が違うときに報告する(後に書いたものも、詳細度が高いものも)
 - [x] **F132. セレクタリストの中の `-moz-` / `-ms-` の擬似**(`W_CSS_SELECTOR_LIST_VENDOR`、解析はこの規則で Unknown のまま): 1 つでも無効なセレクタがあるとリスト全体が捨てられる。`-moz-` は Chromium と WebKit で、`-ms-` と `-o-` はどこでも無効(実測)。`-webkit-` は 3 ブラウザーとも受け付け、`:is()` / `:where()` の中は許される(実測)ので報告しない
 - [x] **F133. container のない軸の container query の単位**(`W_CSS_CONTAINER_UNIT_VIEWPORT`、解析は `cq*` の長さで Unknown のまま): `cqw`・`cqi` は祖先に `container-type: inline-size` か `size` がなければ、`cqh`・`cqb` は `size` がなければ small viewport の単位(`svw`・`svi`・`svh`・`svb`)になる(Chromium・Firefox・WebKit で、10 通りの組で `sv` の単位と同じ箱になることを実測: container のない要素、`inline-size` の container の中の `cqh`、`container-name` だけの祖先、自分自身の `container-type`、`calc()` の中、`font-size`。対照として `inline-size` の container・一括指定 `container: card / inline-size`・祖父母の container では箱が変わる)。ほかの状態や media query で祖先を container にする規則があれば報告しない。解析が読めないセレクタ(`.g:hover .p`)で container を作る規則があるときも報告しない。縦書きは対象外
-- [x] **F134. `<image>` でない `background-image` と、値の中の `:`**(`W_CSS_IMAGE_INVALID`、`W_CSS_STRAY_COLON`、以前はシート全体が `U_LAYOUT_CSS: Missed semicolon`): `url()` のない URL(`background-image: https://example.com/close.png`)や引用符の文字列(`"close.png"`)は `<image>` でないので宣言ごと捨てられ、前の `background-image` が残る(Chromium・Firefox・WebKit で `getComputedStyle` を実測)。一括指定 `background` の画像の位置にある同じものも、一括指定ごと捨てられる(色も付かない)。PostCSS は値の中の `:` で「Missed semicolon」を投げてシート全体を読まないが、ブラウザーはその宣言だけを次の `;` まで捨てて続きを読む(セミコロンの書き忘れも同じ)。解析は `:` を同じ長さの印に置き換えて読み、その宣言を捨てて報告する。`url()`・`image-set()`・グラデーション・`none`・`var()` はそのまま
+- [x] **F134. `<image>` でない `background-image` と、値の中の `:`**(`W_CSS_IMAGE_INVALID`、`W_CSS_STRAY_COLON`、以前はシート全体が `U_LAYOUT_CSS: Missed semicolon`): `url()` のない URL(`background-image: https://example.com/close.png`)や引用符の文字列(`"close.png"`)は `<image>` でないので宣言ごと捨てられ、前の `background-image` が残る(Chromium・Firefox・WebKit で `getComputedStyle` を実測)。一括指定 `background` の画像の位置にある同じものも、一括指定ごと捨てられる(色も付かない)。PostCSS は値の中の `:` で「Missed semicolon」を投げてシート全体を読まないが、ブラウザーはその宣言だけを次の `;` まで捨てて続きを読む(セミコロンの書き忘れも同じ)。解析は `:` を同じ長さの印に置き換えて読み、その宣言を捨てて報告する。`url()`・`image-set()`・グラデーション・`none`・`var()` はそのまま。一括指定の大きさ(`/` の後)や位置に書いた `min()`・`max()`・`clamp()` は画像ではない(3 ブラウザーで `CSS.supports` が true)。捨てられる宣言は前の宣言を上書きしないので、`W_CSS_DUPLICATE_DECLARATION` にもしない。e2e は `layout-css-mistakes.spec.mjs` の F134(捨てられる宣言を外したときと computed style が同じこと、効く値の対照つき)
+- [x] **F135. 同じ名前の `@keyframes` を 2 回書く**(`W_CSS_KEYFRAMES_DUPLICATE`、vlmkit `check animation` の `duplicate-keyframes` の静的な版): 後の規則が前の規則を丸ごと置き換え、キーフレームは合わさらない(Chromium・Firefox・WebKit で実測: `opacity` の `@keyframes k` の後に `transform` の `@keyframes k` を書くと、途中で止めた時点の `opacity` は 1 のまま。対照として名前を変えると 0.5)。前の規則だけが動かすプロパティを `lost` に出す。条件(`@media` など)の中の規則・`-webkit-keyframes`・層の違う規則は報告しない。1 つの `@layer` の中の 2 つも同じ(3 ブラウザーで実測、後の規則が置き換える)
+- [x] **F136. `@property` のないカスタムプロパティの transition**(`W_CSS_TRANSITION_UNREGISTERED`、vlmkit の `unregistered-property-transition`): 型のないカスタムプロパティは一度に変わり、transition が始まらない(3 ブラウザーで `getAnimations()` が 0。対照として `@property --x { syntax: "<number>"; inherits: false; initial-value: 0 }` では 1)。解析が型を扱わない構文の `@property`(`<color>` など)も登録とみなす。スクリプトの `CSS.registerProperty` は見えないので、文言で断る。`allow-discrete`(項目の中か、規則の `transition-behavior`)のあるものは離散的に遷移する(3 ブラウザーで `getAnimations()` が 1)ので報告しない
+- [x] **F137. transition の綴り違いのプロパティ**(`W_CSS_TRANSITION_PROPERTY_UNKNOWN`、vlmkit の `unknown-transition-property`): `transition: widht 1s` は受け入れられ(計算値の `transition-property` は `widht`)、何も遷移しない(3 ブラウザーで実測。対照の `width` では 1)。css-tree の定義にあるプロパティから編集距離 2 以内(隣どうしの入れ替えは 1)のものがあるときだけ報告し、`suggestion` に出す。遠い名前は新しいプロパティかもしれないので報告しない。`-webkit-` などの接頭辞と `var()` は見ない
+- [x] **F138. 単位のない数の変数を時間に使う**(`W_CSS_DURATION_UNITLESS`、vlmkit の `unitless-duration-var`): `--d: 300` を `transition: opacity var(--d)` に使うと、計算値の時点で宣言が無効になり transition も animation も始まらない(3 ブラウザーで実測。対照として `calc(var(--d) * 1ms)` と `--d: 300ms` は始まる)。`calc()` の中は掛ける数なので報告しない。変数の定義のどれかに単位があれば、要素によって違うので報告しない。delay の一括指定でない宣言(`animation-delay: var(--d)`)は初期値の 0s になり、動きは遅れずに始まる(3 ブラウザーで実測)ので、文言はそう言う。`animation` の一括指定の単位のない数は繰り返しの回数になりうる(`animation: k 1s var(--n)` は `--n: 2` で 2 回、実測)ので、その項目にほかの回数(数か `infinite`)がないときは報告しない。`var(--a, var(--b))` の代わりの値は `--a` に値がある間は使われない(実測)ので見ない。代わりの値のある `var(--d, .2s)` は、定義が届かない要素では代わりの値になる(`.other { --d: 300 }` のとき 3 ブラウザーで 0.2s)ので、`:root`・`html`・`*` に at-rule の外で単位のない定義があるときだけ報告する
+- [x] **F139. 綴り違いの media feature**(`W_CSS_MEDIA_FEATURE_UNKNOWN`、vlmkit の `unknown-media-feature`。以前は `U_LAYOUT_QUERY`): ブラウザーの知らない feature の query は当たらず、`not (…)` でも当たらない(3 ブラウザーで `(min-widht: 1px)`・`(widht > 1px)`・`screen and (hovr: hover)`・`not (prefers-reduced-motoin: reduce)` を実測。対照の `(min-width: 1px)`・`(scripting: enabled)`・`(update: fast)`・`(-webkit-min-device-pixel-ratio: 1)` は当たる)。仕様の feature から編集距離 2 以内のときだけ報告し、規則は当たらないものとして解析する(Unknown にしない)。仕様にあるがどのブラウザーも実装しない `prefers-reduced-data` は綴り違いではないので今までどおり。query を並べたものは、ほかの query が当たりうるので対象外。知らない feature は「偽」ではなく「不明」なので、`(min-widht: 1px) or (min-width: 1px)` と `not ((min-widht: 1px) and (max-width: 0px))` は当たる(3 ブラウザーで実測。対照の `(min-widht: 1px) and (min-width: 1px)`・`not screen and (min-widht: 1px)` は当たらない)。`or` か、組を囲む `not` のある query は報告せず、今までどおり Unknown にする
   ので、`@media (min-width: var(--bp))` は無効な query になり、その規則は決して当たらない(3 つのブラウザーで 800px でも当たらない)。
   解析も当たらない規則として扱う。query を並べたもの(`print, (…var…)`)は、ほかの query が当たりうるので今までどおり。
 - 試して当てはまらなかったもの: `progress`・`input[type=range]` の `appearance: none` は、3 つのブラウザーとも何かを描く
@@ -662,6 +670,25 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   text-align が start / left 以外、箱の上下の margin、auto の左右 margin、箱自身の min-width / max-width、
   `container-type: inline-size | size` の箱(size containment で shrink-to-fit の幅が中身を見ない)、inline-grid の
   block 方向、直接テキストを持つ inline-flex(匿名の flex item)、2 つ以上の inline-level の箱が並ぶ行。
+- [x] **I23. overflow の箱の中の操作部品とテキストを覆うもの**(見逃し): `html, body { overflow: hidden }`(スクロールの止め方)の body の中のボタンに、
+  body を抜け出る fixed のシートが重なっても `E_A11Y_OCCLUDED` が出ず、何も報告しなかった。body が html に overflow を渡さずスクロールコンテナになり、
+  中の箱の位置が決まらない(スクロール位置による)ので、覆いの判定が位置のない箱を飛ばしていた。fixed が抜け出る変更の前からある穴で、
+  overflow: hidden の箱の外の absolute の兄弟でも同じだった。今は、overflow: clip の中は位置が決まるのでそのまま判定し、スクロールコンテナの中は
+  `U_A11Y_SCROLLED_COVER` を出したうえでスクロール位置 0 の配置で `E_A11Y_OCCLUDED` を出す。どちらも祖先が切り取る部分は覆われたと数えない。
+  テキストの `U_A11Y_SCROLLED_COVER` も auto / scroll だけを見ていたので、hidden と clip に広げた。375×667 で 3 ブラウザーの elementFromPoint が、
+  html と body が hidden、html hidden と body clip、html auto と body hidden、350px の hidden / clip の箱(その下端より下のボタンは
+  切り取られて当たらない)、対照(html hidden だけ、overflow なし)で一致し、hidden ではホイールも PageDown もスクロールしなかった。
+  残り: 同じスクロールコンテナの中の覆い同士、`E_A11Y_FOCUS_OBSCURED`・`E_A11Y_FIXED_HIDES` などほかの覆いの規則は、位置のない箱をまだ見ない。
+- [x] **I24. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
+  `top: 50%; left: 50%; margin: -125px 0 0 -150px` で、ページ全体の a11y の判定が消えた。文言も block の margin を消せという見当違いのもの)。
+  margin の箱を inset に置く(CSS 2 §10.3.7 / §10.6.4): border の箱は始点の inset + 始点の margin から、終点の inset だけのときは
+  終点の inset − 終点の margin で終わる。両側の inset で auto の大きさは、両側の margin も引く。決まりすぎ(大きさも両側の inset もある)の
+  ときは終点の inset と margin を捨てる(終点は箱自身ではなく包含ブロックの direction で決まり、rtl では left 側。viewport の direction が html と body で食い違うなど分からないときは、幅か max-width・min-width があれば Unknown)。両側の inset で auto の大きさの置換要素(img など)は自分の大きさのままになるので Unknown。Chromium・Firefox・WebKit で、left/top と負の margin、right/bottom と margin、
+  % の inset と px の margin、% の大きさの箱、正の margin、`inset: 0` と auto の大きさ、rtl の決まりすぎ、content-box の padding、border と
+  padding のある包含ブロック、fixed の箱(中央寄せ、右下、`inset: 0`)の 16 通りを 320px と 400px で照合し、矩形が一致した
+  (e2e `px margins offset absolute and fixed boxes`。対照として margin を 0 にすると全組で矩形が変わる)。包含ブロックの外に出る負の margin は
+  inset と同じく `E_LAYOUT_ABSOLUTE_START`。`auto` と % の margin、静的位置の軸(両側の inset が auto)の margin、shrink-to-fit の幅の箱の
+  横の margin は Unknown のまま(文言は箱の名前と margin を出す)
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。

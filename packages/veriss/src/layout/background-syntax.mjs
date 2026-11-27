@@ -2,7 +2,7 @@
 // color in any layer but the last, an unquoted url() with white space in it, a "/" (the size) with no position before
 // it, and a size keyword (cover, contain) without the "/". var() is not judged. isColor says whether a token is a color.
 const split = (text, at) => { const out = []; let cur = '', depth = 0, quote = null; for (const ch of text) { if (quote) { cur += ch; if (ch === quote) quote = null; continue; } if (ch === '"' || ch === "'") { quote = ch; cur += ch; continue; } if (ch === '(') depth++; if (ch === ')') depth--; if (depth === 0 && at.test(ch)) { out.push(cur); cur = ''; continue; } cur += ch; } out.push(cur); return out; };
-const position = /^(?:left|right|top|bottom|center|0|[+-]?(?:\d+\.?\d*|\.\d+)(?:px|%|em|rem|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc)|calc\(.*\))$/i;
+const position = /^(?:left|right|top|bottom|center|0|[+-]?(?:\d+\.?\d*|\.\d+)(?:px|%|em|rem|vw|vh|vmin|vmax|ch|ex|cm|mm|in|pt|pc)|(?:calc|min|max|clamp)\(.*\))$/i;
 /** Why the background shorthand is invalid, or null (valid, or not judged). */
 export function backgroundProblem(value, isColor) {
   const text = String(value).trim();
@@ -52,7 +52,7 @@ export function shorthandImageToken(value) {
   for (const layer of split(text, /,/)) for (const token of split(layer, /\s/).filter(Boolean)) {
     if (/^["']/.test(token)) return token;
     // A "/" glued to the size ("center /cover", "0 0 /50% auto") separates the position from the size: not a path.
-    if (/^\/(?:cover|contain|auto|[+-]?(?:\d+\.?\d*|\.\d+)(?:[a-z]+|%)?|calc\(.*\))$/i.test(token)) continue;
+    if (/^\/(?:cover|contain|auto|[+-]?(?:\d+\.?\d*|\.\d+)(?:[a-z]+|%)?|(?:calc|min|max|clamp)\(.*\))$/i.test(token)) continue;
     if (/^[a-z][\w+.-]*:\/\//i.test(token) || /^\.{0,2}\/[^\s/]/.test(token) || /\.(?:png|jpe?g|gif|webp|avif|svg)(?:[?#].*)?$/i.test(token)) return token;
   }
   return null;

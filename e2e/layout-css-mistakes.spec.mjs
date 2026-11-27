@@ -414,6 +414,26 @@ test('F35: :focus-within with nothing focusable inside; F17: tabindex="-1" takes
   }
 });
 
+test('F17, F35: a scroll container takes Tab focus (Chromium, Firefox), so :focus and :focus-within on it or around it are not reported', async ({page, browserName}) => {
+  // [the scroller's overflow, whether the rule's element is the scroller itself]
+  for (const [overflow, self] of [['auto', true], ['scroll', true], ['auto', false], ['scroll', false], ['hidden', true], ['hidden', false]]) {
+    const inner = `<div class="s" style="height:40px"><p class="a" style="height:200px">t</p></div>`;
+    const html = self ? `<div class="x s" style="height:40px"><p class="a" style="height:200px">t</p></div>` : `<div class="x">${inner}</div>`;
+    const css = `.s{overflow:${overflow}}.x:focus-within{outline:2px solid}.x:focus{color:red}`;
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body><button id="b">b</button>${html}</body></html>`);
+    await page.focus('#b'); await page.keyboard.press('Tab');
+    const [within, focused] = await page.evaluate(() => { const x = document.querySelector('.x'); return [x.matches(':focus-within'), x.matches(':focus')]; });
+    const warnings = (analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: `*{margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.a{height:20px}${css}`, viewport: {min: 320, max: 1200, height: {min: 300, max: 900}}}).layoutWarnings ?? []).filter(w => w.code === 'W_CSS_STATE_UNREACHABLE');
+    const where = `${overflow} ${self ? 'itself' : 'inside'}`;
+    // (overflow, both axes: overflow-y: hidden alone computes overflow-x to auto, a scroller again.)
+    // A warning only where Tab never lands (overflow: hidden is not scrolled by the keyboard, in every engine).
+    if (within) expect(warnings.some(w => w.state === 'focus-within'), where).toBe(false);
+    if (focused) expect(warnings.some(w => w.state === 'focus'), where).toBe(false);
+    if (browserName !== 'webkit') expect(within, where).toBe(overflow !== 'hidden');
+    if (overflow === 'hidden') { expect(within, where).toBe(false); expect(warnings.some(w => w.state === 'focus-within'), where).toBe(true); }
+  }
+});
+
 test('F36: a :hover transform on an inline link does not move it', async ({page}) => {
   for (const [css, html, inert] of [['.x:hover{transform:translateY(-8px)}', '<p class="a">text <a class="x" href="/y">link</a></p>', true], ['.x:hover{scale:2}', '<p class="a">text <span class="x" tabindex="0">s</span></p>', true],
     ['.x{display:inline-block}.x:hover{transform:translateY(-8px)}', '<p class="a">text <a class="x" href="/y">link</a></p>', false], ['.x:hover{transform:translateY(-8px)}', '<div class="x a">block</div>', false]]) {
@@ -1615,5 +1635,82 @@ test('F133: a container query unit with no container for its axis is the small-v
     expect(JSON.stringify(await box(cq)) === JSON.stringify(await box(sv)), `${ctx} ${cq}`).toBe(reported);
     const r = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: `*{margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.a{height:20px}${ctx}.a{${cq}}`, viewport: {min: 320, max: 1200, height: {min: 300, max: 900}}});
     expect((r.layoutWarnings ?? []).some(w => w.code === 'W_CSS_CONTAINER_UNIT_VIEWPORT'), `${ctx} ${cq}`).toBe(reported);
+  }
+});
+
+// F135-F139 (the static half of vlmkit check animation's CSS rules): each warning holds exactly where the browser shows
+// no effect, and each control (a registered property, the right spelling, calc(), another name) has one.
+const started = async (page, css) => { await load(page, css); return page.evaluate(() => { const a = document.querySelector('.a'); a.getBoundingClientRect(); a.classList.add('on'); getComputedStyle(a).width; getComputedStyle(a).opacity; getComputedStyle(a).getPropertyValue('--x'); return document.getAnimations().length; }); };
+
+test('F135: a second @keyframes of one name replaces the first whole', async ({page}) => {
+  for (const [css, dup] of [['@keyframes k{from{opacity:0}to{opacity:1}}@keyframes k{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 10s linear -5s paused}', true],
+    ['@keyframes k{from{opacity:0}to{opacity:1}}@keyframes j{from{transform:translateX(10px)}to{transform:none}}.a{animation:k 10s linear -5s paused,j 10s linear -5s paused}', false]]) {
+    await load(page, css);
+    const opacity = await page.evaluate(() => getComputedStyle(document.querySelector('.a')).opacity);
+    expect(warns(css, 'W_CSS_KEYFRAMES_DUPLICATE'), css).toBe(dup);
+    // Half way through: the first rule's opacity animation shows only when it was not replaced.
+    expect(opacity === '1', `${css}: ${opacity}`).toBe(dup);
+  }
+});
+
+test('F136, F137, F138: a transition that never starts', async ({page}) => {
+  for (const [css, code] of [['.a{--x:0;transition:--x 1s}.a.on{--x:1}', 'W_CSS_TRANSITION_UNREGISTERED'], ['@property --x{syntax:"<number>";inherits:false;initial-value:0}.a{--x:0;transition:--x 1s}.a.on{--x:1}', null],
+    ['.a{width:10px;transition:widht 1s}.a.on{width:100px}', 'W_CSS_TRANSITION_PROPERTY_UNKNOWN'], ['.a{width:10px;transition:width 1s}.a.on{width:100px}', null],
+    [':root{--d:300}.a{transition:opacity var(--d)}.a.on{opacity:.5}', 'W_CSS_DURATION_UNITLESS'], [':root{--d:300}.a{transition:opacity calc(var(--d) * 1ms)}.a.on{opacity:.5}', null], [':root{--d:300ms}.a{transition:opacity var(--d)}.a.on{opacity:.5}', null]]) {
+    const running = await started(page, css);
+    for (const c of ['W_CSS_TRANSITION_UNREGISTERED', 'W_CSS_TRANSITION_PROPERTY_UNKNOWN', 'W_CSS_DURATION_UNITLESS']) expect(warns(css, c), `${css} ${c}`).toBe(c === code);
+    expect(running > 0, `${css}: ${running} running`).toBe(!code);
+  }
+  // An animation's duration from a bare number: no animation runs.
+  for (const [css, unitless] of [[':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}', true], [':root{--d:2s}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}', false]]) {
+    await load(page, css);
+    expect(warns(css, 'W_CSS_DURATION_UNITLESS'), css).toBe(unitless);
+    expect(await page.evaluate(() => document.getAnimations().length) === 0, css).toBe(unitless);
+  }
+});
+
+test('F139: a misspelled media feature makes the query never match', async ({page}) => {
+  await page.setViewportSize({width: 800, height: 600});
+  for (const [query, typo] of [['(min-widht: 1px)', true], ['(widht > 1px)', true], ['screen and (hovr: hover)', true], ['not (prefers-reduced-motoin: reduce)', true], ['(prefers-color-schema: light)', true],
+    ['(min-width: 1px)', false], ['(scripting: enabled)', false], ['(update: fast)', false], ['(-webkit-min-device-pixel-ratio: 1)', false]]) {
+    const css = `.a{color:rgb(0, 0, 255)}@media ${query}{.a{color:rgb(255, 0, 0)}}`;
+    await load(page, css);
+    const applied = await page.evaluate(() => getComputedStyle(document.querySelector('.a')).color === 'rgb(255, 0, 0)');
+    expect(warns(css, 'W_CSS_MEDIA_FEATURE_UNKNOWN'), query).toBe(typo);
+    if (typo) expect(applied, query).toBe(false);
+    else expect(applied, query).toBe(true);
+  }
+});
+
+test('F134: a background-image that is not an <image>, and a stray colon, are dropped where the warning says', async ({page}) => {
+  const style = async props => page.evaluate(props => { const s = getComputedStyle(document.querySelector('.a')); return props.map(p => s.getPropertyValue(p)).join(' | '); }, props);
+  const image = ['background-image', 'background-color'];
+  // [css with the declaration, the same rule without it, the properties to compare, the warning, whether it is dropped]
+  const cases = [
+    ['.a{background-image:url(https://example.com/a.png);background-image:https://example.com/close.png}', '.a{background-image:url(https://example.com/a.png)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{background-image:url(https://example.com/a.png);background-image:"close.png"}', '.a{background-image:url(https://example.com/a.png)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{background:rgb(255, 0, 0);background:"close.png" center / cover no-repeat}', '.a{background:rgb(255, 0, 0)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{background:rgb(255, 0, 0);background:/img/close.png center / cover no-repeat}', '.a{background:rgb(255, 0, 0)}', image, 'W_CSS_IMAGE_INVALID', true],
+    ['.a{color:rgb(0, 128, 0);color:rgb(255, 0, 0)\n background:blue;width:10px}', '.a{color:rgb(0, 128, 0);width:10px}', ['color', 'background-color', 'width'], 'W_CSS_STRAY_COLON', true],
+    // Controls: valid values apply (absolute URLs: a relative one on about:blank computes alike in Firefox) and are not reported.
+    ['.a{background-image:url(https://example.com/a.png);background-image:url("https://example.com/b.png")}', '.a{background-image:url(https://example.com/a.png)}', image, 'W_CSS_IMAGE_INVALID', false],
+    ['.a{background:rgb(255, 0, 0);background:rgb(0, 0, 255) url(https://example.com/a.png) center /min(10px,20px) no-repeat}', '.a{background:rgb(255, 0, 0)}', image, 'W_CSS_IMAGE_INVALID', false],
+    ['.a{color:rgb(0, 128, 0);color:rgb(255, 0, 0);background:blue}', '.a{color:rgb(0, 128, 0)}', ['color', 'background-color'], 'W_CSS_STRAY_COLON', false],
+  ];
+  for (const [css, without, props, code, dropped] of cases) {
+    await load(page, css); const got = await style(props);
+    await load(page, without); const kept = await style(props);
+    expect(got === kept, `${css}: the browser ${dropped ? 'drops' : 'applies'} it`).toBe(dropped);
+    expect(warns(css, code), `${css}: ${code}`).toBe(dropped);
+  }
+});
+
+test('F14: a border shorthand with var() keeps its style under a later border-width', async ({page}) => {
+  for (const css of [':root{--c:red}.a{border:5px solid var(--c)}.a{border-width:0 0 5px}', ':root{--c:red}.a{border:5px solid var(--c)}.a{border-bottom-width:2px}', ':root{--c:red}.a{border:5px var(--c)}.a{border-width:0 0 5px}']) {
+    await load(page, css);
+    const height = await page.evaluate(() => document.querySelector('.a').getBoundingClientRect().height);
+    const r = analyzeHTML('<html lang="en"><body><div class="a"></div></body></html>', {name: 'P', css: base + css, viewport: {min: 320, max: 1200, height: {min: 300, max: 900}}});
+    expect(r.status, css).toBe('verified');
+    expect(String(height), css).toBe(r.sizes.find(s => s.box === '.a').rect.blockSize.constant);
   }
 });

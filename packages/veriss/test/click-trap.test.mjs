@@ -11,8 +11,8 @@ const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#ff
   + '.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px}'
   + 'button{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;font-size:16px;line-height:20px}';
 // A page with two host links, then the layer markup.
-const page = (layer, css, {host = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>', boxes = {}} = {}) =>
-  analyzeHTML(`<html lang="en"><body>${host}${layer}</body></html>`, {name: 'P', viewport, accessibility: true,
+const page = (layer, css, {host = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>', boxes = {}, domain = viewport} = {}) =>
+  analyzeHTML(`<html lang="en"><body>${host}${layer}</body></html>`, {name: 'P', viewport: domain, accessibility: true,
     boxes: {'.l': line, '.m': line, ...boxes}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: base + css});
 const find = (report, code) => report.diagnostics.filter(d => d.code === code);
 const overlay = '.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#000}';
@@ -204,6 +204,10 @@ test('a candidate whose position is not known (in a scroll container) makes the 
   const r = page('<div class="ov"><div class="s"><button class="x" aria-label="Close">x</button></div></div>',
     overlay + '.s{position:absolute;top:0;right:0;width:60px;height:60px;overflow:auto}.x{width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
   assert.equal(find(r, 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(r, 'E_A11Y_CLICK_TRAP').map(d => d.message)));
+  // Unresolved, not dropped: the trap is Unknown and names the close button as the candidate it could not place.
+  const unknown = find(r, 'U_A11Y_CLICK_TRAP');
+  assert.ok(unknown.length > 0 && unknown.every(d => d.box === '.ov'), JSON.stringify(r.diagnostics.map(d => d.code)));
+  assert.ok(unknown.every(d => d.unplaced && /the position of \.x is not known/.test(d.message)), JSON.stringify(unknown.map(d => d.message)));
 });
 
 test('a transparent wrapper that scrolls (overflow: auto) around a painting frame is not known to be invisible', () => {
@@ -362,4 +366,89 @@ test('a close button clipped away by an overflow: hidden ancestor is no way out'
   const shown = page('<div class="ov"><div class="w"><button class="x" aria-label="Close">x</button></div></div>',
     overlay + '.w{position:absolute;top:0;right:0;width:100px;height:60px;overflow:hidden;display:block}.x{position:absolute;top:10px;left:0;width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
   assert.equal(find(shown, 'E_A11Y_CLICK_TRAP').length + find(shown, 'U_A11Y_CLICK_TRAP').length, 0, JSON.stringify(shown.diagnostics.map(d => [d.code, d.box])));
+});
+
+// What the target shows is decided by every box painted over it, pointer-events: none or not: under an opaque sheet that
+// takes no click, the control is not seen, so the transparent catcher between them is an occlusion, not an invisible
+// blocker (giving the catcher pointer-events: none would not show the control).
+test('an opaque pointer-events: none sheet over the control: the catcher under it is an occlusion', () => {
+  const r = page('<div class="catch"></div><div class="sheet"></div>', '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}.sheet{position:fixed;top:0;left:0;right:0;height:100px;z-index:6;background:#000;pointer-events:none}');
+  assert.equal(find(r, 'E_A11Y_INVISIBLE_BLOCKER').filter(d => ['.l', '.m'].includes(d.box)).length, 0, JSON.stringify(find(r, 'E_A11Y_INVISIBLE_BLOCKER').map(d => d.message)));
+  assert.ok(find(r, 'E_A11Y_OCCLUDED').some(d => d.box === '.l' && d.cover === find(r, 'E_A11Y_OCCLUDED').find(x => x.box === '.l').cover && /\.catch/.test(d.message)), JSON.stringify(r.diagnostics.map(d => [d.code, d.box])));
+  // Without the sheet the catcher is an invisible blocker (control).
+  assert.ok(find(page('<div class="catch"></div>', '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}'), 'E_A11Y_INVISIBLE_BLOCKER').some(d => d.box === '.l'));
+});
+
+// Two boxes that paint nothing over one control, the upper one only at some widths (it moves with the viewport): each
+// width range is reported under the box that is on top there, whichever comes first in the tree.
+test('an invisible blocker is named by the box on top in each width range', () => {
+  const css = '.a{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}.b{position:fixed;top:0;left:calc(50% - 300px);width:100px;height:300px;z-index:6}';
+  for (const html of ['<div class="a"></div><div class="b"></div>', '<div class="b"></div><div class="a"></div>']) {
+    const r = page(html, css);
+    const named = find(r, 'E_A11Y_INVISIBLE_BLOCKER').filter(d => d.box === '.l').map(d => [d.message.match(/but (\S+)/)[1], d.range.minExact, d.range.maxExact]).sort((x, y) => Number(x[1]) - Number(y[1]));
+    // .b reaches .l (x 0..100) while 400 < width < 800.
+    assert.deepEqual(named, [['.a', '320', '400'], ['.b', '400', '800'], ['.a', '800', '800']], html);
+  }
+});
+
+// A fixed box that reaches past the viewport bottom: a control below the viewport first meets it where it enters the
+// viewport (its top − the viewport height), not at the box's page bottom.
+test('the scroll offset where a control starts under a fixed box is clipped to the viewport bottom', () => {
+  const host = '<main><a class="l" href="/a">First</a><div class="gap"></div><a class="m" href="/b">Second</a><div class="tail"></div></main>';
+  const at = css => find(page('<div class="ad"></div>', `.gap{display:block;height:960px}.tail{display:block;height:400px}.ad{position:fixed;left:0;width:320px;z-index:2147483000;opacity:0;background:#fff;${css}}`, {host, domain: {min: 375, max: 375, height: {min: 667, max: 667}}}), 'E_A11Y_INVISIBLE_BLOCKER').filter(d => d.box === '.m' && d.scrolled).map(d => Math.round(d.scrolled.from));
+  // .m is at 1000..1040. The box spans 600..800: past the viewport bottom (667), so .m reaches it at 1000 − 667.
+  assert.deepEqual(at('top:600px;height:200px'), [333]);
+  // Wholly on screen (400..600): from its bottom, as before.
+  assert.deepEqual(at('top:400px;height:200px'), [400]);
+});
+
+// Whether scrolling frees a control is the cover's question, not its layer's: a fixed sheet in an untransformed
+// position: relative wrapper still stays put while the page scrolls the links free (the wrapper only groups the exits).
+test('a fixed sheet inside a relative wrapper: scrolling frees the links, unless the page does not scroll', () => {
+  const wrapped = (root, tail) => page('<div class="wr"><div class="sh"></div></div>', `.wr{position:relative;display:block}.gap{display:block;height:500px}.t{display:block;height:${tail}px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`, {host: sheetHost.replace('</main>', '<div class="t"></div></main>')});
+  assert.equal(find(wrapped('', 1000), 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(wrapped('', 1000), 'E_A11Y_CLICK_TRAP').map(d => d.message)));
+  const [trap] = find(wrapped('html{overflow:hidden}', 0), 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap && trap.box === '.wr', JSON.stringify(wrapped('html{overflow:hidden}', 0).diagnostics.map(d => [d.code, d.box])));
+});
+
+// One candidate placed at some widths and not at others (its panel scrolls only below 600px): where it is placed it is
+// the way out; where it is not, the trap is Unknown, not an error.
+test('a way out placed only at some widths keeps the trap Unknown where its position is not known', () => {
+  const r = page('<div class="ov"><div class="s"><button class="x" aria-label="Close">x</button></div></div>',
+    overlay + '.s{position:absolute;top:0;right:0;width:60px;height:60px;overflow:visible}@media (max-width:599px){.s{overflow:auto}}.x{width:44px;height:44px;background:#fff;color:#000}', {boxes: {'.x': {minInlineSize: 10, maxInlineSize: 10, intrinsicBlockSize: 20}}});
+  assert.equal(find(r, 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(r, 'E_A11Y_CLICK_TRAP').map(d => [d.range, d.message])));
+  const unknown = find(r, 'U_A11Y_CLICK_TRAP');
+  assert.ok(unknown.length && unknown.every(d => d.range.max < 600), JSON.stringify(r.diagnostics.map(d => [d.code, d.box, d.range])));
+});
+
+// An inert page under a transparent layer whose painted child shows only at 600px and wider: the trap holds where the
+// layer shows, not over its whole region.
+test('an inert-page trap is reported only where the layer shows', () => {
+  const host = '<main class="w" inert><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>';
+  const r = page('<div class="ad" role="dialog" aria-label="Ad"><div class="pane"></div></div>', '.ad{position:fixed;top:200px;left:20px;width:300px;height:200px;z-index:9;display:block}.pane{display:none;width:300px;height:200px;background:#ffe}@media (min-width:600px){.pane{display:block}}', {host});
+  const traps = find(r, 'E_A11Y_CLICK_TRAP');
+  assert.ok(traps.length > 0 && traps.every(t => t.box === '.ad' && t.range.min >= 600), JSON.stringify(traps.map(t => t.range)));
+});
+
+// The only cover of a control is a positioned box inside an overflow: hidden box that paints below the control: the
+// first pass cannot place it, so the page is laid out again at scroll offset 0 for it too (not only when the first
+// pass already found a blocker or a trap).
+const hiddenHost = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="w"><div class="c"></div></div></main>';
+const hiddenCover = extra => page('', 'main{position:relative}.l{position:absolute;top:0;left:0}.m{position:absolute;top:40px;left:0}.w{display:block;height:100px;overflow:hidden}.c{position:relative;display:block;height:100px}' + extra, {host: hiddenHost});
+test('a cover inside an overflow: hidden box is found at scroll offset 0 even when the first pass found nothing', () => {
+  const blockers = find(hiddenCover(''), 'E_A11Y_INVISIBLE_BLOCKER');
+  assert.deepEqual([...new Set(blockers.map(d => d.box))].sort(), ['.l', '.m'], JSON.stringify(hiddenCover('').diagnostics.map(d => d.code)));
+  assert.ok(blockers.every(d => d.scrollOffset === 0));
+  const painted = hiddenCover('.c{background:#000}');
+  assert.deepEqual([...new Set(find(painted, 'E_A11Y_OCCLUDED').map(d => d.box))].sort(), ['.l', '.m']);
+  // pointer-events: none on the cover: nothing.
+  assert.equal(find(hiddenCover('.c{pointer-events:none}'), 'E_A11Y_INVISIBLE_BLOCKER').length, 0);
+});
+
+// A control inside an overflow: hidden box has no position in the first pass; when offset 0 is laid out (for an unrelated
+// blocker), its own occlusion there is kept, not only the findings of controls the first pass had found.
+test('offset-0 occlusion of a control the first pass could not place is kept', () => {
+  const host = '<main><div class="w"><a class="k" href="/k">Inside</a><div class="sib"></div></div><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main><div class="catch"></div>';
+  const r = page('', '.w{position:relative;display:block;height:100px;overflow:hidden}.k{display:block;width:100px;height:40px;color:#000}.sib{position:absolute;top:0;left:0;width:200px;height:50px;background:#000}.catch{position:fixed;top:100px;left:0;width:50px;height:10px;z-index:5}', {host, boxes: {'.k': {minInlineSize: 40, maxInlineSize: 40, intrinsicBlockSize: 20}}});
+  assert.ok(find(r, 'E_A11Y_OCCLUDED').some(d => d.box === '.k' && d.scrollOffset === 0), JSON.stringify(r.diagnostics.map(d => [d.code, d.box, d.scrollOffset])));
 });

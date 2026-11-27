@@ -16,8 +16,8 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | # | 役割 | 何を見るか | 入力 | 主なコード | 検査できる | 検査しない(Unknown) |
 |---|---|---|---|---|---|---|
 | 1 | [CSS の構文](#1-css-の構文宣言ごと捨てられる値) | ブラウザーが宣言ごと捨てる値 | CSS だけ | `W_CSS_*_INVALID` など 18 | 構文が閉じた値(calc の空白、色、キーワード、grid のトラック…) | `var()` を含む値、`-webkit-` の値、システムフォント |
-| 2 | [at-rule とカスケード](#2-at-rule-とカスケード) | 決して当たらない `@media`・`@supports`、層や順番で負ける規則 | CSS だけ | `W_CSS_MEDIA_*` など 14 | 範囲が空の query、不正な query・`@property`・`@font-face`、層の順 | 別ファイルの `@import`、query の並びで当たりうるもの |
-| 3 | [効かない宣言](#3-文脈で効かない宣言) | 受け入れられるが何もしない宣言 | CSS + box の祖先 | `W_LAYOUT_DECLARATION_INERT` ほか 28 | 親の display・position・表の境界モデルなどで決まる 80 以上の組み合わせ | ブラウザーで効き方が違う組み合わせ(除外して記録) |
+| 2 | [at-rule とカスケード](#2-at-rule-とカスケード) | 決して当たらない `@media`・`@supports`、層や順番で負ける規則 | CSS だけ | `W_CSS_MEDIA_*` など 16 | 範囲が空の query、不正な query・`@property`・`@font-face`、層の順 | 別ファイルの `@import`、query の並びで当たりうるもの |
+| 3 | [効かない宣言](#3-文脈で効かない宣言) | 受け入れられるが何もしない宣言 | CSS + box の祖先 | `W_LAYOUT_DECLARATION_INERT` ほか 31 | 親の display・position・表の境界モデルなどで決まる 80 以上の組み合わせ | ブラウザーで効き方が違う組み合わせ(除外して記録) |
 | 4 | [セレクタ × DOM](#4-セレクタ--dom) | DOM の形や状態のせいで当たらないセレクタ | CSS + DOM | `W_CSS_STATE_UNREACHABLE` ほか 7 | フォーカス・リンク・フォームの状態、HTML の解析が補う要素 | 動的な属性(tabindex・lang・dir・value)、外から渡される子 |
 | 5 | [HTML の構造と属性](#5-html-の構造と属性) | 解析で組み替わる構造、効かない属性 | HTML | `W_HTML_*` 3 | `<p>` の中の `<div>`、入れ子の `<a>`、効かない `width`・`disabled` など | DOM API で組み立てた木(React など)では構造の検査をしない |
 | 6 | [配置(収まり・はみ出し)](#6-配置収まりはみ出し重なり) | すべての viewport 幅で箱が収まるか | CSS + box tree | `E_LAYOUT_*` 25、`W_LAYOUT_*` 28 | grid・flex・block・絶対配置の幅と高さ、トラック、文字の改行 | float、表の自動配置、bidi の混ざった rtl、行を高くする inline |
@@ -68,6 +68,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_MEDIA_NEVER` | 下限が上限より上で、どの viewport にも当たらない `@media`(F5) | 検査可 |
 | `W_CSS_MEDIA_GAP` | ブレークポイントの間に当たらない幅が残る | 検査可 |
 | `W_CSS_MEDIA_VAR` | `@media (min-width: var(--bp))`: query の中の `var()` は置き換わらない(F78) | 検査可 |
+| `W_CSS_MEDIA_FEATURE_UNKNOWN` | `(min-widht: 600px)` のような綴り違いの feature で、決して当たらない query(F139) | 検査可(知っている feature から近い名前だけ) |
 | `W_CSS_MEDIA_INVALID_LENGTH` | `(min-width: 600)`、`600 px`(F79) | 検査可 |
 | `W_CSS_MEDIA_AND_SPACE` | `and(`・`or(`・`not(`(F87) | 検査可 |
 | `W_CSS_MEDIA_EM_ROOT` | ルートの `font-size` を変えたページの `em`・`rem` の query(F125) | 検査可(報告だけ。解析は Unknown) |
@@ -77,6 +78,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_LAYER_OVERRIDDEN` | 詳細度で勝つのに層の順で負ける宣言(F112) | 検査可 |
 | `W_CSS_CONTAINER_QUERY_NEVER` | container のない `@container`、当たらない大きさ | 検査可 |
 | `W_CSS_KEYFRAMES_MISSING` | `@keyframes` のないアニメーション名(F1) | 検査可 |
+| `W_CSS_KEYFRAMES_DUPLICATE` | 同じ名前の `@keyframes` の 2 つ目が 1 つ目を丸ごと置き換える(F135) | 検査可 |
 | `W_CSS_COUNTER_UNUSED` | どの `content` も読まないカウンター(F102) | 一部(解析した CSS の中だけ) |
 | `W_CSS_STATE_SHADOWED` | 後の規則に負けて見えない `:hover`・`:focus`(LVHA の順、F131) | 検査可 |
 
@@ -95,6 +97,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `W_CSS_ANIMATION_NO_DURATION` / `W_CSS_TRANSITION_NO_DURATION` | 長さのないアニメーション・transition(F2・F12) | 検査可 |
 | `W_CSS_TRANSITION_AUTO` | `height: auto` と長さの間の transition(F8) | 検査可 |
 | `W_CSS_TRANSITION_DISPLAY` | `allow-discrete` のない `display` の transition | 検査可 |
+| `W_CSS_TRANSITION_UNREGISTERED` / `W_CSS_TRANSITION_PROPERTY_UNKNOWN` / `W_CSS_DURATION_UNITLESS` | `@property` のないカスタムプロパティ、`widht` のような綴り違い、単位のない数の変数の時間: 始まらない transition・animation(F136〜F138) | 検査可(綴り違いは知っているプロパティから近い名前だけ。`CSS.registerProperty` は見えない) |
 | `W_LAYOUT_MIN_ABOVE_MAX` | min より小さい max(F4) | 検査可 |
 | `W_LAYOUT_AUTO_MARGIN_ABSOLUTE` | 中央に寄らない絶対配置の `margin: auto`(F38) | 検査可 |
 | `W_LAYOUT_CONTENTS_REMOVED` | 置換要素・フォーム部品の `display: contents`(none になる。F30) | 検査可 |
@@ -202,7 +205,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | `E_A11Y_CONTRAST` / `E_A11Y_STATE_CONTRAST` / `E_A11Y_PLACEHOLDER_CONTRAST` / `E_A11Y_ICON_CONTRAST` / `E_A11Y_FIELD_BOUNDARY` / `E_A11Y_LINK_IN_TEXT` | 文字・状態・placeholder・アイコン・欄の境界・文中リンクのコントラスト | 一部(読めない色・画像の背景は `U_A11Y_CONTRAST` など) |
 | `E_A11Y_OCCLUDED` / `E_A11Y_TEXT_OBSCURED` / `E_A11Y_TEXT_START_OBSCURED` / `E_A11Y_TEXT_LINE_OBSCURED` / `E_A11Y_TARGET_OVERLAP` / `E_A11Y_BEHIND_BACKGROUND` | 後から描かれる箱に覆われるボタン・文字、重なるターゲット、背景の後ろに回る箱(stacking context に閉じ込められた z-index は文言で示す。開いた `aria-modal` のダイアログの外は報告しない。何も描かない箱が覆う組は次の行の `E_A11Y_INVISIBLE_BLOCKER`) | 一部(回転した箱・スクロール容器の中は `U_A11Y_ROTATED_COVER`・`U_A11Y_SCROLLED_COVER`) |
 | `E_A11Y_INVISIBLE_BLOCKER` | 何も描かない箱(opacity 0、または背景・枠・文字・画像・置換内容のどれもない)が、見えている操作部品の上でクリックを受ける(透明な全面の click-catcher、opacity 0 の iframe)。描く箱が上にない区間では、その組を `E_A11Y_OCCLUDED` の代わりにこのコードで報告する(二重には出さない)。覆いが部品の一部で、その部品が対象を含む箱(カード)に張られている場合(stretched link の `::after`)はクリックがカードの部品に届くので `E_A11Y_OCCLUDED` のまま。fixed の部品や、ページ全体に張られた透明なリンク(広告のクリック乗っ取り)はこのコード。何も描かない fixed の箱の下をスクロールで通る流れの中の部品も、重なるスクロール位置(`scrolled`)を付けてこのコード(ページがスクロールしないときは出さない) | 検査可(Chromium の `elementFromPoint` と、当たった要素が何も描かないことを照合) |
-| `E_A11Y_CLICK_TRAP` / `U_A11Y_CLICK_TRAP` | ページの操作部品を覆い切る層(覆う箱の、部品を含まない最も外側の positioned な祖先)に、見えて操作できる部品が中にも上にもない(出口がない)。覆われた部品の数と名前、出口の候補ごとの理由(何も描かない・opacity 0・`pointer-events: none`・フォーカスも role もない・覆われている)を示す。描く iframe(など中が見えないもの)があれば出口がその中にありうるので Unknown。何も描かない覆い(閉じるボタンの上の透明なリンク)も出口を塞ぐ。ページの部品が `inert` で、`inert` でない層が見えているときも、`inert` の外に出口がなければこのコード(`inert` の部品は覆われたのと同じ)。html が `overflow: hidden` / `clip` でページがスクロールしないときは、fixed の層の下の流れの中の部品も抜けられないので数える | 一部(スクロールで抜けられる組は除く: fixed の層と流れの中の部品は、層が viewport 全体を覆う区間だけ。描かない層は `E_A11Y_INVISIBLE_BLOCKER` に任せる。スクロールする箱の中の候補は位置が分からないので Unknown。`overflow: hidden` の層の中身はスクロール位置 0 の配置で判定する) |
+| `E_A11Y_CLICK_TRAP` / `U_A11Y_CLICK_TRAP` | ページの操作部品を覆い切る層(覆う箱の、部品を含まない最も外側の positioned な祖先)に、見えて操作できる部品が中にも上にもない(出口がない)。覆われた部品の数と名前、出口の候補ごとの理由(何も描かない・opacity 0・`pointer-events: none`・フォーカスも role もない・覆われている)を示す。描く iframe(など中が見えないもの)があれば出口がその中にありうるので Unknown。何も描かない覆い(閉じるボタンの上の透明なリンク)も出口を塞ぐ。ページの部品が `inert` で、`inert` でない層が見えているときも、`inert` の外に出口がなければこのコード(`inert` の部品は覆われたのと同じ)。fixed の層の下の流れの中の部品は、スクロールで抜けられないときだけ数える: 層が viewport 全体を覆う区間、ページがスクロールしないとき(html が `overflow: hidden` / `clip`、または中身が viewport より低い)、いちばん下までスクロールしても部品が層の下に残る区間 | 一部(スクロールで層の下から抜けられる組は数えない。描かない層は `E_A11Y_INVISIBLE_BLOCKER` に任せる。スクロールする箱の中の候補は位置が分からないので Unknown。`overflow: hidden` の層の中身はスクロール位置 0 の配置で判定する) |
 | `E_A11Y_FOCUS_VISIBLE` / `E_A11Y_FOCUS_CONTRAST` / `E_A11Y_FOCUS_AREA` / `W_A11Y_FOCUS_APPEARANCE` / `W_A11Y_FOCUS_TRANSPARENT` / `W_A11Y_FOCUS_RING_CLIPPED` / `W_A11Y_FORCED_COLORS_FOCUS` | 消えたフォーカスの印、薄い・細い・切られるフォーカスリング | 検査可 |
 | `E_A11Y_FOCUS_OBSCURED` / `E_A11Y_FOCUS_OFFSCREEN` / `E_A11Y_FOCUS_CLIPPED` / `E_A11Y_FOCUS_CLIPPED_AWAY` / `E_A11Y_FOCUS_SCROLLED_UNDER` / `E_A11Y_HOVER_ONLY` / `E_A11Y_CONTENTS_FOCUS` | フォーカスした要素が隠れる・画面外・固定バーの下、ホバーだけで出る中身 | 一部(`:focus` で動く位置は `U_A11Y_FOCUS_POSITION`) |
 | `E_A11Y_TARGET_SIZE` / `E_LAYOUT_TARGET_SIZE` | 24×24px(AAA は 44px)に届かないターゲット | 検査可 |
