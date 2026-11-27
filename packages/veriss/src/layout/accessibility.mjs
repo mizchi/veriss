@@ -438,7 +438,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const paths = [...new Set(clippingRows.filter(c => clipsIt(c, a) || clipsIt(c, b)).map(c => c.path))];
     let pieces = [{ region: base, boxes: [] }];
     for (const path of paths) {
-      const rows = clippingRows.filter(c => c.path === path);
+      // (Only the rows of the viewport ranges the overlap is in: a range where the ancestor has no position but the
+      // overlap does not reach leaves it decided.)
+      const rows = clippingRows.filter(c => c.path === path && intersect(c.region, base));
       if (rows.some(c => !located(c))) return null;
       // Each row bounds the overlap only in its own region; where the ancestor does not clip (no row: overflow visible
       // in that viewport range), the piece stays as it was.
@@ -454,7 +456,19 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     return pieces.map(piece => piece.region);
   };
   // The outermost scroll container with a known position that clips a box without one: the box is seen only inside it.
-  const unlocatedScroller = row => at(row) ? null : clippingRows.findLast(c => c.scroller && clipsIt(c, row) && located(c)) ?? null; // (rows are in post-order: ancestors after)
+  // The scroll container with a known position that clips a box without one, per viewport range: the box is seen only
+  // inside it. A located scroller has no scroller around it, so in each range there is at most one; it may be a
+  // different box in another range (an outer box that scrolls only on narrow screens). Pieces of the box's region.
+  const unlocatedScrollers = row => {
+    if (at(row)) return [];
+    const out = [];
+    for (const c of clippingRows) {
+      if (!c.scroller || !clipsIt(c, row) || !located(c)) continue;
+      const region = intersect(row.region, c.region);
+      if (region) out.push({ s: c, region });
+    }
+    return out;
+  };
   const occlusionRows = everything.map(located).filter(Boolean);
   const targets = placed.filter(row => interactive(row) && visible(row) && !inertAt(row) && !userScrolled(row));
   // inert-shown: an inert control that nothing paints over looks clickable, but takes no click: the click
@@ -575,10 +589,10 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   {
     const byScroller = new Map();
     for (const target of everything.filter(row => !at(row) && row.block && interactive(row) && visible(row) && !inertAt(row) && !hiddenFrom(row.path))) {
-      const s = unlocatedScroller(target);
-      if (!s) continue;
-      if (!byScroller.has(s.path)) byScroller.set(s.path, { s, targets: [] });
-      byScroller.get(s.path).targets.push(target);
+      for (const { s, region } of unlocatedScrollers(target)) {
+        if (!byScroller.has(s.path)) byScroller.set(s.path, { s, targets: [] });
+        byScroller.get(s.path).targets.push({ ...target, region });
+      }
     }
     // (A scroller with a row per viewport piece: each piece's box.)
     for (const { s: first, targets: inside } of byScroller.values()) for (const s of clippingRows.filter(c => c.path === first.path && located(c))) {

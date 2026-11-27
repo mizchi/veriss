@@ -96,3 +96,36 @@ for (const [overflow, expected] of [['hidden', ['E_A11Y_TEXT_START_OBSCURED', 'U
     });
     assert.deepEqual([...new Set(report.diagnostics.map(d => d.code))].sort(), expected);
   });
+
+test('a clipper with no position in another viewport range does not make the overlap Unknown where it is located', () => {
+  // .w clips (overflow: clip) everywhere, but below 600px it sits in a scroll container and has no position; the sheet
+  // exists only from 600px, where .w is located: the covered button is decided there.
+  const report = analyzeHTML(`<html lang="en"><body><div class="s"><div class="p w">${buttons(3)}</div></div><div class="sh"></div></body></html>`, {
+    name: 'P', css: base + 'html{overflow:hidden}.w{overflow:clip}.sh{display:none}@media (max-width:599px){.s{overflow:auto;height:400px}}@media (min-width:600px){.sh{display:block}}',
+    viewport: {min: 375, max: 800, height: {min: 667, max: 667}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
+  const seen = JSON.stringify(report.diagnostics.map(d => `${d.code} ${d.path} ${d.range?.min}-${d.range?.max}`));
+  assert.deepEqual(occluded(report), ['P/0/0/0/2'], seen);
+  assert.ok(!report.diagnostics.some(d => d.code === 'U_A11Y_SCROLLED_COVER'), seen);
+});
+
+test('a control whose scroll container changes with the viewport: each range has the Unknown of its own scroller', () => {
+  // From 600px .i is the scroll container of the buttons; below it .o scrolls too, so .i has no position there and
+  // the buttons are seen only inside .o. The sheet covers both: each range is Unknown at the other scroll offsets.
+  const report = analyzeHTML(`<html lang="en"><body><div class="o"><div class="p i">${buttons(3)}</div></div><div class="sh"></div></body></html>`, {
+    name: 'P', css: base + 'html{overflow:hidden}.i{overflow:auto;height:350px}@media (max-width:599px){.o{overflow:auto;height:400px}}',
+    viewport: {min: 375, max: 800, height: {min: 667, max: 667}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
+  const u = report.diagnostics.filter(d => d.code === 'U_A11Y_SCROLLED_COVER' && d.cover === 'P/0/1');
+  const seen = JSON.stringify(u.map(d => `${d.path} ${d.range.min}-${d.range.max} ${d.targets}`));
+  assert.ok(u.some(d => d.path === 'P/0/0' && d.range.min < 599 && d.targets.includes('P/0/0/0/2')), `below 600px, under .o: ${seen}`);
+  assert.ok(u.some(d => d.path === 'P/0/0/0' && d.range.max > 600 && d.targets.includes('P/0/0/0/2')), `from 600px, under .i: ${seen}`);
+  assert.ok(!u.some(d => d.path === 'P/0/0' && d.range.max > 600), `.o does not scroll from 600px: ${seen}`);
+});
+
+test('a fixed box inside a scroll container escapes it: its link is not content that scrolls there', () => {
+  // The centred list overflows, so its first item starts before its top; the fixed header inside it is placed against
+  // the viewport and does not scroll with it (CSS Overflow 3 §3): no scroll-start finding for its link.
+  const html = '<html lang="en"><body><main class="m"><div class="gap"></div><div class="list"><p class="i first">First</p><p class="i">Two</p><p class="i">Three</p><p class="i">Four</p><p class="i">Five</p><p class="i">Six</p><p class="i">Seven</p><div class="f"><a class="l" href="/x">Go</a></div></div></main></body></html>';
+  const css = '*{margin:0;padding:0;box-sizing:border-box}html,body,.m{display:grid;grid-template-columns:minmax(0,1fr);background:#fff}.gap{height:300px}.list{display:flex;flex-direction:column;overflow-y:auto;height:200px;justify-content:center}.i{flex:none;height:40px;font-size:16px;line-height:24px;color:#000}.f{position:fixed;top:0;left:0;width:200px;height:40px;background:#fff}.l{display:block;width:44px;height:24px;font-size:16px;line-height:24px;color:#000}';
+  const report = analyzeHTML(html, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 480, max: 900}}, accessibility: true, scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}], scrollIntent: 'css', boxes: {'.i': {minInlineSize: 0, intrinsicBlockSize: 24}, '.l': {minInlineSize: 0, intrinsicBlockSize: 24}}});
+  assert.deepEqual(report.diagnostics.filter(d => d.code === 'E_A11Y_SCROLL_START_UNREACHABLE').map(d => d.box), ['.i.first']);
+});
