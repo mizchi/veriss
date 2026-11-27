@@ -500,7 +500,10 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         for (const r of seenOver) ghost = ghost.flatMap(piece => subtract(piece, r));
         let occluded = [whole];
         for (const g of ghost) occluded = occluded.flatMap(piece => subtract(piece, g));
-        for (const piece of ghost) {
+        // Each ghost piece is split along the covers' regions first, so one set of covers (and one top cover) holds over
+        // the whole of each part.
+        const parts = ghost.flatMap(piece => covers.reduce((list, c) => list.flatMap(p => { const inside = intersect(p, c.region); return inside ? [inside, ...subtract(p, c.region)] : [p]; }), [piece]));
+        for (const piece of parts) {
           const over = covers.filter(c => intersect(c.region, piece)).map(c => c.cover);
           const top = topmost(over);
           if (!ownStretch(top, target) && !unplacedPaint(top)) { report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', blockerMessage(target, top), target, piece, { rule: 'invisible-blocker', cover: top.path, why: paintsNothing(top) }); continue; }

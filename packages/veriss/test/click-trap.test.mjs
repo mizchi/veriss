@@ -378,3 +378,15 @@ test('an opaque pointer-events: none sheet over the control: the catcher under i
   // Without the sheet the catcher is an invisible blocker (control).
   assert.ok(find(page('<div class="catch"></div>', '.catch{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}'), 'E_A11Y_INVISIBLE_BLOCKER').some(d => d.box === '.l'));
 });
+
+// Two boxes that paint nothing over one control, the upper one only at some widths (it moves with the viewport): each
+// width range is reported under the box that is on top there, whichever comes first in the tree.
+test('an invisible blocker is named by the box on top in each width range', () => {
+  const css = '.a{position:fixed;top:0;left:0;right:0;bottom:0;z-index:5}.b{position:fixed;top:0;left:calc(50% - 300px);width:100px;height:300px;z-index:6}';
+  for (const html of ['<div class="a"></div><div class="b"></div>', '<div class="b"></div><div class="a"></div>']) {
+    const r = page(html, css);
+    const named = find(r, 'E_A11Y_INVISIBLE_BLOCKER').filter(d => d.box === '.l').map(d => [d.message.match(/but (\S+)/)[1], d.range.minExact, d.range.maxExact]).sort((x, y) => Number(x[1]) - Number(y[1]));
+    // .b reaches .l (x 0..100) while 400 < width < 800.
+    assert.deepEqual(named, [['.a', '320', '400'], ['.b', '400', '800'], ['.a', '800', '800']], html);
+  }
+});
