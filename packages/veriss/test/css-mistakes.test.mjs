@@ -421,6 +421,10 @@ test('F35: :focus-within on an element with nothing focusable inside', () => {
   assert.equal(w('.s{overflow-y:scroll}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 0);
   // overflow: hidden is not one the user scrolls with the keyboard: still reported.
   assert.equal(w('.s{overflow:hidden}.x:focus-within{outline:2px solid}', '<div class="x"><div class="s"><p class="a">t</p></div></div>').length, 1);
+  // A descendant's style is computed in its parent's viewport range, not the whole one: --ov is auto only from 600px,
+  // where .leaf is hidden, so nothing scrolls at any width.
+  assert.equal(w('.m{--ov:hidden}.s{overflow:hidden}@media (min-width:600px){.m{--ov:auto}}@media (max-width:599px){.s{overflow:var(--ov)}}.x:focus-within{outline:2px solid}',
+    '<div class="x"><div class="m"><div class="s"><p class="a">t</p></div></div></div>').length > 0, true);
 });
 
 test('F17: :focus on a tabindex="-1" element is reachable (a click or focus() focuses it)', () => {

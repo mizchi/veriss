@@ -689,12 +689,13 @@ export function createCssMistakes({ report, facts, tools }) {
           // slot or children passed in, whose content is not known) it never does. A scroll container inside it (or the
           // element itself) may take focus too, so it is judged on each one's style; a style not computed is not known.
           if (sel.state === 'focus-within') {
-            const inside = (b, chain, inh, own) => {
+            // Each state's own viewport range goes down with its style: what a child inherits holds there only.
+            const inside = (b, chain, inh, region, own) => {
               if (takesFocus(b) || (b.boundaries ?? []).some(x => ['slot', 'children', 'component'].includes(x.kind))) return true;
-              let states; if (own) states = [{ style: own }]; else try { states = styles(b, r, chain, inh, false, false); } catch { return true; }
-              return states.some(st => scrolls(st.style) || [...(b.children ?? []), ...(b.inline ?? [])].some(c => inside(c, [...chain, { box: b, style: st.style, names: [] }], st.style)));
+              let states; if (own) states = [{ style: own, region }]; else try { states = styles(b, region, chain, inh, false, false); } catch { return true; }
+              return states.some(st => scrolls(st.style) || [...(b.children ?? []), ...(b.inline ?? [])].some(c => inside(c, [...chain, { box: b, style: st.style, names: [] }], st.style, st.region ?? region)));
             };
-            if (inside(box, ancestors, inherited, style) || layoutWarnings.some(w => w.code === 'W_CSS_STATE_UNREACHABLE' && w.path === box.path && w.selector === sel.source)) continue;
+            if (inside(box, ancestors, inherited, r, style) || layoutWarnings.some(w => w.code === 'W_CSS_STATE_UNREACHABLE' && w.path === box.path && w.selector === sel.source)) continue;
             layoutWarnings.push({ code: 'W_CSS_STATE_UNREACHABLE', severity: 'warning', box: box.label, path: box.path, selector: sel.source, state: sel.state, css: [{ property: ':focus-within', file: rule.file, line: rule.line, selector: sel.source }],
               message: `${sel.source} never applies to ${box.label}: neither it nor anything inside it is focusable (no link with href, control or tabindex), so nothing in it ever has focus` });
             continue;
