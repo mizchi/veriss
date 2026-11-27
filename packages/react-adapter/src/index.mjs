@@ -1,4 +1,4 @@
-// React (JSX) adapter for @mizchi/veriss, with the style systems that leave a static stylesheet: StyleX
+// React (JSX) adapter for veriss, with the style systems that leave a static stylesheet: StyleX
 // (stylex.create + stylex.props) and Linaria (css`` and styled.tag``), plus plain className strings with an external
 // stylesheet. The JSX a component returns is a family of DOM trees: `cond && <X/>`, `cond ? <A/> : <B/>`, `xs.map(…)`
 // item counts, and conditional class or style arguments are choices; the core (adapter-core) analyses every state.

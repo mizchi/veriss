@@ -55,11 +55,11 @@ hostInset が20pxなら、割当幅160–640pxを調べるための viewport は
 ## API
 
 ```js
-import { analyzeLayout } from '@mizchi/veriss';
+import { analyzeLayout } from 'veriss';
 import {
   createContractIR, createLayoutIR, createObligationIR,
-} from '@mizchi/veriss/src/layout-contract.mjs';
-import { verifyContractObligation } from '@mizchi/veriss/src/layout-contract-node.mjs';
+} from 'veriss/src/layout-contract.mjs';
+import { verifyContractObligation } from 'veriss/src/layout-contract-node.mjs';
 
 const contract = createContractIR({
   component: 'Four',

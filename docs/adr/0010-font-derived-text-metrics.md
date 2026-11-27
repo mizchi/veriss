@@ -113,7 +113,7 @@ UAの見出し・強調のフォント(h1–h6のsizeとweight、strong/bのweig
 
 - FFI: `packages/veriss/text-metrics/`(`mizchi/font@0.8.0`、fixtureはOFLのNoto Sans JP/Robotoのsubset。
   `fixtures/sources.json`の元フォント・subset対象文字・pyftsubsetの指定から再生成できる。ASCII・仮名全体・全角約物を含み、旧fixtureの文字の幅は変わらない)。
-- 導出: `src/text.mjs`、`src/text-node.mjs`(`@mizchi/veriss/text`、`/text/node`)。
+- 導出: `src/text.mjs`、`src/text-node.mjs`(`veriss/text`、`/text/node`)。
 - コア: `src/layout/css.mjs`(text系プロパティを継承付きで保持)、`text-font.mjs`、`engine.mjs`、`input.mjs`。
 - Isle: CLIの`layout.json`の`fonts`、Viteの検査付きbuildの`layout.fonts`(`lib/layout-build.mjs`の`resolveCheckedLayout`)、`lib/layout-summary.mjs`の`text:`行。
   Viteではentryからの相対パスでフォントを読み、`text`契約をbuildStartで寸法契約へ解決する。フォントは監視対象になり、

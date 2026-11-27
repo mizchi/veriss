@@ -1,9 +1,9 @@
 {
-  "name": "@mizchi/veriss",
-  "version": "0.0.1",
-  "private": true,
+  "name": "veriss",
+  "version": "0.1.0",
   "type": "module",
   "description": "Static responsive CSS verification over a closed box-tree model.",
+  "license": "MIT",
   "exports": {
     ".": {
       "types": "./src/index.d.mts",
@@ -60,7 +60,8 @@
     "src/",
     "README.md",
     "text-metrics/_build/js/release/build/font_ffi/font_ffi.js",
-    "text-metrics/fixtures/"
+    "text-metrics/fixtures/",
+    "LICENSE"
   ],
   "dependencies": {
     "postcss": "8.5.32",

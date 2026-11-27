@@ -4,7 +4,7 @@ playwright-report
 .vlmkit
 .mooncakes
 _build
-# The text-metrics build is committed so that a git dependency on @mizchi/veriss needs no MoonBit toolchain.
+# The text-metrics build is committed so that a git dependency on veriss needs no MoonBit toolchain.
 !packages/veriss/text-metrics/_build
 packages/veriss/text-metrics/_build/*
 !packages/veriss/text-metrics/_build/js

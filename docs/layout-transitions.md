@@ -2,7 +2,7 @@
 
 > isle の `docs/layout-transitions.md` から移した(isle が veriss の利用者になったため)。isle の例・eval・テストへのリンクは isle のリポジトリを指す。
 
-`@mizchi/veriss/transitions` に、二つの状態で指定boxのborder矩形が
+`veriss/transitions` に、二つの状態で指定boxのborder矩形が
 変わらないことを検査するAPIを実装しています。ブラウザーを描画せず、CSSから
 独立に抽出した前後の幾何モデルをZ3で比較します。Isle固有の構文や状態機械には
 依存せず、Isleが作った解析結果も入力できます。IsleではDOM側の`@noshift`を基本にし、
@@ -162,13 +162,13 @@ Workerでは`layout/noshift`の`createNoShiftPlan` / `verifyNoShiftPlan`を使�
 
 ## API
 
-以下は独立パッケージの例です。パッケージは現在private・レジストリ未公開です。
-インストールは[ローカルアーカイブの手順](../packages/veriss/README.md)を参照してください。
+以下は独立パッケージの例です。npm から `npm install veriss` で入れます
+(ほかの入れ方は [README](../packages/veriss/README.md) を参照してください)。
 
 ```js
-import {analyzeHTML} from '@mizchi/veriss/html';
-import {createNoShiftContract} from '@mizchi/veriss/transitions';
-import {verifyNoShift} from '@mizchi/veriss/transitions/node';
+import {analyzeHTML} from 'veriss/html';
+import {createNoShiftContract} from 'veriss/transitions';
+import {verifyNoShift} from 'veriss/transitions/node';
 
 const html = '<main class="page"><div class="content"></div><div class="action"></div></main>';
 const base = `

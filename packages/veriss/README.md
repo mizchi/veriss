@@ -5,10 +5,14 @@ finite box tree and a complete author stylesheet without rendering a page or
 executing application code. [Isle](https://github.com/mizchi/isle) is one user; the core has no dependency
 on the Isle compiler, its syntax, or a browser renderer.
 
-The package is `@mizchi/veriss`. It is not published to npm; depend on it from git (pnpm), pinned to a commit:
+```sh
+npm install veriss
+```
+
+For an unreleased commit, depend on it from git (pnpm), pinned to a commit:
 
 ```json
-{ "dependencies": { "@mizchi/veriss": "github:mizchi/veriss#<commit>&path:packages/veriss" } }
+{ "dependencies": { "veriss": "github:mizchi/veriss#<commit>&path:packages/veriss" } }
 ```
 
 The built text-metrics module (`text-metrics/_build/.../font_ffi.js`) is committed, so a consumer needs no MoonBit toolchain.
@@ -16,8 +20,8 @@ The built text-metrics module (`text-metrics/_build/.../font_ffi.js`) is committ
 ## Verify static HTML
 
 ```js
-import {analyzeHTML} from '@mizchi/veriss/html';
-import {verifyLayoutReport} from '@mizchi/veriss/z3/node';
+import {analyzeHTML} from 'veriss/html';
+import {verifyLayoutReport} from 'veriss/z3/node';
 
 const report = analyzeHTML(
   '<main class="row">' + '<div class="cell"></div>'.repeat(4) + '</main>',
@@ -44,7 +48,7 @@ attributes currently need a different adapter; pass CSS as a complete stylesheet
 ## Supply a box tree from another tool
 
 ```js
-import {analyzeLayout} from '@mizchi/veriss';
+import {analyzeLayout} from 'veriss';
 
 const report = analyzeLayout(
   {tag: 'div', classes: ['message'], text: true},
@@ -162,7 +166,7 @@ geometry is decided and never change the status, regions or proof.
 `{text}` box contracts into size contracts:
 
 ```js
-import {loadTextMetrics} from '@mizchi/veriss/text/node';
+import {loadTextMetrics} from 'veriss/text/node';
 const metrics = await loadTextMetrics({fonts: {'Noto Sans JP': {file: 'NotoSansJP.ttf'}}});
 const font = {family: 'Noto Sans JP', size: 16, lineHeight: 24, weight: 400};
 const report = analyzeLayout(tree, metrics.resolveOptions({
@@ -207,8 +211,8 @@ contract. `/transitions/node` verifies exact presence and border-rectangle
 equality for explicitly matched targets:
 
 ```js
-import {createNoShiftContract} from '@mizchi/veriss/transitions';
-import {verifyNoShift} from '@mizchi/veriss/transitions/node';
+import {createNoShiftContract} from 'veriss/transitions';
+import {verifyNoShift} from 'veriss/transitions/node';
 
 const contract = createNoShiftContract({
   name: 'Load',

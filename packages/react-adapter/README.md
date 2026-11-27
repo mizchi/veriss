@@ -1,6 +1,6 @@
 # @mizchi/veriss-react
 
-A React (JSX/TSX) adapter for `@mizchi/veriss`, with the style systems that leave a static stylesheet.
+A React (JSX/TSX) adapter for `veriss`, with the style systems that leave a static stylesheet.
 
 ```js
 import {analyzeReact} from '@mizchi/veriss-react';

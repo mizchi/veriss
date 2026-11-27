@@ -1,7 +1,7 @@
 # @mizchi/veriss-adapter-core
 
 The part the component adapters (Svelte, Vue, React with StyleX or Linaria) share: template states as choices,
-the analysis of every state with `@mizchi/veriss`, the findings per state, and the lint output. It depends
+the analysis of every state with `veriss`, the findings per state, and the lint output. It depends
 on the core; the core knows nothing of components.
 
 ```js

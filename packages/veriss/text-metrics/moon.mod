@@ -4,7 +4,7 @@ version = "0.0.1"
 
 license = "Apache-2.0"
 
-description = "Build-time text metrics for @mizchi/veriss, backed by mizchi/font"
+description = "Build-time text metrics for veriss, backed by mizchi/font"
 
 preferred_target = "js"
 

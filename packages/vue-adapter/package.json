@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Vue 3 SFC adapter for @mizchi/veriss: v-if/v-show/v-for/:class branches as states, scoped styles.",
+  "description": "Vue 3 SFC adapter for veriss: v-if/v-show/v-for/:class branches as states, scoped styles.",
   "exports": {
     ".": {
       "import": "./src/index.mjs"

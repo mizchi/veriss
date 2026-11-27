@@ -1,4 +1,4 @@
-// Svelte 5 component adapter for @mizchi/veriss.
+// Svelte 5 component adapter for veriss.
 //
 // A component is a family of DOM trees: every {#if} branch, class: directive and {#each} item count is a choice. The
 // adapter enumerates the combinations (bounded), renders each as HTML, and runs the generic analysis on each one.

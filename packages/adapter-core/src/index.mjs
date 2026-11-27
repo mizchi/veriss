@@ -1,7 +1,7 @@
 // The shared part of the component adapters (Svelte, Vue, React with StyleX or Linaria). An adapter turns one
 // component into its template states — { html, choices } with the conditions each takes — plus its CSS; this module
 // analyses every state with the generic core and reports what holds per state. The core knows nothing of components.
-import { analyzeHTML, phrasingTags } from '@mizchi/veriss/html';
+import { analyzeHTML, phrasingTags } from 'veriss/html';
 import { parseFragment, serialize } from 'parse5';
 import { noShift } from './noshift.mjs';
 
