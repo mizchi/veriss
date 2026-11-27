@@ -539,14 +539,17 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
         r = below(r, c.origin.inline, right(target)); r = below(r, target.origin.inline, right(c));
         // A box with no area takes no click, and a control with none is not seen (as in overlap()).
         for (const size of [c.inline, c.block, target.inline, target.block]) r = below(r, scalar(0), size);
-        // On screen, and below the control's place at s = 0; reached before the largest scroll offset.
+        // On screen, and below the control's place at s = 0; reached before the largest scroll offset. The box's bottom
+        // is taken where the viewport cuts it: past the viewport bottom, the control first meets it entering the viewport.
         r = below(r, c.origin.block, viewportBlock); r = below(r, scalar(0), bottom(c));
-        r = atMost(r, bottom(c), target.origin.block);
-        r = below(r, target.origin.block, sum(bottom(c), diff(bottom(scrolledPage), viewportBlock)));
-        if (!r) continue;
-        const p = sample(r), from = number(evaluate(diff(target.origin.block, bottom(c)), p)), to = Math.min(number(evaluate(diff(bottom(target), c.origin.block), p)), number(evaluate(diff(bottom(scrolledPage), viewportBlock), p)));
-        report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', `${target.box.label} scrolls under the fixed ${c.box.label}, which ${invisible(c) ? 'is invisible (opacity 0)' : 'paints nothing'} but takes the pointer: once the page is scrolled past ${Math.round(from)}px (to ${Math.round(to)}px, at the witness viewport), clicks on ${target.box.label} land on ${c.box.label}, which the user cannot see. Give ${c.box.label} pointer-events: none, or display: none while it is not shown`,
-          target, r, { rule: 'invisible-blocker', cover: c.path, why: paintsNothing(c), scrolled: { from, to } });
+        for (const [part, edge] of [[atMost(r, bottom(c), viewportBlock), bottom(c)], [below(r, viewportBlock, bottom(c)), viewportBlock]]) {
+          let q = atMost(part, edge, target.origin.block);
+          q = below(q, target.origin.block, sum(edge, diff(bottom(scrolledPage), viewportBlock)));
+          if (!q) continue;
+          const p = sample(q), from = number(evaluate(diff(target.origin.block, edge), p)), to = Math.min(number(evaluate(diff(bottom(target), c.origin.block), p)), number(evaluate(diff(bottom(scrolledPage), viewportBlock), p)));
+          report(findings, 'E_A11Y_INVISIBLE_BLOCKER', 'error', `${target.box.label} scrolls under the fixed ${c.box.label}, which ${invisible(c) ? 'is invisible (opacity 0)' : 'paints nothing'} but takes the pointer: once the page is scrolled past ${Math.round(from)}px (to ${Math.round(to)}px, at the witness viewport), clicks on ${target.box.label} land on ${c.box.label}, which the user cannot see. Give ${c.box.label} pointer-events: none, or display: none while it is not shown`,
+            target, q, { rule: 'invisible-blocker', cover: c.path, why: paintsNothing(c), scrolled: { from, to } });
+        }
       }
     }
   }

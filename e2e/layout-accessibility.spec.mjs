@@ -2523,6 +2523,15 @@ test('fixed covers and scrolling: the offsets where a transparent fixed box take
   expect(run(wipeHTML, wipeCSS('.ad{pointer-events:none}')).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER')).toEqual([]);
   await open(wipeHTML, wipeCSS('.ad{pointer-events:none}'));
   expect(await hitAt('.m', (from + to) / 2)).toBe('m');
+  // A box reaching past the viewport bottom: the link meets it where it enters the viewport (1000 − 667), not at the
+  // box's page bottom (1000 − 800), where the link is still below the viewport.
+  const low = `.gap{display:block;height:960px}.tail{display:block;height:400px}.ad{position:fixed;left:0;top:600px;width:320px;height:200px;z-index:2147483000;opacity:0;background:#fff}`;
+  const [late] = run(wipeHTML, low).diagnostics.filter(d => d.code === 'E_A11Y_INVISIBLE_BLOCKER' && d.box === '.m');
+  expect(Math.round(late.scrolled.from)).toBe(333);
+  await open(wipeHTML, low);
+  expect(await page.evaluate(() => { scrollTo(0, 250); return document.querySelector('.m').getBoundingClientRect().top >= innerHeight; }), 'at 250 the link is below the viewport').toBe(true);
+  // Just past the offset, the link's visible top is under the box.
+  expect(await page.evaluate(y => { scrollTo(0, y); const r = document.querySelector('.m').getBoundingClientRect(); return document.elementFromPoint(r.left + 10, Math.min(r.top + 1, innerHeight - 1))?.className; }, late.scrolled.from + 2)).toBe('ad');
 
   const sheetHTML = '<main><div class="gap"></div><a class="l" href="/a">First</a><a class="m" href="/b">Second</a><div class="tail"></div></main><div class="sh"></div>';
   const sheetCSS = root => `.gap{display:block;height:500px}.tail{display:block;height:800px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`;

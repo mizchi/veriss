@@ -11,8 +11,8 @@ const base = '*{box-sizing:border-box;margin:0}body{display:block;background:#ff
   + '.l,.m{display:block;width:100px;height:40px;color:#000;font-size:16px;line-height:20px}'
   + 'button{appearance:none;display:block;padding:0;border:0;min-width:0;min-height:0;font-size:16px;line-height:20px}';
 // A page with two host links, then the layer markup.
-const page = (layer, css, {host = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>', boxes = {}} = {}) =>
-  analyzeHTML(`<html lang="en"><body>${host}${layer}</body></html>`, {name: 'P', viewport, accessibility: true,
+const page = (layer, css, {host = '<main><a class="l" href="/a">First</a><a class="m" href="/b">Second</a></main>', boxes = {}, domain = viewport} = {}) =>
+  analyzeHTML(`<html lang="en"><body>${host}${layer}</body></html>`, {name: 'P', viewport: domain, accessibility: true,
     boxes: {'.l': line, '.m': line, ...boxes}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: base + css});
 const find = (report, code) => report.diagnostics.filter(d => d.code === code);
 const overlay = '.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:#000}';
@@ -389,4 +389,15 @@ test('an invisible blocker is named by the box on top in each width range', () =
     // .b reaches .l (x 0..100) while 400 < width < 800.
     assert.deepEqual(named, [['.a', '320', '400'], ['.b', '400', '800'], ['.a', '800', '800']], html);
   }
+});
+
+// A fixed box that reaches past the viewport bottom: a control below the viewport first meets it where it enters the
+// viewport (its top − the viewport height), not at the box's page bottom.
+test('the scroll offset where a control starts under a fixed box is clipped to the viewport bottom', () => {
+  const host = '<main><a class="l" href="/a">First</a><div class="gap"></div><a class="m" href="/b">Second</a><div class="tail"></div></main>';
+  const at = css => find(page('<div class="ad"></div>', `.gap{display:block;height:960px}.tail{display:block;height:400px}.ad{position:fixed;left:0;width:320px;z-index:2147483000;opacity:0;background:#fff;${css}}`, {host, domain: {min: 375, max: 375, height: {min: 667, max: 667}}}), 'E_A11Y_INVISIBLE_BLOCKER').filter(d => d.box === '.m' && d.scrolled).map(d => Math.round(d.scrolled.from));
+  // .m is at 1000..1040. The box spans 600..800: past the viewport bottom (667), so .m reaches it at 1000 − 667.
+  assert.deepEqual(at('top:600px;height:200px'), [333]);
+  // Wholly on screen (400..600): from its bottom, as before.
+  assert.deepEqual(at('top:400px;height:200px'), [400]);
 });
