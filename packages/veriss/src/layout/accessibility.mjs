@@ -943,12 +943,19 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       // The cover holds [x, x + 2] × [y − 1, y + 1].
       region = atMost(region, cover.origin.inline, x); region = atMost(region, sum(x, scalar(2)), right(cover));
       region = atMost(region, cover.origin.block, diff(y, scalar(1))); region = atMost(region, sum(y, scalar(1)), bottom(cover));
-      // At scroll offset 0 a text start inside a scroll container is seen only within that container's box.
-      if (scrollZero) for (const s of scrollersOf(target)) { region = atMost(region, s.origin.inline, x); region = atMost(region, sum(x, scalar(2)), right(s)); region = atMost(region, s.origin.block, diff(y, scalar(1))); region = atMost(region, sum(y, scalar(1)), bottom(s)); }
-      if (region) {
-        report(findings, 'E_A11Y_TEXT_START_OBSCURED', 'error', `the start of ${target.box.label}'s text is hidden behind ${cover.box.label} (it covers where the first line begins); move ${cover.box.label} off the text or give the text room (padding) beside it`, target, region, { rule: 'text-start-obscured', cover: cover.path });
-        break;
+      // At scroll offset 0 a text start inside a scroll container is seen only within that container's box: each row of
+      // the container bounds it in that row's viewport range only (it may sit elsewhere, or not clip, in another).
+      let pieces = region ? [region] : [];
+      if (scrollZero) {
+        const byPath = new Map();
+        for (const s of scrollersOf(target)) if (intersect(s.region, target.region)) byPath.set(s.path, [...(byPath.get(s.path) ?? []), s]);
+        for (const rows of byPath.values()) pieces = pieces.flatMap(piece => [
+          ...rows.map(s => { let r = intersect(piece, s.region); r = atMost(r, s.origin.inline, x); r = atMost(r, sum(x, scalar(2)), right(s)); r = atMost(r, s.origin.block, diff(y, scalar(1))); return atMost(r, sum(y, scalar(1)), bottom(s)); }).filter(Boolean),
+          ...rows.reduce((rest, s) => rest.flatMap(r => subtract(r, s.region)), [piece]),
+        ]);
       }
+      for (const region of pieces) report(findings, 'E_A11Y_TEXT_START_OBSCURED', 'error', `the start of ${target.box.label}'s text is hidden behind ${cover.box.label} (it covers where the first line begins); move ${cover.box.label} off the text or give the text room (padding) beside it`, target, region, { rule: 'text-start-obscured', cover: cover.path });
+      if (pieces.length) break;
     }
   }
 

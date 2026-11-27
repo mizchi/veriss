@@ -159,3 +159,13 @@ test('an invisible cover outside a scroll container: the initial-scroll invisibl
   assert.match(found[0].message, /initial scroll position/);
   assert.ok(report.diagnostics.some(d => d.code === 'U_A11Y_SCROLLED_COVER'), 'other scroll offsets stay Unknown');
 });
+
+test('text start under a cover at the initial scroll offset: a scroller bounds it only in its own viewport range', () => {
+  // .s (overflow: hidden) sits at y = 0 below 600px and at y = 200 from 600px. Below 600px the fixed badge covers where
+  // the text starts; the scroller's wide-screen place must not bound the narrow range.
+  const report = analyzeHTML('<html lang="en"><body><div class="gap"></div><div class="s"><p class="t">Hello</p></div><div class="b"></div></body></html>', {
+    name: 'P', viewport: {min: 375, max: 800, height: {min: 667, max: 667}}, accessibility: true, boxes: {'.t': {minInlineSize: 0, intrinsicBlockSize: 24}}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}],
+    css: '*{margin:0}body{display:block;background:#fff}.gap{height:0}@media (min-width:600px){.gap{height:200px}}.s{height:100px;overflow:hidden}.t{display:block;font-size:16px;line-height:24px;color:#000;text-align:left}.b{position:fixed;left:0;top:0;width:40px;height:30px;background:#333;z-index:9}'});
+  const found = report.diagnostics.filter(d => d.code === 'E_A11Y_TEXT_START_OBSCURED');
+  assert.deepEqual(found.map(d => `${d.path} ${d.range.min}-${d.range.max}`), ['P/0/1/0 375-600'], JSON.stringify(report.diagnostics.map(d => `${d.code} ${d.path}`)));
+});
