@@ -1,4 +1,4 @@
-// Vue 3 SFC adapter for @mizchi/veriss. The template's branches are choices: v-if / v-else-if / v-else chains,
+// Vue 3 SFC adapter for veriss. The template's branches are choices: v-if / v-else-if / v-else chains,
 // v-show (display: none when false), :class objects, arrays and literal conditionals, literal-conditional bindings
 // of other attributes, and v-for item counts. Every combination is analysed by the core (adapter-core), the same way
 // as the Svelte adapter. A condition is named by its expression source; !x negates x.

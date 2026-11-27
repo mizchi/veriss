@@ -4,7 +4,7 @@ isle から切り出した CSS 検証器(veriss)を、別のマシンで続け�
 
 ## 今どこにいるか
 
-- `main` に全部入っている(このセッションの作業も)。isle は veriss を git 依存で使う利用者になった(isle の `package.json` の `@mizchi/veriss` が commit を指す)
+- `main` に全部入っている(このセッションの作業も)。isle は veriss を git 依存で使う利用者になった(isle の `package.json` の `veriss` が commit を指す)
 - **実ページの Unknown を減らす(2026-11-24〜25、PR #19〜#37)**: CSS-in-JS の管理画面の実ページ(44 ページ)に veriss を当て、
   止まりどころを 1 つずつ潰した。チェックリストの I1〜I19。自分で書く側の規約は [安全なサブセット](safe-subset.md)
   - 誤検出を直した: keyframes 名の大文字・小文字、辺ごとの border の一括指定、caret、`*` の擬似要素のリセット(1 万 7 千件 → 0)

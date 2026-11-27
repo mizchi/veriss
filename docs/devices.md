@@ -39,7 +39,7 @@
 ## API
 
 ```js
-import {deviceChecks, analyzeDevices} from '@mizchi/veriss/devices';
+import {deviceChecks, analyzeDevices} from 'veriss/devices';
 const checks = deviceChecks({region: 'jp', minShare: 1, mode: 'fullscreen'}); // プロファイル × 向き(2 画面は single と spanned)
 const {results, findings} = analyzeDevices(html, {name: 'Page', css, accessibility: true}, checks);
 // findings: コードと箱ごとに、出たチェック(`iphone-16-pro/landscape` など)の一覧

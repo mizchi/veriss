@@ -30,24 +30,24 @@ test('an isolated npm consumer verifies HTML and runs Z3 without installing Isle
     assert.equal(unpacked.status,0,unpacked.stderr);
     const app=join(directory,'app');
     await mkdir(join(app,'node_modules/@mizchi'),{recursive:true});
-    await rename(join(directory,'package'),join(app,'node_modules/@mizchi/veriss'));
-    const metadata=JSON.parse(await readFile(join(app,'node_modules/@mizchi/veriss/package.json'),'utf8'));
+    await rename(join(directory,'package'),join(app,'node_modules/veriss'));
+    const metadata=JSON.parse(await readFile(join(app,'node_modules/veriss/package.json'),'utf8'));
     for(const entry of Object.values(metadata.exports)) {
       if(typeof entry==='string') continue; // a deep-import pattern (./src/*), not an entry point
-      assert.ok((await readFile(join(app,'node_modules/@mizchi/veriss',entry.types),'utf8')).length);
+      assert.ok((await readFile(join(app,'node_modules/veriss',entry.types),'utf8')).length);
     }
     for(const name of Object.keys(metadata.dependencies)) {
       await symlink(join(packageRoot,'node_modules',name),join(app,'node_modules',name),'dir');
     }
     await writeFile(join(app,'package.json'),'{"type":"module"}');
     await writeFile(join(app,'check.mjs'),`import assert from 'node:assert/strict';
-import {analyzeHTML} from '@mizchi/veriss/html';
-import {verifyLayoutReport} from '@mizchi/veriss/z3/node';
-import {createContractIR,createLayoutIR,createObligationIR} from '@mizchi/veriss/contracts';
-import {verifyContractObligation} from '@mizchi/veriss/contracts/node';
-import {createNoShiftContract} from '@mizchi/veriss/transitions';
-import {verifyNoShift} from '@mizchi/veriss/transitions/node';
-import {analyzeLayout} from '@mizchi/veriss';
+import {analyzeHTML} from 'veriss/html';
+import {verifyLayoutReport} from 'veriss/z3/node';
+import {createContractIR,createLayoutIR,createObligationIR} from 'veriss/contracts';
+import {verifyContractObligation} from 'veriss/contracts/node';
+import {createNoShiftContract} from 'veriss/transitions';
+import {verifyNoShift} from 'veriss/transitions/node';
+import {analyzeLayout} from 'veriss';
 const report=analyzeHTML('<main class="row"><div></div><div></div></main>',{
   name:'Document',css:'*{box-sizing:border-box}.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));height:100px;grid-template-rows:100px}',viewport:{min:160,max:400,height:{min:100,max:100}}
 });

@@ -264,7 +264,7 @@ engine から独立した Z3 の仕様で、engine(範囲全体で UNSAT)と 3 �
 ## 実装済み(最近)
 
 - L1 の Lean による定義と証明、oracle による差分テスト。ランダムな設定の乱数の不具合(Flex がすべて 1 項目、Grid がすべて 1 列)を直した
-- クリティカル CSS の抽出(`@mizchi/veriss/critical`)
+- クリティカル CSS の抽出(`veriss/critical`)
 - 壊れた状態変化の CLS を L1 の仕様の上で Z3 が検出(SAT の反例)、正しい版は UNSAT
 - 座標計算サブセット L1 の参照仕様(ADR-0018、`models/layout/`): engine と幅の範囲全体で一致、3 ブラウザーとランダムな設定で一致
 - eval の基準を Chromium 156 で記録し直した。結果に `browser`(記録したブラウザーの版)を書き、gate は eval が変わったときに記録と今回の版を並べて出す

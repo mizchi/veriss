@@ -1,4 +1,4 @@
-# クリティカル CSS の抽出(`@mizchi/veriss/critical`)
+# クリティカル CSS の抽出(`veriss/critical`)
 
 ページのファーストビュー(読み込んだ直後、スクロールしていない画面)の表示に要る CSS の規則だけを抜き出す。対象の画面は、
 一般的なスマートフォンと PC の範囲のすべての大きさ(`firstViewProfiles`)。
@@ -9,7 +9,7 @@
 | pc | 1263〜1920px | 720〜1080px | overlay。通常のスクロールバー(15px・17px)は、幅の範囲を 17px 下げて含める。CSS が `vw` などの viewport の単位を使うときは、通常のスクロールバーそのものを解析に入れる(`vw` はスクロールバーを含む) |
 
 ```js
-import {extractCriticalCSS} from '@mizchi/veriss/critical';
+import {extractCriticalCSS} from 'veriss/critical';
 const {css, rest, elements, profiles} = extractCriticalCSS(html, {css: stylesheet});
 // css: ファーストビューの規則(元の順番、元の @media などの中)。rest: それ以外(後から読み込む)
 ```
@@ -20,7 +20,7 @@ const {css, rest, elements, profiles} = extractCriticalCSS(html, {css: styleshee
 計算されたフォントで測って、その文字が要る大きさで配置する(1 回目の解析で各文のフォントを報告させ、2 回目に測った契約で配置する)。
 
 ```js
-import {loadTextMetrics} from '@mizchi/veriss/text/node';
+import {loadTextMetrics} from 'veriss/text/node';
 const fonts = {Roboto: {file: 'fonts/Roboto.ttf'}};
 const r = extractCriticalCSS(html, {css, textMetrics: await loadTextMetrics({fonts}), fonts});
 ```

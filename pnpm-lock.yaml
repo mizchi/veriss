@@ -188,7 +188,7 @@ importers:
         specifier: 8.5.32
         version: 8.5.32
     devDependencies:
-      '@mizchi/veriss':
+      veriss:
         specifier: workspace:*
         version: link:../veriss
 
@@ -244,12 +244,12 @@ importers:
         specifier: 5.57.2
         version: 5.57.2
     devDependencies:
-      '@mizchi/veriss':
-        specifier: workspace:*
-        version: link:../veriss
       '@mizchi/veriss-adapter-core':
         specifier: workspace:*
         version: link:../adapter-core
+      veriss:
+        specifier: workspace:*
+        version: link:../veriss
 
   packages/veriss:
     dependencies:

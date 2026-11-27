@@ -4,7 +4,7 @@ version = "0.0.1"
 
 license = "Apache-2.0"
 
-description = "Development-only differential cascade oracle for @mizchi/veriss, backed by mizchi/css"
+description = "Development-only differential cascade oracle for veriss, backed by mizchi/css"
 
 preferred_target = "js"
 

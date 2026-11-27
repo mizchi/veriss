@@ -1,8 +1,8 @@
 name: release
 
-# Push a v* tag to publish @mizchi/veriss (packages/veriss; the adapters stay private for now).
+# Push a v* tag to publish veriss (packages/veriss; the adapters stay private for now).
 # The npm side trusts this workflow by filename:
-#   npm trust github @mizchi/veriss --repo mizchi/veriss --file release.yml --allow-publish
+#   npm trust github veriss --repo mizchi/veriss --file release.yml --allow-publish
 # No NPM_TOKEN: npm authenticates through OIDC and attaches provenance.
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
             echo "packages/veriss is $v, tag is $GITHUB_REF_NAME"; exit 1
           fi
       # The unit tests of the published package (the browser e2e and the evals are tools/gate.sh, run before a push).
-      - run: pnpm --filter @mizchi/veriss test
+      - run: pnpm --filter veriss test
       # Trusted publishing needs npm >= 11.5.1.
       - run: npm install -g npm@11
       - name: Publish

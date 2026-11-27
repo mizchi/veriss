@@ -85,7 +85,7 @@ export default {
 | `@mizchi/veriss-color` | 色の解析、重ね合わせ、輝度、WCAG の比、祖先の背景をたどる `backdrop(chain)` | なし |
 | `@mizchi/veriss-css` | syntax と style の段(postcss、css-tree を使う) | なし(postcss、css-tree) |
 | `@mizchi/veriss-layout` | layout の段(記号の解、`region`、`linear`) | `veriss-css` の `StyleFacts` の形だけ |
-| `@mizchi/veriss`(core) | dom の段、段をつなぐ pipeline、規則の登録、報告の形、既存の公開 API | 上の 3 つ |
+| `veriss`(core) | dom の段、段をつなぐ pipeline、規則の登録、報告の形、既存の公開 API | 上の 3 つ |
 | 規則 | `rules/css-mistakes`、`rules/a11y-dom`、`rules/a11y-geometry`、`rules/contrast`、`rules/integrity`、`rules/cls` | 事実の形、`veriss-color` |
 
 - **コントラスト** は `veriss-color` と `rules/contrast` の組。`rules/contrast` は `needs: ['style']` で、祖先の塗りの鎖(DOM の祖先と computed style だけで決まる)から判定する。後ろに別の箱が重なるかどうかだけは geometry が要る。そこは layout がある場合に限って `overlaps(row)` を渡し、ない場合は今と同じく Unknown にする。

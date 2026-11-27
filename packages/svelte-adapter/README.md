@@ -1,6 +1,6 @@
 # @mizchi/veriss-svelte
 
-A Svelte 5 component adapter for `@mizchi/veriss`, written to check that the verifier core is not tied to
+A Svelte 5 component adapter for `veriss`, written to check that the verifier core is not tied to
 Isle's template language. It depends on the core; the core does not depend on it.
 
 ```js

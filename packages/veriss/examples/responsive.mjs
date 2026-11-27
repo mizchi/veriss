@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import {analyzeHTML} from '@mizchi/veriss/html';
-import {verifyLayoutReport} from '@mizchi/veriss/z3/node';
+import {analyzeHTML} from 'veriss/html';
+import {verifyLayoutReport} from 'veriss/z3/node';
 
 const html='<main class="row">'+'<div class="cell"></div>'.repeat(4)+'</main>';
 for(const breakpoint of [184,183]) {
