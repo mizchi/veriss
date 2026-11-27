@@ -260,7 +260,10 @@ function expand(property, value) {
   if (property==='scrollbar-color') return [];
   if (property === 'all') {
     if (!wide.has(value)) throw new Error('Unsupported all reset');
-    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`])].filter(key => key !== 'direction').map(key => [key, value]);
+    // (Each side's border width and style ($bw-/$bs-) too: without them a later border-width alone kept an iframe's UA
+    // style, and all: revert dropped its UA border (measured 304x254 for frameborder="0"; revert is Unknown there).
+    // inherit takes the side's used border as a whole, as before.)
+    return [...geometry, ...textProperties, ...paintProperties, 'background-color', 'background-image', ...['left', 'right', 'top', 'bottom'].flatMap(side => [side, `padding-${side}`, `margin-${side}`, `border-${side}`, ...(value === 'inherit' ? [] : [`$bw-${side}`, `$bs-${side}`])])].filter(key => key !== 'direction').map(key => [key, value]);
   }
   if (property === 'flex') return flexShorthand(value);
   // grid-area: <name> places the item in the named area of its parent's grid-template-areas (grid.mjs resolves it);
@@ -331,8 +334,10 @@ function expand(property, value) {
     const sides = borderSides[property];
     // initial and unset set the side's width and style too (medium, none). A shorthand with var() is expanded as 'initial'
     // to find the longhands it writes: without its width and style here, a later border-width read its style as none.
-    // (inherit and revert take the side's used border as a whole, as before.)
-    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value], ...(['initial', 'unset'].includes(value) ? [[`$bw-${side}`, value], [`$bs-${side}`, value]] : [])]);
+    // revert and revert-layer too: revert rolls an iframe back to its UA border past the frameborder hint (304x254
+    // measured in all three engines, where it was verified at 300x250), which the side's pair keeps Unknown.
+    // (inherit takes the side's used border as a whole, as before.)
+    if (wide.has(value)) return sides.flatMap(side => [[`border-${side}`, value], [`border-${side}-color`, value], ...(value !== 'inherit' ? [[`$bw-${side}`, value], [`$bs-${side}`, value]] : [])]);
     const styles = new Set(['none', 'hidden', 'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
     const lengthLike = /^(?:\d+\.?\d*|\.\d+)(?:px|r?em|ch|ex|vw|vh|vmin|vmax)$/;
     let width, style, color;

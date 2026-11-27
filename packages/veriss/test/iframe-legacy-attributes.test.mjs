@@ -95,6 +95,19 @@ test('a CSS-wide border shorthand resets the style too; revert-layer rolls back 
   assert.deepEqual(frame(run('width="300" height="250"', '@layer a{iframe{border-style:none}}iframe{border-style:revert-layer}')), [300, 250]);
 });
 
+test('all: initial / unset resets the border width and style too (measured: 300x250 and 306x256 in all three engines)', () => {
+  for (const value of ['initial', 'unset']) {
+    assert.deepEqual(frame(run('frameborder="0"', `iframe{all:${value}}iframe{display:block;width:300px;height:250px;border-width:1px}`)), [300, 250], value);
+    assert.deepEqual(frame(run('frameborder="0"', `iframe{all:${value}}iframe{display:block;width:300px;height:250px;border-style:solid}`)), [306, 256], value);
+  }
+  // all: inherit takes the parent's (no) border: 300x250. all: revert rolls back to the UA border (304x254 measured), past
+  // the frameborder hint: Unknown, where it was verified at 300x250.
+  assert.deepEqual(frame(run('frameborder="0"', 'iframe{all:inherit}iframe{display:block;width:300px;height:250px}')), [300, 250]);
+  assert.equal(run('frameborder="0"', 'iframe{all:revert}iframe{display:block;width:300px;height:250px}').status, 'unknown');
+  // The same for border: revert (304x254 measured in all three engines; it was verified at 300x250).
+  assert.equal(run('width="300" height="250" frameborder="0"', 'iframe{border:revert}').status, 'unknown');
+});
+
 test('frame attributes on an element they do not apply to do nothing', () => {
   const report = analyzeHTML('<html lang="en"><body><main><div class="d" frameborder="0" scrolling="no" marginwidth="0"></div></main></body></html>', {name: 'P', viewport: vp, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}], css: 'body{margin:0}.d{height:10px}'});
   assert.deepEqual(unknowns(report), []);
