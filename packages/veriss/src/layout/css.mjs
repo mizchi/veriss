@@ -963,7 +963,9 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         if (node.name.toLowerCase() === 'media' && /(?<![\w:-])(?:and|or|not)\(/i.test(node.params) && !postcss.list.comma(node.params).slice(1).length) { note('W_CSS_MEDIA_AND_SPACE', { params: node.params.trim(), written: /(?<![\w:-])(?:and|or|not)\(/i.exec(node.params)[0], file: filename, line: node.source.start.line }); continue; }
         // F139: a feature name no browser knows makes the query never match (in a not () too; measured in Chromium, Firefox and
         // WebKit). Only a name near a known feature is called a typo; in a list only that query fails, so only a single query.
-        if (node.name.toLowerCase() === 'media' && !postcss.list.comma(node.params).slice(1).length) {
+        // An unknown feature is "unknown", not false: an or with a true side matches, and so does a not over a group whose
+        // other side is false (measured in all three), so those stay with the query parser (Unknown).
+        if (node.name.toLowerCase() === 'media' && !postcss.list.comma(node.params).slice(1).length && !/(?<![\w-])or(?![\w-])/i.test(node.params) && !/(?<![\w-])not\s*\(\s*\(/i.test(node.params)) {
           const typo = mediaFeatureNames(node.params).map(feature => ({ feature, suggestion: mediaFeatureTypo(feature) })).find(t => t.suggestion);
           if (typo) { note('W_CSS_MEDIA_FEATURE_UNKNOWN', { params: node.params.trim(), ...typo, file: filename, line: node.source.start.line }); continue; }
         }
@@ -1146,7 +1148,7 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
       for (const d of authored) if (/^(?:transition|transition-property)$/i.test(d.prop) && !/var\(/i.test(d.value))
         for (const item of postcss.list.comma(d.value)) {
           const word = d.prop.toLowerCase() === 'transition-property' ? item.trim() : postcss.list.space(item).find(t => /^(?:--|-?[a-z_])[\w-]*$/i.test(t) && !transitionKeywords.has(t.toLowerCase()));
-          if (!word || ['all', 'none'].includes(word.toLowerCase())) continue;
+          if (!word || ['all', 'none'].includes(word.toLowerCase()) || wide.has(word.toLowerCase())) continue;
           if (word.startsWith('--')) { transitionedCustom.push({ property: word, selector: node.selector, file: filename, line: d.source.start.line }); continue; }
           const suggestion = propertyTypo(word);
           if (suggestion) note('W_CSS_TRANSITION_PROPERTY_UNKNOWN', { property: word, suggestion, selector: node.selector, file: filename, line: d.source.start.line });
@@ -1370,7 +1372,13 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         if (/^(?:transition|animation)(?:-duration|-delay)?$/.test(prop)) {
           // Outside calc(): there a bare number is a multiplier.
           let outside = '', depth = 0; for (let i = 0; i < d.value.length; i++) { if (depth === 0 && /^calc\(/i.test(d.value.slice(i))) { depth = 1; i += 4; continue; } if (depth) { if (d.value[i] === '(') depth++; else if (d.value[i] === ')') depth--; continue; } outside += d.value[i]; }
-          for (const m of outside.matchAll(/var\(\s*(--[\w-]+)\s*[,)]/g)) uses.push({ variable: m[1], property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
+          // Only a var() at the top of the value is substituted for sure: a fallback is used only when its variable has no value.
+          let top = '', nest = 0; for (let i = 0; i < outside.length; i++) { if (/^var\(/i.test(outside.slice(i)) && nest === 0) { const end = outside.slice(i).search(/[,)]/); top += outside.slice(i, i + end + 1); if (outside[i + end] === ',') { nest = 1; i += end; continue; } i += end; continue; } if (nest) { if (outside[i] === '(') nest++; else if (outside[i] === ')') nest--; continue; } top += outside[i]; }
+          for (const item of postcss.list.comma(top)) {
+            // In the animation shorthand a bare number is its iteration count, unless the item already has one.
+            if (prop === 'animation' && !postcss.list.space(item).some(t => /^(?:infinite|[+-]?(?:\d+\.?\d*|\.\d+))$/i.test(t))) continue;
+            for (const m of item.matchAll(/var\(\s*(--[\w-]+)\s*[,)]/g)) uses.push({ variable: m[1], property: prop, selector: d.parent?.selector ?? '', file: sheet.file, line: d.source?.start.line });
+          }
         }
       });
     }

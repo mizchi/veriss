@@ -1596,3 +1596,32 @@ test('F139: a misspelled media feature makes the query never match', () => {
   for (const css of ['@media (min-width: 600px){.a{color:red}}', '@media (scripting: enabled){.a{color:red}}', '@media (prefers-reduced-data: reduce){.a{color:red}}', '@media (-webkit-min-device-pixel-ratio: 2){.a{color:red}}', '@media (update: fast){.a{color:red}}'])
     assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 0, css);
 });
+
+test('F137: a CSS-wide keyword in transition-property is not a typo', () => {
+  for (const css of ['.a{transition-property:unset}', '.a{transition-property:initial}', '.a{transition-property:revert-layer}'])
+    assert.equal(codes(run(css), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 0, css);
+  assert.equal(codes(run('.a{transition-property:widht}'), 'W_CSS_TRANSITION_PROPERTY_UNKNOWN').length, 1);
+});
+
+test('F138: a bare number in an animation shorthand may be its iteration count; a fallback not taken is not used', () => {
+  // The number is the iteration count here: valid.
+  assert.equal(codes(run(':root{--n:2}@keyframes k{to{opacity:.5}}.a{animation:k 1s var(--n)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  assert.equal(codes(run(':root{--n:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--n)}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  // The fallback is not substituted while --duration has a value.
+  assert.equal(codes(run('.a{--duration:.2s;--backup:300;transition-duration:var(--duration,var(--backup))}'), 'W_CSS_DURATION_UNITLESS').length, 0);
+  // A delay longhand falls back to 0s: the motion still runs, without its delay.
+  const [delay] = codes(run(':root{--d:300}@keyframes k{to{opacity:.5}}.a{animation:k 1s;animation-delay:var(--d)}'), 'W_CSS_DURATION_UNITLESS');
+  assert.ok(delay); assert.match(delay.message, /0s/); assert.doesNotMatch(delay.message, /no animation runs/);
+});
+
+test('F139: a typo in a query that an or (or a not over a group) can still make true is not called never-matching', () => {
+  // Measured in Chromium, Firefox and WebKit: both of these match.
+  for (const css of ['.a{width:10px}@media (min-widht:1px) or (min-width:1px){.a{width:20px}}', '.a{width:10px}@media not ((min-widht:1px) and (max-width:0px)){.a{width:20px}}']) {
+    const r = run(css);
+    assert.equal(codes(r, 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 0, css);
+    assert.notEqual(r.status, 'verified', css);
+  }
+  // These never match (measured): still reported.
+  for (const css of ['@media (min-widht:1px) and (min-width:1px){.a{color:red}}', '@media not (min-widht:1px){.a{color:red}}', '@media not screen and (min-widht:1px){.a{color:red}}'])
+    assert.equal(codes(run(css), 'W_CSS_MEDIA_FEATURE_UNKNOWN').length, 1, css);
+});
