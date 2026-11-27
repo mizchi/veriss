@@ -935,6 +935,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   for (const target of placed.filter(row => row.box.text && visible(row) && !hiddenFrom(row.path) && !row.box.pseudo && row.content && ['start', 'left'].includes(String(row.textAlign)) && row.direction !== 'rtl' && /^\d+(?:\.\d+)?px$/.test(String(row.lineHeight)))) {
     const own = layer(target), half = Number(String(target.lineHeight).slice(0, -2)) / 2;
     const x = sum(target.origin.inline, scalar(target.content.left)), y = sum(sum(target.origin.block, scalar(target.content.top)), scalar(q(String(half))));
+    // Where a cover was already reported: the next covers are looked at only in the rest (another cover may hide the text
+    // start at other widths).
+    const done = [];
     for (const cover of placed) {
       if (related(cover.path, target.path) || !visible(cover) || !cover.painted || !opaque(cover)) continue;
       if (!paintsAbove(cover, layer(cover), target, own)) continue;
@@ -954,8 +957,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
           ...rows.reduce((rest, s) => rest.flatMap(r => subtract(r, s.region)), [piece]),
         ]);
       }
+      for (const d of done) pieces = pieces.flatMap(piece => subtract(piece, d));
       for (const region of pieces) report(findings, 'E_A11Y_TEXT_START_OBSCURED', 'error', `the start of ${target.box.label}'s text is hidden behind ${cover.box.label} (it covers where the first line begins); move ${cover.box.label} off the text or give the text room (padding) beside it`, target, region, { rule: 'text-start-obscured', cover: cover.path });
-      if (pieces.length) break;
+      done.push(...pieces);
     }
   }
 

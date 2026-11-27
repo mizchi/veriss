@@ -169,3 +169,14 @@ test('text start under a cover at the initial scroll offset: a scroller bounds i
   const found = report.diagnostics.filter(d => d.code === 'E_A11Y_TEXT_START_OBSCURED');
   assert.deepEqual(found.map(d => `${d.path} ${d.range.min}-${d.range.max}`), ['P/0/1/0 375-600'], JSON.stringify(report.diagnostics.map(d => `${d.code} ${d.path}`)));
 });
+
+test('text start covered by one box at some widths and by another at others: both are reported', () => {
+  // The text starts at 30% of the width: .b covers it from 375 to 460px, .b2 from 667px (Chromium, Firefox and WebKit
+  // hit .b at 400px, the text at 550px, .b2 at 700px). One row of the text spans all of it: finding .b ended the search.
+  const report = analyzeHTML('<html lang="en"><body><div class="s"><p class="t">Hello</p></div><div class="b"></div><div class="b b2"></div></body></html>', {
+    name: 'P', viewport: {min: 375, max: 800, height: {min: 667, max: 667}}, accessibility: true, boxes: {'.t': {minInlineSize: 0, intrinsicBlockSize: 24}}, scrollbars: [{name: 'o', inlineSize: 0, blockSize: 0}],
+    css: '*{margin:0}body{display:block;background:#fff}.s{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,7fr)}.t{grid-column:2;display:block;font-size:16px;line-height:24px;color:#000;text-align:left}.b{position:fixed;top:0;left:100px;width:40px;height:30px;background:#333;z-index:9}.b2{left:200px}'});
+  const found = report.diagnostics.filter(d => d.code === 'E_A11Y_TEXT_START_OBSCURED');
+  assert.deepEqual(found.map(d => d.cover).sort(), ['P/0/1', 'P/0/2'], JSON.stringify(report.diagnostics.map(d => `${d.code} ${d.path} ${d.cover}`)));
+  assert.ok(found.find(d => d.cover === 'P/0/2').range.min >= 666, JSON.stringify(found.map(d => d.range)));
+});
