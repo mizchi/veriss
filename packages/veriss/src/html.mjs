@@ -73,6 +73,11 @@ export function htmlBoxTree(html) {
       if(node.tagName==='svg' && !attr.namespace && /^(?:width|height|viewbox|xmlns|version|fill|stroke|stroke-width|stroke-linecap|stroke-linejoin|stroke-miterlimit|stroke-dasharray|fill-rule|clip-rule|fill-opacity|stroke-opacity|opacity|preserveaspectratio|focusable)$/i.test(attr.name)) continue;
       if(node.tagName==='svg' && attr.namespace==='http://www.w3.org/2000/xmlns/') continue;
       if(!attr.namespace && ((['img','source'].includes(node.tagName) && /^(?:width|height|srcset|sizes|media|loading|decoding)$/.test(attr.name)) || (node.tagName==='video' && /^(?:width|height|preload)$/.test(attr.name)) || (node.tagName==='iframe' && /^(?:width|height)$/.test(attr.name)))) continue;
+      // An iframe's legacy frame attributes (HTML rendering §15.4.4): frameborder is a presentational hint on its border
+      // (recorded in the box tree, read by computeStyle); scrolling, marginwidth and marginheight act on the frame's own
+      // document only and change nothing on this page. On any other element (frame / frameset are not modeled) they do
+      // nothing at all.
+      if(!attr.namespace && /^(?:frameborder|scrolling|marginwidth|marginheight)$/.test(attr.name)) { if(node.tagName!=='iframe') (node.inertAttributes ??= []).push(attr.name); continue; }
       // A canvas's width / height set its bitmap (and an intrinsic size the layout uses only where CSS leaves it auto,
       // which the engine does not admit): recorded in the box tree as canvasSize (F71).
       if(!attr.namespace && node.tagName==='canvas' && /^(?:width|height)$/.test(attr.name)) continue;

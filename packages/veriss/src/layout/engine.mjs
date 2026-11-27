@@ -235,6 +235,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // whether html keeps a scrollbar gutter either way (scrollbar-gutter: stable, overflow-y: scroll) or never shows one
   // (overflow-y: hidden or clip).
   let pageScroll;
+  // An inline replaced box alone on its line (lineBox below): the margins that place it in its line box, by path.
+  const lineBoxes = new Map();
   const animated = []; // boxes with a running animation whose keyframes lay out: {box, region, name}
   const domain = validateOptions(options), block = options.block ?? Boolean(options.viewport.height);
   const component = options.name ?? 'Document';
@@ -611,6 +613,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // block-level display's, inline-flex as flex and inline-grid as grid. Where it sits on its line is decided by
       // the block's layout: alone on the line it is admitted (loneInlineLevel), otherwise Unknown.)
       if (gridItem && inherited && ['inline', 'inline-block', 'inline-flex', 'inline-grid'].includes(style.display)) style = { ...style, display: { 'inline-flex': 'flex', 'inline-grid': 'grid' }[style.display] ?? 'block', $inlineLevel: true, $inlineDisplay: style.display };
+      // (Its own margins kept for lineBox, which derives the placing margins from them again in every pass.)
+      if (style.$inlineLevel && lineBoxes.has(box.path)) style = { ...style, ...lineBoxes.get(box.path), $ownMargins: Object.fromEntries(['top', 'right', 'bottom', 'left'].map(side => [`margin-${side}`, style[`margin-${side}`]])) };
       // content-visibility: auto: on screen the box lays out as usual; offscreen it is size-contained. Admitted where
       // its width does not come from its content (block flow, or grid columns that are not content-sized), so that
       // only its height changes offscreen (W_LAYOUT_CONTENT_VISIBILITY_SIZE).
@@ -870,18 +874,30 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (box.text) throw new Error('Automatic text height needs an intrinsicBlockSize contract');
     return [{ region, value: scalar(0) }];
   }
-  function validate(style, box, region, emit, available = {}, parentStyle = null) {
+  function validate(style, box, region, emit, available = {}, parentStyle = null, parents = []) {
     if (style.display === 'none') return false;
     if(box.whitespace && !['normal','nowrap'].includes(style['white-space'])) throw new Error('Preserved whitespace needs explicit text geometry from the input adapter');
     // A px height on text whose font-size follows the user's default font size: a larger default makes the text
     // taller than the box, which then overflows it or clips it (min-height grows, so it is fine).
     // Visually hidden text (clipped to nothing, or a 1px box that hides its overflow) is meant not to be seen.
     const visuallyHidden = visuallyHiddenStyle(style);
-    if ((box.text || box.inline?.length) && !box.pseudo && emit && !visuallyHidden && /^\d+(?:\.\d+)?px$/.test(String(style['block-size'])) && style.$sources?.['block-size'] && !layoutWarnings.some(w => w.code === 'W_LAYOUT_HEIGHT_FIXED_TEXT' && w.path === box.path)) {
+    // A collapsed box (a closed accordion panel: a 0px padding box that does not show its block overflow) hides its text
+    // on purpose at every font size, and the text of every box inside it (those it clips).
+    // (A min-height other than 0 raises the used height: not collapsed.)
+    const collapsed = st => ['0', '0px'].includes(String(st['block-size'])) && ['auto', '0', '0px'].includes(String(st['min-block-size'] ?? 'auto')) && ['top', 'bottom'].every(side => ['0', '0px'].includes(String(st[`padding-${side}`]))) && String(st['overflow-y'] ?? 'visible') !== 'visible';
+    const hiddenByCollapse = collapsed(style) || clipChain(parents, style).some(p => p.style && collapsed(p.style));
+    // Dynamic content alone (the adapters render {expression} and component children as '…') may be text or an icon. An
+    // inline icon (an svg or img) sits on the line's baseline under the strut, which grows with the default font size
+    // too (measured in Chromium: a 12px inline svg in a 12px box that hides its overflow sits 2px down at a 16px default
+    // and entirely below the box at 32px), so the warning stands, but it does not claim the content is text.
+    const dynamicOnly = box.text && !box.inline?.length && box.textContent !== undefined && !/[^\s\u2026]/.test(String(box.textContent));
+    if ((box.text || box.inline?.length) && !box.pseudo && emit && !visuallyHidden && !hiddenByCollapse && /^\d+(?:\.\d+)?px$/.test(String(style['block-size'])) && style.$sources?.['block-size'] && !layoutWarnings.some(w => w.code === 'W_LAYOUT_HEIGHT_FIXED_TEXT' && w.path === box.path)) {
       const size = String(style['font-size']);
       const keyword = /^(?:medium|small|large|x-small|x-large|xx-small|xx-large|xxx-large|smaller|larger|ua)$/.test(size);
       if (!/^\d+(?:\.\d+)?px$/.test(size) && (keyword || !unitContext.rootFontSize)) layoutWarnings.push({ code: 'W_LAYOUT_HEIGHT_FIXED_TEXT', severity: 'warning', box: box.label, path: box.path, blockSize: style['block-size'], fontSize: size,
-        message: `${box.label} has height: ${style['block-size']} but its text follows the user's default font size (font-size: ${size === 'ua' ? 'the UA default' : size}): with a larger default the text outgrows the box and ${['hidden', 'clip'].includes(style['overflow-y']) ? 'is cut off' : 'overflows it'}. Use min-height (or padding) instead`, ...ranges(region) });
+        message: dynamicOnly
+          ? `${box.label} has height: ${style['block-size']} and dynamic content (an expression or children, '…' here) whose line follows the user's default font size (font-size: ${size === 'ua' ? 'the UA default' : size}): text, or an inline icon on the text baseline, outgrows the box with a larger default and ${['hidden', 'clip'].includes(style['overflow-y']) ? 'is cut off' : 'overflows it'}. Use min-height (or padding) for text; give an icon display: block`
+          : `${box.label} has height: ${style['block-size']} but its text follows the user's default font size (font-size: ${size === 'ua' ? 'the UA default' : size}): with a larger default the text outgrows the box and ${['hidden', 'clip'].includes(style['overflow-y']) ? 'is cut off' : 'overflows it'}. Use min-height (or padding) instead`, ...(dynamicOnly ? { content: 'dynamic' } : {}), ...ranges(region) });
     }
     // A px line-height on text whose font-size follows the user's default font size (no px root size and a
     // relative size, or a keyword such as medium): a larger default grows the glyphs, not the line, so wrapped lines
@@ -1900,7 +1916,11 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // nothing by itself (clipping and page overflow are checked on their own), so there is no block-size obligation
         // against a positioned ancestor or the initial containing block. A fixed box taller than the viewport keeps it.
         const hangs = available.containingBlock && available.containingBlock.path !== 'viewport';
-        if (available.block && !hangs) obligation(available.marginEnd ? sum(available.block, scalar(available.marginEnd.block)) : available.block, blockSize, box, region, 'E_LAYOUT_ITEM_SIZE', 'block', available.fitBlock !== false && !viewportScrolls, item('block'));
+        if (available.block && !hangs) {
+          obligation(available.marginEnd ? sum(available.block, scalar(available.marginEnd.block)) : available.block, blockSize, box, region, 'E_LAYOUT_ITEM_SIZE', 'block', available.fitBlock !== false && !viewportScrolls, item('block'));
+          // Waived only because the viewport scrolls: the page scroll, which moves no box at scroll position 0.
+          if (viewportScrolls && available.fitBlock !== false) checks.at(-1).pageScroll = true;
+        }
         if (contract.minBlockSize !== undefined && !visuallyHiddenStyle(style)) (box.tableCell && (contract.overflowBlock ?? 'fit') === 'fit' ? cellGrows : obligation)(contentBlock, scalar(contract.minBlockSize), box, region, 'E_LAYOUT_CONTENT', 'block', (contract.overflowBlock ?? 'fit') === 'fit', content('block', 'minBlockSize'));
       }
       let positioned;
@@ -1948,7 +1968,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       const painted = scaled(style, unscaledOrigin, inline, blockSize), ownOrigin = painted.origin;
       // Inside an overflow: clip box positions are exact but parts may be clipped away: the other rules see no
       // position (as before), focus-clipped reads clipOrigin.
-      const underClip = parents.some(p => p.clipScope);
+      const underClip = clipChain(parents, style).some(p => p.clipScope);
+      // The nearest position: fixed box at or above this one: the overflow of its ancestors does not clip this box.
+      const fixedFrom = style.$fixed ? box.path : parents.findLast(p => p.style?.$fixed)?.box?.path;
       // Sticky inside an overflow: hidden box (a scroll container nobody scrolls): it sticks to that box, not to the page,
       // so it never sticks; at the initial scroll position it is where the flow puts it (a warning, laid out as relative).
       // overflow-x: clip with overflow-y visible is not a scroll container (CSS Overflow 3): a sticky box inside still
@@ -2086,7 +2108,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const parentDisplay = parents.at(-1)?.style.$blockFlow ? 'block' : parents.at(-1)?.style.display;
         inertDeclarations(box, style, { parents, parentDisplay, inFlow: style.position !== 'absolute' }, region);
       }
-      geometry.push({ box, path: box.path, region, origin: underClip ? null : ownOrigin, ...(style.$listItem && style['list-style-type'] !== 'none' && style['list-style-position'] !== 'inside' && style.direction !== 'rtl' ? { outsideMarker: style['list-style-type'] } : {}), ...(style.display === 'grid' && /^(?:\s*(?:repeat\(\s*\d+\s*,\s*\d+(?:\.\d+)?px\s*\)|\d+(?:\.\d+)?px))+\s*$/.test(String(style['grid-template-columns'])) ? { fixedTracks: style['grid-template-columns'] } : {}), ...((box.text || box.inline?.length) && !box.pseudo && ['normal', 'pre-wrap', 'pre-line'].includes(style['white-space']) && style['overflow-wrap'] === 'normal' ? { wrapsByWords: true } : {}), ...(style.$widthFromAttribute ? { widthFromAttribute: style.$widthFromAttribute } : {}), ...(/\dvw\b|\bvw\)/.test(String(style.$sources?.['inline-size']?.specified ?? '')) ? { vwInline: style.$sources['inline-size'].specified } : {}), ...(/^100%$/.test(String(style.$sources?.['inline-size']?.specified ?? '').trim()) && ['left', 'right'].some(side => /^\d+(?:\.\d+)?px$/.test(String(style[`margin-${side}`])) && cmp(px(style[`margin-${side}`]), zero) > 0) ? { fullWidthMargins: ['left', 'right'].map(side => `margin-${side}`).filter(key => /^\d+(?:\.\d+)?px$/.test(String(style[key])) && cmp(px(style[key]), zero) > 0).map(key => `${key}: ${style[key]}`) } : {}), ...(style['box-sizing'] === 'content-box' && /^100%$/.test(String(style.$sources?.['inline-size']?.specified ?? '').trim()) && ['left', 'right'].some(side => cmp(px(style[`padding-${side}`] === 'ua' ? '0' : style[`padding-${side}`]), zero) > 0 || cmp(px(style[`border-${side}`] === 'ua' ? '0' : style[`border-${side}`]), zero) > 0) ? { contentBoxFull: ['left', 'right'].flatMap(side => [`padding-${side}`, `border-${side}`]).filter(key => style[key] && !['0', '0px', 'ua'].includes(String(style[key]))) } : {}), ...(style.$imageRatio ? { imageRatio: style.$imageRatio } : {}), clipOrigin: ownOrigin, ...(style.position === 'absolute' ? { containingPath: available.containingBlock?.path } : {}), ...(style.$fixed ? { fixed: true } : {}), ...(style.$uaControl ? { uaControl: true } : {}), ...(style.$sticky ? { sticky: { parent: parents.at(-1)?.box.path ?? null } } : {}), inline: painted.inline, block: painted.block, position: style.position,
+      geometry.push({ box, path: box.path, region, origin: underClip ? null : ownOrigin, ...(fixedFrom ? { fixedFrom } : {}), ...(style.$listItem && style['list-style-type'] !== 'none' && style['list-style-position'] !== 'inside' && style.direction !== 'rtl' ? { outsideMarker: style['list-style-type'] } : {}), ...(style.display === 'grid' && /^(?:\s*(?:repeat\(\s*\d+\s*,\s*\d+(?:\.\d+)?px\s*\)|\d+(?:\.\d+)?px))+\s*$/.test(String(style['grid-template-columns'])) ? { fixedTracks: style['grid-template-columns'] } : {}), ...((box.text || box.inline?.length) && !box.pseudo && ['normal', 'pre-wrap', 'pre-line'].includes(style['white-space']) && style['overflow-wrap'] === 'normal' ? { wrapsByWords: true } : {}), ...(style.$widthFromAttribute ? { widthFromAttribute: style.$widthFromAttribute } : {}), ...(/\dvw\b|\bvw\)/.test(String(style.$sources?.['inline-size']?.specified ?? '')) ? { vwInline: style.$sources['inline-size'].specified } : {}), ...(/^100%$/.test(String(style.$sources?.['inline-size']?.specified ?? '').trim()) && ['left', 'right'].some(side => /^\d+(?:\.\d+)?px$/.test(String(style[`margin-${side}`])) && cmp(px(style[`margin-${side}`]), zero) > 0) ? { fullWidthMargins: ['left', 'right'].map(side => `margin-${side}`).filter(key => /^\d+(?:\.\d+)?px$/.test(String(style[key])) && cmp(px(style[key]), zero) > 0).map(key => `${key}: ${style[key]}`) } : {}), ...(style['box-sizing'] === 'content-box' && /^100%$/.test(String(style.$sources?.['inline-size']?.specified ?? '').trim()) && ['left', 'right'].some(side => cmp(px(style[`padding-${side}`] === 'ua' ? '0' : style[`padding-${side}`]), zero) > 0 || cmp(px(style[`border-${side}`] === 'ua' ? '0' : style[`border-${side}`]), zero) > 0) ? { contentBoxFull: ['left', 'right'].flatMap(side => [`padding-${side}`, `border-${side}`]).filter(key => style[key] && !['0', '0px', 'ua'].includes(String(style[key]))) } : {}), ...(style.$imageRatio ? { imageRatio: style.$imageRatio } : {}), clipOrigin: ownOrigin, ...(style.position === 'absolute' ? { containingPath: available.containingBlock?.path } : {}), ...(style.$fixed ? { fixed: true } : {}), ...(style.$uaControl ? { uaControl: true } : {}), ...(style.$sticky ? { sticky: { parent: parents.at(-1)?.box.path ?? null } } : {}), inline: painted.inline, block: painted.block, position: style.position,
         borders: Object.fromEntries(['left','right','top','bottom'].map(side => [side, px(style[`border-${side}`])])),
         // Content aligned towards the end (center, end): overflowing content may lie before the start edge.
         ...(['justify-content', 'align-content', 'align-items'].some(key => /^(?:center|end|flex-end|unsafe\b)/.test(String(style[key] ?? ''))) ? { alignsContent: true } : {}),
@@ -2094,6 +2116,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         ...(/^(?:0|\d+(?:\.\d+)?px)$/.test(String(style['padding-right'])) ? { paddingInlineEnd: px(String(style['padding-right']) === '0' ? '0px' : style['padding-right']) } : {}),
         // overflow: clip clips without scrolling (hidden still scrolls a focused descendant into view).
         clipAxes: { inline: style['overflow-x'] === 'clip', block: style['overflow-y'] === 'clip' },
+        // The axes on which its overflow clips its content (a visible axis beside a hidden/auto/scroll one computes to
+        // auto), and whether it scrolls it (positions inside then follow a scroll offset). The root's overflow applies
+        // to the viewport, not to its box.
+        ...(box.documentRoot && available.root ? {} : (() => {
+          const x = String(style['overflow-x']), y = String(style['overflow-y']), scrolls = v => !['visible', 'clip'].includes(v);
+          const clips = { inline: x !== 'visible' || scrolls(y), block: y !== 'visible' || scrolls(x) };
+          return clips.inline || clips.block ? { overflowClips: clips, scroller: scrolls(x) || scrolls(y) } : {};
+        })()),
         overflow: ['hidden','clip'].includes(overflowValue) ? 'clip' : ['auto','scroll'].includes(overflowValue) ? 'scroll' : 'visible', overflowValue,
         // Where a single line of text starts inside the box (font-derived text extents).
         content: { left: add(px(style['border-left']), px(style['padding-left'])), top: add(px(style['border-top']), px(style['padding-top'])), inline: contentInline },
@@ -2122,7 +2152,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         ...(box.placeholder && ['input', 'textarea'].includes(box.tag) ? { placeholderPaint: styles({ ...box, pseudo: 'placeholder' }, region, [...parents, { box, style, names: [] }], style, false, false, new Set(['::placeholder'])).map(s => ({ region: s.region, color: s.style.$sources.color ? s.style.color : '#757575', opacity: s.style.opacity })) } : {}),
         ...(focusableBox(box) ? { focusStates: styles(box, region, parents.map(p => ({ ...p, names: p.names ?? [] })), parents.at(-1)?.style, false, false, focusState).map(s => ({ region: s.region, paint: paintFacts(s.style), authorOutline: Boolean(s.style.$sources['outline-style']), ...focusMove(box, style, s.style, available, inline, blockSize, parents), ...(s.style['z-index'] !== style['z-index'] ? { zIndex: s.style['z-index'] !== 'auto' && (style.position !== 'static' || ['grid', 'flex'].includes(parents.at(-1)?.style.display)) ? Number(s.style['z-index']) : null } : {}) })) } : {}) });
       if (box.inline?.length) inlineContent(box, style, region, [...parents, { box, style }], geometry.at(-1).chain, geometry.at(-1));
-      const shown = scaled(style, parents.some(p => p.clipScope) ? null : origin, inline, blockSize);
+      const shown = scaled(style, underClip ? null : origin, inline, blockSize);
       const rect=shown.origin && shown.block ? {inlineStart:affine(shown.origin.inline),blockStart:affine(shown.origin.block),inlineSize:affine(shown.inline),blockSize:affine(shown.block)} : null;
       const sizeRow = { box: box.label, path: box.path, position:style.position, display: style.$blockFlow ? 'block' : String(style.$inlineDisplay ?? style.display), float: style.float, alignContent: String(style['align-content'] ?? 'normal'), ...positioned,...(rect ? {rect} : {}), boxSizing: style['box-sizing'], boxSizingSource: style.$sources['box-sizing'],
         paddingInlineSize:affine(diff(inline,scalar(add(px(style['border-left']),px(style['border-right']))))),
@@ -2293,7 +2323,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // scroll-zero (an internal re-analysis): positions inside scroll containers at their initial scroll offset 0, exact
     // there; only the cover findings at that offset are taken from it.
     const scrollZero = preferences.includes('scroll-zero');
-    if(!block || parents.some(p=>(p.clipped && !scrollZero) || p.subgrid) || (!scrollZero && !available.root && ['overflow-x','overflow-y'].some(key=>!['visible','clip'].includes(style[key]))) ||
+    if(!block || clipChain(parents, style).some(p=>p.clipped && !scrollZero) || parents.some(p=>p.subgrid) || (!scrollZero && !available.root && ['overflow-x','overflow-y'].some(key=>!['visible','clip'].includes(style[key]))) ||
       ['grid-template-columns','grid-template-rows'].some(key=>style[key]==='subgrid')) return null;
     if(style.position!=='absolute') {
       // Cross-axis alignment of a flex item that is not stretched.
@@ -3019,6 +3049,64 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const empty = !(box.children ?? []).length && !box.text && !box.inline?.length;
     return style[`min-${size}`] !== 'auto' || scroller || empty ? size : null;
   }
+  // An atomic inline replaced box (iframe, img, video, canvas, embed, object) that is the only in-flow content of a block
+  // container (an ad tag's iframe, whitespace around it allowed) sits on a line box of its own, with the container's
+  // strut: on the baseline (vertical-align: baseline) the line keeps the strut's part below the baseline under it, and
+  // its part above when the box is shorter. Returns the margins that place it as a block in that line box ({margins}),
+  // {reason} when the line is not decided, or {} when this is not that case. The strut is known with font-size 0 (it is
+  // empty: all three engines), from the container's font contract with ascent and descent (Chromium: the baseline sits
+  // A + floor((L − A − D) / 2) below the line top; measured), or as a whole line height for vertical-align top/bottom.
+  function lineBox(container, cs, child) {
+    const st = { ...child.style, ...child.style.$ownMargins }, tag = child.box.tag;
+    if (!['iframe', 'img', 'video', 'canvas', 'embed', 'object'].includes(tag) || st.$inlineDisplay !== 'inline' || child.box.pseudo || container.text || (container.inline ?? []).length) return {};
+    const pxv = v => String(v) === '0' || String(v) === 'auto' ? zero : /^-?\d+(?:\.\d+)?px$/.test(String(v)) ? px(String(v)) : null;
+    if (container.whitespace && !['normal', 'nowrap'].includes(String(cs['white-space']))) return { reason: `white-space: ${cs['white-space']} keeps the white space around it, which makes lines of its own; that line layout is not modeled` };
+    if (cs.direction === 'rtl') return { reason: 'its line in a right-to-left block is not modeled' };
+    const align = String(cs['text-align'] ?? 'start'), ml = pxv(st['margin-left']), mr = pxv(st['margin-right']), mt = pxv(st['margin-top']), mb = pxv(st['margin-bottom']);
+    if ([ml, mr, mt, mb].includes(null)) return { reason: 'its margins are not px lengths' };
+    // (Always both sides, from its own margins: auto is 0 on an inline box (CSS 2 §10.3.1), and what an earlier pass
+    // placed it with is not kept.)
+    const horizontal = ['start', 'left', 'justify', 'ua', 'match-parent'].includes(align) ? { 'margin-left': `${lengthText(ml)}px`, 'margin-right': `${lengthText(mr)}px` } : ['center', 'right', 'end'].includes(align) && cmp(ml, zero) === 0 && cmp(mr, zero) === 0 ? (align === 'center' ? { 'margin-left': 'auto', 'margin-right': 'auto' } : { 'margin-left': 'auto', 'margin-right': '0px' }) : null;
+    if (!horizontal) return { reason: `text-align: ${align} with horizontal margins on it is not modeled` };
+    // Its outer height (margin box), when its height is a px length.
+    // (auto is not 0 here: the height comes from the box, an aspect-ratio or the image, and is not a px length.)
+    const bs = String(st['block-size'] ?? 'auto') === 'auto' ? null : pxv(st['block-size']), edges = ['top', 'bottom'].map(side => [pxv(st[`padding-${side}`]), pxv(st[`border-${side}`])]).flat();
+    // (A min-height or max-height can change the used height after this: then it is not known here.)
+    const bounded = !['auto', '0', '0px'].includes(String(st['min-block-size'] ?? 'auto')) || String(st['max-block-size'] ?? 'none') !== 'none';
+    const outer = bs === null || bounded || edges.includes(null) ? null : add(add(st['box-sizing'] === 'border-box' ? bs : edges.reduce(add, bs), mt), mb);
+    const va = String(st['vertical-align'] ?? 'baseline'), size = pxv(cs['font-size']), lh = String(cs['line-height']);
+    const font = container.contract?.font;
+    // The strut: its parts above and below the baseline, or null.
+    let strut = null, lineHeight = null;
+    if (size !== null && cmp(size, zero) === 0 && (lh === 'normal' || /^\d+(?:\.\d+)?$/.test(lh))) strut = { above: zero, below: zero };
+    else if (font?.ascent !== undefined && !textFontMismatch(cs, font, options.defaultFontSize)) {
+      if (uaEngine && uaEngine !== 'chromium') return { reason: `${uaEngine === 'webkit' ? 'WebKit' : 'Firefox'} places the baseline with unrounded font metrics, which the font contract does not give` };
+      const L = q(String(font.lineHeight)), A = q(String(font.ascent)), D = q(String(font.descent));
+      const above = add(A, q(String(Math.floor(Number(number(sub(sub(L, A), D))) / 2))));
+      strut = { above, below: sub(L, above) };
+    }
+    if (strut) lineHeight = add(strut.above, strut.below);
+    else if (size !== null && /^\d+(?:\.\d+)?px$/.test(lh)) lineHeight = px(lh);
+    else if (size !== null && /^\d+(?:\.\d+)?$/.test(lh)) lineHeight = mul(q(lh), size);
+    const max = (a, b) => cmp(a, b) >= 0 ? a : b;
+    const done = (offset, gap) => ({ margins: { ...horizontal, 'margin-top': `${lengthText(add(mt, offset))}px`, 'margin-bottom': `${lengthText(add(mb, gap))}px` } });
+    if (strut && cmp(strut.above, zero) <= 0 && cmp(strut.below, zero) <= 0 && ['baseline', 'top', 'bottom', 'middle'].includes(va)) return done(zero, zero);
+    if (va === 'baseline' && strut) {
+      if (cmp(strut.above, zero) > 0 && outer === null) return { reason: bounded ? `its min-height (${st['min-block-size']}) or max-height (${st['max-block-size']}) can change its height, so whether the strut's ascent reaches above it is not known` : 'its height is not a px length, so whether the strut\'s ascent reaches above it is not known' };
+      return done(cmp(strut.above, zero) > 0 && cmp(outer, strut.above) < 0 ? sub(strut.above, outer) : zero, max(strut.below, zero));
+    }
+    if (['top', 'bottom'].includes(va) && lineHeight !== null && outer !== null && cmp(outer, lineHeight) >= 0) return done(zero, zero);
+    if (['top', 'bottom'].includes(va)) return { reason: `vertical-align: ${va} in a line ${lineHeight === null ? 'whose height depends on the font (line-height: normal)' : 'taller than it'} is not modeled` };
+    return { reason: `it sits on the baseline of ${container.label}'s line, which keeps room for the font's descent below it (a few px, depending on the font and line-height), and that is not known. Give it display: block or vertical-align: top (with a px line-height no taller than it), set font-size: 0 on ${container.label}, or declare ${container.label}'s font with its ascent and descent (a font contract)` };
+  }
+  // The ancestors whose overflow can clip or scroll a box: those from its nearest position: fixed ancestor (or itself)
+  // down. A fixed box's containing block is the viewport (an ancestor that would contain it is Unknown before this), so
+  // the overflow of the boxes around it neither clips nor scrolls it or its descendants (CSS Overflow 3 §3).
+  function clipChain(parents, style) {
+    if (style?.$fixed) return [];
+    const at = parents.findLastIndex(p => p.style?.$fixed);
+    return at < 0 ? parents : parents.slice(at);
+  }
   // An absolutely positioned or fixed child of a grid or flex container, laid out against its containing block once the
   // container's size is known (finalAncestors: the ancestors with the container's final size). staticOrigin: where it
   // sits on an axis whose insets are both auto (its static position, page coordinates), when the container knows it.
@@ -3034,10 +3122,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       if (trap && !layoutWarnings.some(w => w.code === 'W_LAYOUT_FIXED_TRAPPED' && w.path === item.box.path)) layoutWarnings.push({ code: 'W_LAYOUT_FIXED_TRAPPED', severity: 'warning', box: item.box.label, path: item.box.path, ancestor: trap.box.label,
         message: `${item.box.label} is position: fixed, but ${trap.box.label} (${fixedContainer(trap.style)}) becomes its containing block: it is placed against ${trap.box.label} and moves with it instead of staying on the viewport. Render it outside that box (a portal to the end of body), or drop the property`, ...ranges(r) });
       if (trap) throw Object.assign(new Error(`${item.box.label} is position: fixed, but its ancestor ${trap.box.label} has ${fixedContainer(trap.style)}, which makes it the containing block: ${item.box.label} is placed against ${trap.box.label} and scrolls with it, not with the viewport. Move it outside that box (for example to the end of body), or drop the property`), { code: 'U_LAYOUT_FIXED_CONTAINED', box: item.box, region: r, ancestor: trap.box.label, ancestorPath: trap.box.path, property: 'transform' });
-      // (overflow: hidden / clip on the root element goes to the viewport, which neither clips nor moves a fixed box:
-      // measured in Chromium, Firefox and WebKit, the fixed box stays where it is and the page does not scroll.)
-      const rootToViewport = ancestor => ancestor.box?.documentRoot && ['overflow-x','overflow-y'].every(key=>['hidden','clip'].includes(ancestor.style[key]));
-      if (finalAncestors.some(ancestor=>ancestor.clipped || ancestor.subgrid || (ancestor.style && (containsFixed(ancestor.style) || (!rootToViewport(ancestor) && ['overflow-x','overflow-y'].some(key=>ancestor.style[key] !== 'visible')))))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside a transformed, clipped or scrolling ancestor`), { code: 'U_LAYOUT_CSS' });
+      // An ancestor that hides, clips or scrolls its overflow is not its containing block: the box escapes it (CSS
+      // Overflow 3 §3 clips only the boxes whose containing block chain passes through it; measured in Chromium and
+      // WebKit: drawn and hit-tested outside). clip / clip-path on an ancestor and subgrid placement stay Unknown.
+      if (finalAncestors.some(ancestor=>ancestor.subgrid || (!ancestor.style && ancestor.clipped) || (ancestor.style && (String(ancestor.style.clip ?? 'auto') !== 'auto' || String(ancestor.style['clip-path'] ?? 'none') !== 'none')))) throw Object.assign(new Error(`${item.box.label} is position: fixed inside an ancestor with clip or clip-path, or subgrid placement`), { code: 'U_LAYOUT_CSS' });
       const viewport = { inline: width, block: height, origin: { inline: scalar(0), block: scalar(0) } };
       return solve(item.box,{inline:viewport.inline,block:viewport.block,containingBlock:{path:'viewport',...viewport},...(staticOrigin !== undefined ? { staticOrigin } : {})},r,finalAncestors,item.inherited ?? style,emit).map(result=>result.region);
     }
@@ -3390,7 +3478,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           style = intrinsicKeyword === 'fit-content' ? { ...style, 'inline-size': 'auto', 'min-inline-size': declare(sizes.min), 'max-inline-size': declare(max) }
             : { ...style, 'inline-size': declare(intrinsicKeyword === 'min-content' ? sizes.min : max) };
         }
-        if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null)) continue;
+        if (!validate(style, box, state.region, emit, available, parents.at(-1)?.style ?? null, parents)) continue;
         // A fieldset's first legend is rendered in its block-start border (HTML §15.3.13): it is not a
         // layout child, and the fieldset's effective border-top is max(border-top, legend height).
         const rendered = renderedLegend(box, style, state.region, parents);
@@ -3705,6 +3793,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       if (!fontless && !layoutWarnings.some(w => w.code === 'W_LAYOUT_IMAGE_BASELINE_GAP' && w.path === img.box.path))
                         layoutWarnings.push({ code: 'W_LAYOUT_IMAGE_BASELINE_GAP', severity: 'warning', box: img.box.label, path: img.box.path, parent: box.label,
                           message: `${img.box.label} is an inline image in ${box.label}: it sits on the text baseline, so ${box.label} is taller than the image by the font's descender (a few pixels of gap under it). Give ${img.box.label} display: block (or vertical-align: top)`, ...ranges(bs.region) });
+                    if (flow.length === 1 && flow[0].style.$inlineLevel) {
+                      const placed = lineBox(box, style, flow[0]);
+                      if (placed.reason) throw Object.assign(new Error(`${flow[0].box.label} is inline-level inside the block container ${box.label}: ${placed.reason}`), { code: 'U_LAYOUT_INLINE', box: flow[0].box, region: children.region });
+                      if (placed.margins) {
+                        lineBoxes.set(flow[0].box.path, { ...placed.margins, $lineBox: true });
+                        const index = children.children.indexOf(flow[0]);
+                        children.children[index] = { ...flow[0], style: { ...flow[0].style, ...placed.margins, $inlineLevel: false, $lineBox: true } };
+                        flow[0] = children.children[index];
+                      }
+                    }
                     // (One inline-level box alone in the block is laid out on its line: loneInlineLevel, checklist I22.)
                     for (const child of flow) if (child.style.$inlineLevel) {
                       const why = flow.length === 1 ? loneInlineLevel(box, style, child, children.region, ancestors) : 'its line layout is not modeled';
@@ -3728,7 +3826,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                     // Vertical margins collapse between adjacent siblings (the larger one wins; measured): the next
                     // sibling's top margin becomes max(previous bottom, its top) − previous bottom. Collapsing through the
                     // container (no padding or border on that side) or through an empty child is not modeled.
-                    const mv = (child, side) => /^\d+(?:\.\d+)?px$/.test(String(child.style[`margin-${side}`])) ? px(child.style[`margin-${side}`]) : zero;
+                    // (The margins of a box on a line box of its own stay inside that line box: none collapse.)
+                    const mv = (child, side) => !child.style.$lineBox && /^\d+(?:\.\d+)?px$/.test(String(child.style[`margin-${side}`])) ? px(child.style[`margin-${side}`]) : zero;
                     // A plain block child (not a formatting root, no padding or border on that side) lets its first
                     // (last) child's top (bottom) margin collapse through it: its own margin becomes the larger of the
                     // two, and it lays that grandchild out without it (collapsedTop / collapsedBottom). The grandchild's
@@ -3761,7 +3860,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                         const inner = [...at, { box: owner, style: st, inline: null, block: null, type: st['container-type'], names: [] }];
                         const kids = flowOf(owner, st, inner);
                         if (!kids) return null;
-                        if (!kids.length || kids.some(k => /inline|contents|table/.test(String(k.style.display)))) return own;
+                        if (!kids.length || kids.some(k => k.style.$inlineLevel || /inline|contents|table/.test(String(k.style.display)))) return own;
                         const edge = side === 'top' ? kids[0] : kids.at(-1);
                         const theirs = outward(edge.box, edge.style, inner, side, depth + 1);
                         if (theirs === null) return null;
@@ -3769,7 +3868,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                       };
                       const updates = {};
                       const grand = flowOf(child.box, child.style, childAncestors);
-                      if (!grand || grand.some(g => /inline|contents|table/.test(String(g.style.display)))) return;
+                      if (!grand || grand.some(g => g.style.$inlineLevel || /inline|contents|table/.test(String(g.style.display)))) return;
                       const childOf = [...childAncestors];
                       for (const side of ['top', 'bottom']) {
                         // (A max-height may clamp the box, and where it does WebKit still collapses the margin through it while
@@ -4170,6 +4269,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       for (const d of zero.diagnostics.filter(d => ['E_A11Y_TEXT_START_OBSCURED', 'E_A11Y_TEXT_LINE_OBSCURED'].includes(d.code)))
         if (scrolledCovers.some(u => d.path.startsWith(`${u.path}/`) && u.cover === d.cover) && !diagnostics.some(x => x.code === d.code && x.path === d.path && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
           diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${scrolledCovers.find(u => d.path.startsWith(`${u.path}/`)).box}; other scroll offsets are not checked)` });
+      // A target inside a scroll container under a box that is not scrolled with it (occluded-target's Unknown names
+      // the target and the cover): covered at the initial scroll offset is an error there, by a box that paints
+      // (E_A11Y_OCCLUDED) or by one that paints nothing (E_A11Y_INVISIBLE_BLOCKER).
+      for (const d of zero.diagnostics.filter(d => ['E_A11Y_OCCLUDED', 'E_A11Y_INVISIBLE_BLOCKER'].includes(d.code))) {
+        const u = scrolledCovers.find(u => u.rule === 'occluded-target' && u.targets?.includes(d.path) && u.cover === d.cover);
+        if (u && !diagnostics.some(x => x.code === d.code && x.path === d.path && x.cover === d.cover && JSON.stringify([x.range, x.heightRange, x.regionConstraints]) === JSON.stringify([d.range, d.heightRange, d.regionConstraints])))
+          diagnostics.push({ ...d, scrollOffset: 0, message: `${d.message} (at the initial scroll position of ${u.box}; other scroll offsets are not checked)` });
+      }
     }
     // Hit testing inside overflow: hidden boxes (ad slots and overlays clip their frame and close control): those boxes
     // are scroll containers, so their content has no position in this pass, and a transparent wrapper looks like an

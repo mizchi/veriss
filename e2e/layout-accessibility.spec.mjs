@@ -2401,6 +2401,39 @@ test('text-contrast where the layout is Unknown (ADR-0016 M7): a warning exactly
   expect(low).toEqual(['.b', '.c']);
 });
 
+// A target inside a box that hides, clips or scrolls its overflow, under a fixed sheet that escapes that box (a scroll
+// lock: html and body overflow hidden) or lies outside it: the browser hit-tests the sheet over the buttons in its area,
+// and the buttons the box clips away are not under the pointer at all. The verifier reports the same buttons
+// (packages/veriss/test/occluded-in-overflow.test.mjs); a scroll container's other offsets stay Unknown.
+test('occlusion inside overflow hidden / clip boxes matches hit testing (fixed sheet escaping them)', async ({page}) => {
+  const buttons = Array.from({length: 8}, (_, i) => `<button class="go" aria-label="B${i}"></button>`).join('');
+  const base = 'body{margin:0}.p{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:44px;row-gap:100px}.go{display:block;width:44px;height:44px;background:#246;border:0;padding:0}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9}.w{height:350px}';
+  for (const [name, cls, css] of [
+    ['html hidden', 'p', 'html{overflow:hidden}'],
+    ['html+body hidden', 'p', 'html{overflow:hidden}body{overflow:hidden}'],
+    ['html hidden, body clip', 'p', 'html{overflow:hidden}body{overflow:clip}'],
+    ['wrapper hidden', 'p w', 'html{overflow:hidden}.w{overflow:hidden}'],
+    ['wrapper clip', 'p w', 'html{overflow:hidden}.w{overflow:clip}'],
+  ]) {
+    const html = `<div class="${cls}">${buttons}</div><div class="sh"></div>`;
+    const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: base + css, viewport: {min: 375, max: 375, height: {min: 667, max: 667}}, accessibility: true});
+    const statics = [...new Set(report.diagnostics.filter(d => d.code === 'E_A11Y_OCCLUDED').map(d => d.path))].sort();
+    expect(report.status, name).not.toBe('verified');
+    await page.setViewportSize({width: 375, height: 667});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${base}${css}</style></head><body>${html}</body></html>`);
+    // Covered: the centre is in the viewport and inside every clipping ancestor, and the sheet is hit there.
+    const browser = await page.evaluate(() => [...document.querySelectorAll('.go')].filter(b => {
+      const r = b.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2;
+      for (let a = b.parentElement; a && a !== document.documentElement; a = a.parentElement) { const c = a.getBoundingClientRect(); if (getComputedStyle(a).overflowY !== 'visible' && (y < c.top || y >= c.bottom)) return false; }
+      return y < innerHeight && document.elementFromPoint(x, y)?.className === 'sh';
+    }).map(b => `P/0/0/${[...b.parentElement.children].indexOf(b)}`));
+    expect(statics, name).toEqual(browser.sort());
+    // Neither the wheel nor PageDown scrolls anything here.
+    await page.mouse.move(100, 100); await page.mouse.wheel(0, 300); await page.keyboard.press('PageDown'); await page.waitForTimeout(100);
+    expect(await page.evaluate(() => [scrollY, document.body.scrollTop, document.querySelector('.w')?.scrollTop ?? 0]), name).toEqual([0, 0, 0]);
+  }
+});
+
 // A layer with no way out (E_A11Y_CLICK_TRAP) and a box that paints nothing over a control (E_A11Y_INVISIBLE_BLOCKER):
 // in the browser, every control the trap names is not the element at its centre, every way-out candidate paints
 // nothing or cannot take focus, and the blocker is the element at the control's centre while painting nothing.

@@ -110,6 +110,8 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - `width` / `height` 属性を使ってよいのは、`img`・`video`・`canvas`・`iframe` と `svg` だけ。表の `th width="320px"` は、
     当たる要素が Unknown になる(`HTML rendering attribute needs an adapter: width`)。CSS の `width` で書く。
   - それ以外の要素では、`width` / `height` / `size` / `color` / `align` などは効かない(`W_HTML_ATTRIBUTE_INERT`)。
+  - iframe の `frameborder` は `"0"` か `"no"` で書く(UA の 2px の枠線が消える)。`"yes"` や `""` はエンジンで解釈が違う(Unknown)。
+    `scrolling`・`marginwidth`・`marginheight` は iframe の中にだけ効くので、受け付ける。
 - コンポーネントの props を DOM に漏らさない。
   - styled-components では transient props(`$size`)にする。
   - 漏れても描画には効かないので、veriss は止まらない。ただし `size` などの HTML の属性名は警告になる。

@@ -144,6 +144,8 @@
   終わりの側(ltr では right、rtl では left、縦は bottom)が無視される(auto の margin があれば中央寄せに使われるので除く)。
   3 つのブラウザーで、無視される側を外しても位置が変わらないことを確かめた。
 - [x] **F14. 線の種類のない border の幅**(`W_CSS_BORDER_NO_STYLE`): `border-style` は初期値 none なので、`border-width: 2px`
+  - 健全性の修正(vlmkit から実ページに当てて発見): `var()` を含む `border` の一括指定(`border: 5px solid var(--c)`)の後の `border-width` で、style を none と読んで幅を 0 にしていた(verified で 20px、3 ブラウザーは 25px)。`var()` の一括指定は書く個別プロパティを `initial` で展開して決めるが、`initial` / `unset` の `border` が幅と style の内部の値を書いていなかった
+  - 誤検出の修正: 素の `:focus-visible { outline }`(主語が何でもよい状態のセレクタ)を、フォーカスできない要素ごとに `W_CSS_STATE_UNREACHABLE` と報告していた(kanban のデモで 350 件)
   だけでは線は描かれず幅も 0(解析もそう配置する)。幅を書いた辺のうち、使われる幅が 0 の辺を報告する。
 - [x] **F15. 画像のない背景の大きさ・位置**(`W_LAYOUT_DECLARATION_INERT`): `background-size`・`-position`・`-repeat`・
   `-attachment`・`-origin` は `background-image` がなければ何もしない。`:hover` などの状態や media 条件で画像を当てる規則が
@@ -662,7 +664,16 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   text-align が start / left 以外、箱の上下の margin、auto の左右 margin、箱自身の min-width / max-width、
   `container-type: inline-size | size` の箱(size containment で shrink-to-fit の幅が中身を見ない)、inline-grid の
   block 方向、直接テキストを持つ inline-flex(匿名の flex item)、2 つ以上の inline-level の箱が並ぶ行。
-- [x] **I23. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
+- [x] **I23. overflow の箱の中の操作部品とテキストを覆うもの**(見逃し): `html, body { overflow: hidden }`(スクロールの止め方)の body の中のボタンに、
+  body を抜け出る fixed のシートが重なっても `E_A11Y_OCCLUDED` が出ず、何も報告しなかった。body が html に overflow を渡さずスクロールコンテナになり、
+  中の箱の位置が決まらない(スクロール位置による)ので、覆いの判定が位置のない箱を飛ばしていた。fixed が抜け出る変更の前からある穴で、
+  overflow: hidden の箱の外の absolute の兄弟でも同じだった。今は、overflow: clip の中は位置が決まるのでそのまま判定し、スクロールコンテナの中は
+  `U_A11Y_SCROLLED_COVER` を出したうえでスクロール位置 0 の配置で `E_A11Y_OCCLUDED` を出す。どちらも祖先が切り取る部分は覆われたと数えない。
+  テキストの `U_A11Y_SCROLLED_COVER` も auto / scroll だけを見ていたので、hidden と clip に広げた。375×667 で 3 ブラウザーの elementFromPoint が、
+  html と body が hidden、html hidden と body clip、html auto と body hidden、350px の hidden / clip の箱(その下端より下のボタンは
+  切り取られて当たらない)、対照(html hidden だけ、overflow なし)で一致し、hidden ではホイールも PageDown もスクロールしなかった。
+  残り: 同じスクロールコンテナの中の覆い同士、`E_A11Y_FOCUS_OBSCURED`・`E_A11Y_FIXED_HIDES` などほかの覆いの規則は、位置のない箱をまだ見ない。
+- [x] **I24. 絶対配置・fixed の箱の px の margin(負の値も)**: 0 でない margin は Unknown にしていた(広告の中央寄せ
   `top: 50%; left: 50%; margin: -125px 0 0 -150px` で、ページ全体の a11y の判定が消えた。文言も block の margin を消せという見当違いのもの)。
   margin の箱を inset に置く(CSS 2 §10.3.7 / §10.6.4): border の箱は始点の inset + 始点の margin から、終点の inset だけのときは
   終点の inset − 終点の margin で終わる。両側の inset で auto の大きさは、両側の margin も引く。決まりすぎ(大きさも両側の inset もある)の
