@@ -673,6 +673,9 @@ export function createCssMistakes({ report, facts, tools }) {
             continue;
           }
           if (!['focus', 'focus-visible', 'focus-within', 'hover', 'active', 'checked'].includes(sel.state) || sel.pseudoElement || !matches(sel, box, new Set([sel.state]))) continue;
+          // A subject that is anything (:focus-visible, *:focus, main :focus): written for whatever can take the state on the
+          // page, so it is not a mistake on the elements that cannot.
+          if ((sel.parts ?? []).every(p => p.kind === 'tag' && p.value === '*')) continue;
           // (Focus: not where the adapter could not tell — a dynamic tabindex — nor on elements whose focusability the box
           // tree does not record: frames, media with controls, image map areas, editable content.) Any tabindex, -1 too,
           // makes an element focusable by a click or focus() (measured in Chromium, Firefox and WebKit).

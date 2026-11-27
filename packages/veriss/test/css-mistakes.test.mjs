@@ -176,6 +176,13 @@ test('F17, F18: a :focus rule on an element that cannot take focus, a :hover on 
   assert.equal(st('<a class="a">No href</a>', '.a:focus{color:red}').length, 1);
   assert.equal(st('<div class="a"></div>', '.a{pointer-events:none}.a:hover{color:red}').length, 1);
   assert.equal(st('<div class="a"></div>', '.a:hover{color:red}').length, 0);
+  // A state rule whose subject is anything (:focus-visible { outline } for the whole page, *:focus, main :focus) is written
+  // for whatever can take the state, not for each element it would match: not reported on the ones that cannot.
+  // (Found running veriss on a rendered page: 350 warnings for one global focus ring.)
+  for (const css of [':focus-visible{outline:2px solid}', '*:focus{outline:2px solid}', '.a :focus-visible{outline:2px solid}', ':checked{color:red}'])
+    assert.equal(st('<div class="a"><p class="b">x</p></div>', css).length, 0, css);
+  // A subject with a class still is.
+  assert.equal(st('<div class="a"><p class="b">x</p></div>', '.b:focus-visible{outline:2px solid}').length, 1);
 });
 
 test('F19: :checked on an element that is never checked, ::placeholder on one that shows none', () => {
