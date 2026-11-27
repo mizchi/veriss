@@ -2470,6 +2470,9 @@ test('click traps and invisible blockers match hit testing and what the browser 
       expect(facts.hit[b.box], `${c.name}: ${b.box} does not take the click`).not.toBe(b.box);
       expect(facts.blockerPaints[b.box], `${c.name}: what takes ${b.box}'s click (${facts.hit[b.box]}, static ${b.cover}) paints nothing`).toBe(false);
     }
+    // The whole set: every control whose click the browser gives to a box that paints nothing is reported (at this
+    // viewport, inside the analysed range), and no other.
+    if (c.blocker) expect([...new Set(blockers.map(b => b.box))].sort(), c.name).toEqual(['.l', '.m'].filter(sel => facts.hit[sel] !== sel && facts.blockerPaints[sel] === false));
   }
 });
 
