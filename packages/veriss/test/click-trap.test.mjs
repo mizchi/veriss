@@ -401,3 +401,12 @@ test('the scroll offset where a control starts under a fixed box is clipped to t
   // Wholly on screen (400..600): from its bottom, as before.
   assert.deepEqual(at('top:400px;height:200px'), [400]);
 });
+
+// Whether scrolling frees a control is the cover's question, not its layer's: a fixed sheet in an untransformed
+// position: relative wrapper still stays put while the page scrolls the links free (the wrapper only groups the exits).
+test('a fixed sheet inside a relative wrapper: scrolling frees the links, unless the page does not scroll', () => {
+  const wrapped = (root, tail) => page('<div class="wr"><div class="sh"></div></div>', `.wr{position:relative;display:block}.gap{display:block;height:500px}.t{display:block;height:${tail}px}.sh{position:fixed;left:0;right:0;bottom:0;height:60vh;background:#333;z-index:9;display:block}${root}`, {host: sheetHost.replace('</main>', '<div class="t"></div></main>')});
+  assert.equal(find(wrapped('', 1000), 'E_A11Y_CLICK_TRAP').length, 0, JSON.stringify(find(wrapped('', 1000), 'E_A11Y_CLICK_TRAP').map(d => d.message)));
+  const [trap] = find(wrapped('html{overflow:hidden}', 0), 'E_A11Y_CLICK_TRAP');
+  assert.ok(trap && trap.box === '.wr', JSON.stringify(wrapped('html{overflow:hidden}', 0).diagnostics.map(d => [d.code, d.box])));
+});

@@ -2545,4 +2545,11 @@ test('fixed covers and scrolling: the offsets where a transparent fixed box take
     expect(scrolled > 0, `${root || 'scrolls'}: the wheel scrolls the page`).toBe(!trapped);
     if (!trapped) expect(await page.evaluate(() => { const r = document.querySelector('.l').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; })).toBe('l');
   }
+  // The same sheet in an untransformed position: relative wrapper: still fixed, still scrolled free (no trap).
+  const wrappedHTML = sheetHTML.replace('<div class="sh"></div>', '<div class="wr"><div class="sh"></div></div>'), wrappedCSS = sheetCSS('') + '.wr{position:relative;display:block}';
+  expect(run(wrappedHTML, wrappedCSS).diagnostics.some(d => d.code === 'E_A11Y_CLICK_TRAP'), 'wrapped').toBe(false);
+  await open(wrappedHTML, wrappedCSS);
+  expect(await hitAt('.l', 0), 'wrapped').toBe('sh');
+  await page.mouse.move(100, 100); await page.mouse.wheel(0, 300); await page.waitForTimeout(300);
+  expect(await page.evaluate(() => { const r = document.querySelector('.l').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className; }), 'wrapped: scrolled free').toBe('l');
 });

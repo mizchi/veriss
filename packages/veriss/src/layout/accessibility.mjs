@@ -2303,7 +2303,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       const short = atMost(below(region, viewportBlock, bottom(scrolledPage)), sum(layerRow.origin.block, range), target.origin.block);
       return [still, short].filter(Boolean);
     };
-    // Where the target stays under the layer at every scroll position.
+    // Where the target stays under the cover at every scroll position.
     const stuck = (layerRow, target, region) => {
       if (stillPage) return [region];
       const lp = meet([region], pinnedFixed(layerRow)), tp = meet([region], pinnedFixed(target));
@@ -2368,7 +2368,9 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
       if (!layerRow || inControl(layerRow)) continue;
       const whole = contains(cover, target, pair.region);
       if (!whole) continue;
-      const pieces = stuck(layerRow, target, whole);
+      // Whether scrolling frees the target is the cover's geometry (a fixed sheet in a relative wrapper stays put); the
+      // layer only groups the exits.
+      const pieces = stuck(cover, target, whole);
       if (!pieces.length) continue;
       if (!byLayer.has(layerRow.path)) byLayer.set(layerRow.path, { layerRow, pieces: [], covered: new Map() });
       const entry = byLayer.get(layerRow.path);
