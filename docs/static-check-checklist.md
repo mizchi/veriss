@@ -144,6 +144,8 @@
   終わりの側(ltr では right、rtl では left、縦は bottom)が無視される(auto の margin があれば中央寄せに使われるので除く)。
   3 つのブラウザーで、無視される側を外しても位置が変わらないことを確かめた。
 - [x] **F14. 線の種類のない border の幅**(`W_CSS_BORDER_NO_STYLE`): `border-style` は初期値 none なので、`border-width: 2px`
+  - 健全性の修正(vlmkit から実ページに当てて発見): `var()` を含む `border` の一括指定(`border: 5px solid var(--c)`)の後の `border-width` で、style を none と読んで幅を 0 にしていた(verified で 20px、3 ブラウザーは 25px)。`var()` の一括指定は書く個別プロパティを `initial` で展開して決めるが、`initial` / `unset` の `border` が幅と style の内部の値を書いていなかった
+  - 誤検出の修正: 素の `:focus-visible { outline }`(主語が何でもよい状態のセレクタ)を、フォーカスできない要素ごとに `W_CSS_STATE_UNREACHABLE` と報告していた(kanban のデモで 350 件)
   だけでは線は描かれず幅も 0(解析もそう配置する)。幅を書いた辺のうち、使われる幅が 0 の辺を報告する。
 - [x] **F15. 画像のない背景の大きさ・位置**(`W_LAYOUT_DECLARATION_INERT`): `background-size`・`-position`・`-repeat`・
   `-attachment`・`-origin` は `background-image` がなければ何もしない。`:hover` などの状態や media 条件で画像を当てる規則が
