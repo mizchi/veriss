@@ -2,93 +2,620 @@
  "version": 1,
  "date": "2026-11-28",
  "commit": "38435a71fed028ea8756053a6087797730aac2d9",
- "runUrl": "https://github.com/mizchi/veriss/actions/runs/46172030615",
- "ok": true,
+ "runUrl": "https://github.com/mizchi/veriss/actions/runs/46175283922",
+ "ok": false,
  "totals": {
   "chromium": {
-   "cases": 1000,
-   "planned": 1000,
-   "verified": 333,
-   "violated": 443,
-   "unknown": 224,
-   "mismatches": 0,
+   "cases": 15000,
+   "planned": 15000,
+   "verified": 4660,
+   "violated": 6758,
+   "unknown": 3582,
+   "mismatches": 2,
    "missingChunks": 0,
-   "failedChunks": 0,
+   "failedChunks": 2,
    "problems": 0,
-   "decided": 0.776
+   "decided": 0.7612
   },
   "firefox": {
-   "cases": 1000,
-   "planned": 1000,
-   "verified": 325,
-   "violated": 451,
-   "unknown": 224,
-   "mismatches": 0,
+   "cases": 15000,
+   "planned": 15000,
+   "verified": 4595,
+   "violated": 6820,
+   "unknown": 3585,
+   "mismatches": 2,
    "missingChunks": 0,
-   "failedChunks": 0,
+   "failedChunks": 2,
    "problems": 0,
-   "decided": 0.776
+   "decided": 0.761
   },
   "webkit": {
-   "cases": 1000,
-   "planned": 1000,
-   "verified": 328,
-   "violated": 448,
-   "unknown": 224,
-   "mismatches": 0,
+   "cases": 15000,
+   "planned": 15000,
+   "verified": 4622,
+   "violated": 6795,
+   "unknown": 3583,
+   "mismatches": 1,
    "missingChunks": 0,
-   "failedChunks": 0,
+   "failedChunks": 1,
    "problems": 0,
-   "decided": 0.776
+   "decided": 0.7611333333333333
   }
  },
  "runs": [
   {
    "browser": "chromium",
    "seed": 1,
-   "planned": 1000,
-   "cases": 1000,
-   "verified": 333,
-   "violated": 443,
-   "unknown": 224,
-   "chunks": 2,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1538,
+   "violated": 2241,
+   "unknown": 1221,
+   "chunks": 10,
+   "missingChunks": [],
+   "failedChunks": [
+    {
+     "first": 2500,
+     "cases": 500
+    },
+    {
+     "first": 4000,
+     "cases": 500
+    }
+   ],
+   "mismatches": [
+    {
+     "index": 2525,
+     "kind": "violation E_LAYOUT_CONTENT",
+     "shrunk": {
+      "width": 400,
+      "height": 600,
+      "fixed": [],
+      "root": {
+       "id": 0,
+       "decl": {},
+       "kids": [
+        {
+         "id": 21,
+         "decl": {},
+         "kids": [
+          {
+           "id": 23,
+           "decl": {},
+           "kids": [
+            {
+             "id": 25,
+             "decl": {
+              "width": "100px",
+              "padding": "4px",
+              "display": "grid",
+              "grid-template-columns": "minmax(0,1fr) minmax(0,1fr) minmax(0,2fr)"
+             },
+             "kids": [
+              {
+               "id": 26,
+               "decl": {},
+               "kids": [],
+               "parentKind": "grid",
+               "depth": 4
+              },
+              {
+               "id": 27,
+               "decl": {
+                "white-space": "nowrap",
+                "line-height": "16px"
+               },
+               "kids": [],
+               "parentKind": "grid",
+               "depth": 4,
+               "text": "OK"
+              }
+             ],
+             "parentKind": "flex",
+             "depth": 3
+            }
+           ],
+           "parentKind": "flex",
+           "depth": 2
+          }
+         ],
+         "parentKind": "flex",
+         "depth": 1
+        }
+       ]
+      }
+     },
+     "css": "*{box-sizing:border-box;margin:0}html{scrollbar-width:none;font-size:16px}html,body{display:grid;grid-template-columns:minmax(0,1fr)}#n0{}#n21{}#n23{}#n25{width:100px;padding:4px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr)}#n26{}#n27{white-space:nowrap;line-height:16px}",
+     "body": "<div id=\"n0\"><div id=\"n21\"><div id=\"n23\"><div id=\"n25\"><div id=\"n26\"></div><div id=\"n27\">OK</div></div></div></div></div>",
+     "mismatches": [
+      {
+       "kind": "violation",
+       "code": "E_LAYOUT_CONTENT",
+       "box": "#n27",
+       "axis": "inline",
+       "message": "#n27 requires 1479/64px but receives 23px on inline axis at viewport 400px × 600px"
+      }
+     ],
+     "repro": {
+      "local": "FUZZ_CASES=1 FUZZ_SEED=1 FUZZ_FIRST=2525 npx playwright test -c playwright.layout.config.mjs e2e/layout-fuzz-safe-subset.spec.mjs --project chromium -g 'seeded pages'",
+      "ci": "gh workflow run fuzz.yml -f browsers=chromium -f seeds=1 -f first=2525 -f cases=1 -f chunk=1"
+     }
+    },
+    {
+     "index": 4229,
+     "kind": "violation E_LAYOUT_ITEM_SIZE",
+     "shrunk": {
+      "width": 400,
+      "height": 600,
+      "fixed": [],
+      "root": {
+       "id": 0,
+       "decl": {},
+       "kids": [
+        {
+         "id": 14,
+         "decl": {
+          "display": "grid",
+          "grid-template-columns": "160px 120px",
+          "grid-template-rows": "30px 30px"
+         },
+         "kids": [
+          {
+           "id": 15,
+           "decl": {
+            "grid-column": "2"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          },
+          {
+           "id": 16,
+           "decl": {
+            "white-space": "nowrap",
+            "line-height": "20px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4,
+           "text": "Home"
+          },
+          {
+           "id": 17,
+           "decl": {
+            "padding": "16px",
+            "height": "40px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          },
+          {
+           "id": 18,
+           "decl": {
+            "height": "10px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          }
+         ],
+         "parentKind": "grid",
+         "depth": 3
+        }
+       ]
+      }
+     },
+     "css": "*{box-sizing:border-box;margin:0}html{scrollbar-width:none;font-size:16px}html,body{display:grid;grid-template-columns:minmax(0,1fr)}#n0{}#n14{display:grid;grid-template-columns:160px 120px;grid-template-rows:30px 30px}#n15{grid-column:2}#n16{white-space:nowrap;line-height:20px}#n17{padding:16px;height:40px}#n18{height:10px}",
+     "body": "<div id=\"n0\"><div id=\"n14\"><div id=\"n15\"></div><div id=\"n16\">Home</div><div id=\"n17\"></div><div id=\"n18\"></div></div></div>",
+     "mismatches": [
+      {
+       "kind": "violation",
+       "code": "E_LAYOUT_ITEM_SIZE",
+       "box": "#n17",
+       "axis": "block",
+       "message": "#n17 requires 40px but receives 30px on block axis at viewport 400px × 600px"
+      }
+     ],
+     "repro": {
+      "local": "FUZZ_CASES=1 FUZZ_SEED=1 FUZZ_FIRST=4229 npx playwright test -c playwright.layout.config.mjs e2e/layout-fuzz-safe-subset.spec.mjs --project chromium -g 'seeded pages'",
+      "ci": "gh workflow run fuzz.yml -f browsers=chromium -f seeds=1 -f first=4229 -f cases=1 -f chunk=1"
+     }
+    }
+   ],
+   "decided": 0.7558,
+   "boxesDecided": 0.5435741641484737,
+   "problems": []
+  },
+  {
+   "browser": "chromium",
+   "seed": 2,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1522,
+   "violated": 2266,
+   "unknown": 1212,
+   "chunks": 10,
    "missingChunks": [],
    "failedChunks": [],
    "mismatches": [],
-   "decided": 0.776,
-   "boxesDecided": 0.5597443572526495,
+   "decided": 0.7576,
+   "boxesDecided": 0.5531387230278331,
+   "problems": []
+  },
+  {
+   "browser": "chromium",
+   "seed": 3,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1600,
+   "violated": 2251,
+   "unknown": 1149,
+   "chunks": 10,
+   "missingChunks": [],
+   "failedChunks": [],
+   "mismatches": [],
+   "decided": 0.7702,
+   "boxesDecided": 0.5571148454844512,
    "problems": []
   },
   {
    "browser": "firefox",
    "seed": 1,
-   "planned": 1000,
-   "cases": 1000,
-   "verified": 325,
-   "violated": 451,
-   "unknown": 224,
-   "chunks": 2,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1513,
+   "violated": 2266,
+   "unknown": 1221,
+   "chunks": 10,
+   "missingChunks": [],
+   "failedChunks": [
+    {
+     "first": 4000,
+     "cases": 500
+    }
+   ],
+   "mismatches": [
+    {
+     "index": 4229,
+     "kind": "violation E_LAYOUT_ITEM_SIZE",
+     "shrunk": {
+      "width": 400,
+      "height": 600,
+      "fixed": [],
+      "root": {
+       "id": 0,
+       "decl": {},
+       "kids": [
+        {
+         "id": 14,
+         "decl": {
+          "display": "grid",
+          "grid-template-columns": "160px 120px",
+          "grid-template-rows": "30px 30px"
+         },
+         "kids": [
+          {
+           "id": 15,
+           "decl": {
+            "grid-column": "2"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          },
+          {
+           "id": 16,
+           "decl": {
+            "white-space": "nowrap",
+            "line-height": "20px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4,
+           "text": "Home"
+          },
+          {
+           "id": 17,
+           "decl": {
+            "padding": "16px",
+            "height": "40px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          },
+          {
+           "id": 18,
+           "decl": {
+            "height": "10px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          }
+         ],
+         "parentKind": "grid",
+         "depth": 3
+        }
+       ]
+      }
+     },
+     "css": "*{box-sizing:border-box;margin:0}html{scrollbar-width:none;font-size:16px}html,body{display:grid;grid-template-columns:minmax(0,1fr)}#n0{}#n14{display:grid;grid-template-columns:160px 120px;grid-template-rows:30px 30px}#n15{grid-column:2}#n16{white-space:nowrap;line-height:20px}#n17{padding:16px;height:40px}#n18{height:10px}",
+     "body": "<div id=\"n0\"><div id=\"n14\"><div id=\"n15\"></div><div id=\"n16\">Home</div><div id=\"n17\"></div><div id=\"n18\"></div></div></div>",
+     "mismatches": [
+      {
+       "kind": "violation",
+       "code": "E_LAYOUT_ITEM_SIZE",
+       "box": "#n17",
+       "axis": "block",
+       "message": "#n17 requires 40px but receives 30px on block axis at viewport 400px × 600px"
+      }
+     ],
+     "repro": {
+      "local": "FUZZ_CASES=1 FUZZ_SEED=1 FUZZ_FIRST=4229 npx playwright test -c playwright.layout.config.mjs e2e/layout-fuzz-safe-subset.spec.mjs --project firefox -g 'seeded pages'",
+      "ci": "gh workflow run fuzz.yml -f browsers=firefox -f seeds=1 -f first=4229 -f cases=1 -f chunk=1"
+     }
+    }
+   ],
+   "decided": 0.7558,
+   "boxesDecided": 0.5435741641484737,
+   "problems": []
+  },
+  {
+   "browser": "firefox",
+   "seed": 2,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1499,
+   "violated": 2289,
+   "unknown": 1212,
+   "chunks": 10,
+   "missingChunks": [],
+   "failedChunks": [
+    {
+     "first": 1000,
+     "cases": 500
+    }
+   ],
+   "mismatches": [
+    {
+     "index": 1272,
+     "kind": "violation E_LAYOUT_CONTENT",
+     "shrunk": {
+      "width": 400,
+      "height": 600,
+      "fixed": [],
+      "root": {
+       "id": 0,
+       "decl": {},
+       "kids": [
+        {
+         "id": 6,
+         "decl": {
+          "max-width": "360px",
+          "display": "flex"
+         },
+         "kids": [
+          {
+           "id": 7,
+           "decl": {
+            "width": "230px"
+           },
+           "kids": [],
+           "parentKind": "flex",
+           "depth": 3
+          },
+          {
+           "id": 8,
+           "decl": {
+            "flex": "1"
+           },
+           "kids": [],
+           "parentKind": "flex",
+           "depth": 3
+          },
+          {
+           "id": 9,
+           "decl": {
+            "flex": "1",
+            "min-width": "0",
+            "padding": "8px"
+           },
+           "kids": [
+            {
+             "id": 10,
+             "decl": {
+              "padding": "16px",
+              "white-space": "nowrap",
+              "line-height": "16px"
+             },
+             "kids": [],
+             "parentKind": "flex",
+             "depth": 4,
+             "text": "OK"
+            }
+           ],
+           "parentKind": "flex",
+           "depth": 3
+          }
+         ],
+         "parentKind": "block",
+         "depth": 2
+        }
+       ]
+      }
+     },
+     "css": "*{box-sizing:border-box;margin:0}html{scrollbar-width:none;font-size:16px}html,body{display:grid;grid-template-columns:minmax(0,1fr)}#n0{}#n6{max-width:360px;display:flex}#n7{width:230px}#n8{flex:1}#n9{flex:1;min-width:0;padding:8px}#n10{padding:16px;white-space:nowrap;line-height:16px}",
+     "body": "<div id=\"n0\"><div id=\"n6\"><div id=\"n7\"></div><div id=\"n8\"></div><div id=\"n9\"><div id=\"n10\">OK</div></div></div></div>",
+     "mismatches": [
+      {
+       "kind": "violation",
+       "code": "E_LAYOUT_CONTENT",
+       "box": "#n10",
+       "axis": "inline",
+       "message": "#n10 requires 12533333/500000px but receives 25px on inline axis at viewport 400px × 600px"
+      }
+     ],
+     "repro": {
+      "local": "FUZZ_CASES=1 FUZZ_SEED=2 FUZZ_FIRST=1272 npx playwright test -c playwright.layout.config.mjs e2e/layout-fuzz-safe-subset.spec.mjs --project firefox -g 'seeded pages'",
+      "ci": "gh workflow run fuzz.yml -f browsers=firefox -f seeds=2 -f first=1272 -f cases=1 -f chunk=1"
+     }
+    }
+   ],
+   "decided": 0.7576,
+   "boxesDecided": 0.5530123526995862,
+   "problems": []
+  },
+  {
+   "browser": "firefox",
+   "seed": 3,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1583,
+   "violated": 2265,
+   "unknown": 1152,
+   "chunks": 10,
    "missingChunks": [],
    "failedChunks": [],
    "mismatches": [],
-   "decided": 0.776,
-   "boxesDecided": 0.5597443572526495,
+   "decided": 0.7696,
+   "boxesDecided": 0.5570014098429726,
    "problems": []
   },
   {
    "browser": "webkit",
    "seed": 1,
-   "planned": 1000,
-   "cases": 1000,
-   "verified": 328,
-   "violated": 448,
-   "unknown": 224,
-   "chunks": 2,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1522,
+   "violated": 2257,
+   "unknown": 1221,
+   "chunks": 10,
+   "missingChunks": [],
+   "failedChunks": [
+    {
+     "first": 4000,
+     "cases": 500
+    }
+   ],
+   "mismatches": [
+    {
+     "index": 4229,
+     "kind": "violation E_LAYOUT_ITEM_SIZE",
+     "shrunk": {
+      "width": 400,
+      "height": 600,
+      "fixed": [],
+      "root": {
+       "id": 0,
+       "decl": {},
+       "kids": [
+        {
+         "id": 14,
+         "decl": {
+          "display": "grid",
+          "grid-template-columns": "160px 120px",
+          "grid-template-rows": "30px 30px"
+         },
+         "kids": [
+          {
+           "id": 15,
+           "decl": {
+            "grid-column": "2"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          },
+          {
+           "id": 16,
+           "decl": {
+            "white-space": "nowrap",
+            "line-height": "20px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4,
+           "text": "Home"
+          },
+          {
+           "id": 17,
+           "decl": {
+            "padding": "16px",
+            "height": "40px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          },
+          {
+           "id": 18,
+           "decl": {
+            "height": "10px"
+           },
+           "kids": [],
+           "parentKind": "grid",
+           "depth": 4
+          }
+         ],
+         "parentKind": "grid",
+         "depth": 3
+        }
+       ]
+      }
+     },
+     "css": "*{box-sizing:border-box;margin:0}html{scrollbar-width:none;font-size:16px}html,body{display:grid;grid-template-columns:minmax(0,1fr)}#n0{}#n14{display:grid;grid-template-columns:160px 120px;grid-template-rows:30px 30px}#n15{grid-column:2}#n16{white-space:nowrap;line-height:20px}#n17{padding:16px;height:40px}#n18{height:10px}",
+     "body": "<div id=\"n0\"><div id=\"n14\"><div id=\"n15\"></div><div id=\"n16\">Home</div><div id=\"n17\"></div><div id=\"n18\"></div></div></div>",
+     "mismatches": [
+      {
+       "kind": "violation",
+       "code": "E_LAYOUT_ITEM_SIZE",
+       "box": "#n17",
+       "axis": "block",
+       "message": "#n17 requires 40px but receives 30px on block axis at viewport 400px × 600px"
+      }
+     ],
+     "repro": {
+      "local": "FUZZ_CASES=1 FUZZ_SEED=1 FUZZ_FIRST=4229 npx playwright test -c playwright.layout.config.mjs e2e/layout-fuzz-safe-subset.spec.mjs --project webkit -g 'seeded pages'",
+      "ci": "gh workflow run fuzz.yml -f browsers=webkit -f seeds=1 -f first=4229 -f cases=1 -f chunk=1"
+     }
+    }
+   ],
+   "decided": 0.7558,
+   "boxesDecided": 0.5435741641484737,
+   "problems": []
+  },
+  {
+   "browser": "webkit",
+   "seed": 2,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1512,
+   "violated": 2277,
+   "unknown": 1211,
+   "chunks": 10,
    "missingChunks": [],
    "failedChunks": [],
    "mismatches": [],
-   "decided": 0.776,
-   "boxesDecided": 0.5597443572526495,
+   "decided": 0.7578,
+   "boxesDecided": 0.5531387230278331,
+   "problems": []
+  },
+  {
+   "browser": "webkit",
+   "seed": 3,
+   "planned": 5000,
+   "cases": 5000,
+   "verified": 1588,
+   "violated": 2261,
+   "unknown": 1151,
+   "chunks": 10,
+   "missingChunks": [],
+   "failedChunks": [],
+   "mismatches": [],
+   "decided": 0.7698,
+   "boxesDecided": 0.5570014098429726,
    "problems": []
   }
  ]

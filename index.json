@@ -5,44 +5,44 @@
    "date": "2026-11-28",
    "file": "history/2026-11-28.json",
    "commit": "38435a71fed028ea8756053a6087797730aac2d9",
-   "runUrl": "https://github.com/mizchi/veriss/actions/runs/46172030615",
-   "ok": true,
+   "runUrl": "https://github.com/mizchi/veriss/actions/runs/46175283922",
+   "ok": false,
    "totals": {
     "chromium": {
-     "cases": 1000,
-     "planned": 1000,
-     "verified": 333,
-     "violated": 443,
-     "unknown": 224,
-     "mismatches": 0,
+     "cases": 15000,
+     "planned": 15000,
+     "verified": 4660,
+     "violated": 6758,
+     "unknown": 3582,
+     "mismatches": 2,
      "missingChunks": 0,
-     "failedChunks": 0,
+     "failedChunks": 2,
      "problems": 0,
-     "decided": 0.776
+     "decided": 0.7612
     },
     "firefox": {
-     "cases": 1000,
-     "planned": 1000,
-     "verified": 325,
-     "violated": 451,
-     "unknown": 224,
-     "mismatches": 0,
+     "cases": 15000,
+     "planned": 15000,
+     "verified": 4595,
+     "violated": 6820,
+     "unknown": 3585,
+     "mismatches": 2,
      "missingChunks": 0,
-     "failedChunks": 0,
+     "failedChunks": 2,
      "problems": 0,
-     "decided": 0.776
+     "decided": 0.761
     },
     "webkit": {
-     "cases": 1000,
-     "planned": 1000,
-     "verified": 328,
-     "violated": 448,
-     "unknown": 224,
-     "mismatches": 0,
+     "cases": 15000,
+     "planned": 15000,
+     "verified": 4622,
+     "violated": 6795,
+     "unknown": 3583,
+     "mismatches": 1,
      "missingChunks": 0,
-     "failedChunks": 0,
+     "failedChunks": 1,
      "problems": 0,
-     "decided": 0.776
+     "decided": 0.7611333333333333
     }
    }
   }
