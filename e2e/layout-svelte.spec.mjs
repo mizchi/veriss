@@ -123,7 +123,8 @@ test('anonymous flex items of text: the elements beside them are where Chromium 
   for (const width of [320, 480, 800]) {
     await page.setViewportSize({width, height: 700});
     await page.setContent(`<!doctype html><html lang="en"><head><style>${face}${page0}${css}</style></head><body>${html}</body></html>`);
-    await page.evaluate(() => document.fonts.ready);
+    // document.fonts.ready can resolve before the face starts loading (docs/handoff.md): load every face.
+    await page.evaluate(() => Promise.all([...document.fonts].map(f => f.load())));
     const browser = await page.evaluate(() => [...document.querySelectorAll('.remove, .tag')].map(e => { const r = e.getBoundingClientRect(); return [e.className.split(' ')[0], r.left, r.width]; }));
     const rows = state.report.sizes.filter(r => r.rect && /^\.(remove|tag)/.test(r.box) && width >= r.range.min && width <= r.range.max);
     const at = a => Number(a.coefficient.split('/').reduce((x, y) => x / y)) * width + Number(String(a.constant).split('/').reduce((x, y) => x / y));
