@@ -179,6 +179,33 @@ importers:
         specifier: 7.0.0
         version: 7.0.0
 
+  examples/linaria:
+    devDependencies:
+      veriss:
+        specifier: workspace:*
+        version: link:../../packages/veriss
+      veriss-adapter-core:
+        specifier: workspace:*
+        version: link:../../packages/adapter-core
+      veriss-linaria:
+        specifier: workspace:*
+        version: link:../../packages/linaria
+      veriss-react:
+        specifier: workspace:*
+        version: link:../../packages/react-adapter
+
+  examples/svelte:
+    devDependencies:
+      veriss:
+        specifier: workspace:*
+        version: link:../../packages/veriss
+      veriss-adapter-core:
+        specifier: workspace:*
+        version: link:../../packages/adapter-core
+      veriss-svelte:
+        specifier: workspace:*
+        version: link:../../packages/svelte-adapter
+
   packages/adapter-core:
     dependencies:
       parse5:

@@ -26,6 +26,9 @@ npx veriss-svelte --viewport 320-1280 src/**/*.svelte
 npx veriss-linaria --viewport 320-1280 src/**/*.tsx   # .js / .jsx / .ts / .tsx。Linaria の css`` と styled.tag``(veriss-react)
 ```
 
+導入の手順(インストール、出力の読み方、package.json と CI、指摘から構造を直す方法)は [導入ガイド](guide/README.md) に、壊れた例と直した例の組は
+[`examples/svelte/`](../examples/svelte/) と [`examples/linaria/`](../examples/linaria/) にあります。
+
 ## オプション
 
 | オプション | 既定 | 意味 |
