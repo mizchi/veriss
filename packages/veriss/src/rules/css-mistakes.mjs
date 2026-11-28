@@ -324,11 +324,14 @@ export function createCssMistakes({ report, facts, tools }) {
       for (const { rule, sel } of own) for (const d of rule.declarations) {
         const winner = on.style.$sources?.[d.property];
         if (!winner || (winner.file === d.file && winner.line === d.line && winner.selector === sel.source) || new RegExp(`:${st}(?![\\w-])`, 'i').test(String(winner.selector))) continue;
-        if (String(winner.specified ?? '').trim().toLowerCase() === String(d.value ?? '').trim().toLowerCase()) continue;
-        if (layoutWarnings.some(w => w.code === 'W_CSS_STATE_SHADOWED' && w.path === box.path && w.selector === sel.source && w.property === d.property)) continue;
-        layoutWarnings.push({ code: 'W_CSS_STATE_SHADOWED', severity: 'warning', box: box.label, path: box.path, selector: sel.source, property: d.property, state: `:${st}`,
+        // As written: a shorthand with var() is expanded with 'initial' to find its longhands (d.pending), so its value
+        // is what was specified, and it is one declaration however many longhands it writes.
+        const written = d.pending?.property ?? d.property, value = d.specified ?? d.value;
+        if (String(winner.specified ?? '').trim().toLowerCase() === String(value ?? '').trim().toLowerCase()) continue;
+        if (layoutWarnings.some(w => w.code === 'W_CSS_STATE_SHADOWED' && w.path === box.path && w.selector === sel.source && (w.property === d.property || (w.written === written && w.line === d.line && w.winner === winner.selector)))) continue;
+        layoutWarnings.push({ code: 'W_CSS_STATE_SHADOWED', severity: 'warning', box: box.label, path: box.path, selector: sel.source, property: d.property, written, line: d.line, winner: winner.selector, state: `:${st}`,
           css: [{ property: d.property, file: d.file, line: d.line, selector: sel.source }, { property: d.property, file: winner.file, line: winner.line, selector: winner.selector }],
-          message: `${box.label}: ${sel.source} { ${d.property}: ${d.value} } never shows: ${winner.selector} { ${d.property}: ${winner.specified} } also applies while it is :${st} and wins (it comes later or is more specific). Put the :${st} rule after it (for links: :link, :visited, :hover, :active), or make it more specific` });
+          message: `${box.label}: ${sel.source} { ${written}: ${value} } never shows: ${winner.selector} { ${winner.written ?? d.property}: ${winner.specified} } also applies while it is :${st} and wins (it comes later or is more specific). Put the :${st} rule after it (for links: :link, :visited, :hover, :active), or make it more specific` });
       }
     }
   }
