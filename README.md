@@ -55,6 +55,7 @@ pnpm test:e2e -- --project chromium   # browser checks (also firefox, webkit)
 
 ## Docs
 
+- [Adopting the checkers](docs/guide/README.md) (Japanese) — install `veriss-svelte` / `veriss-linaria`, read the output, wire it into CI, and follow the findings to correct structure; worked pairs in `examples/svelte/` and `examples/linaria/`
 - [Rule catalog](https://mizchi.github.io/veriss/) (`docs/rule-catalog.md`) — the checks by role, with NG / OK examples
 - `docs/critical-css.md` — critical CSS: the rules the first view needs on usual phones and PCs (`veriss/critical`)
 - `docs/adr/0018-coordinate-subset.md` — the coordinate subset L1 of Grid and Flex as an independent Z3 reference (`models/layout/`)
