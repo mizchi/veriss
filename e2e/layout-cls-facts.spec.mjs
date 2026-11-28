@@ -244,7 +244,9 @@ test('font swap warnings: text whose box follows the web font shifts in Chromium
 test('lazy images in the initial viewport: the static warning region agrees with Chromium geometry', async ({page}) => {
   const css = '*{box-sizing:border-box;margin:0}.page{display:grid;grid-template-columns:minmax(0,1fr)}.sp{height:700px}img{display:block;width:100%;height:auto}';
   const html = '<div class="page"><div class="sp"></div><img src="/slow.png" width="400" height="200" loading="lazy" alt=""></div>';
-  const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 320, max: 1280, height: {min: 500, max: 1000}}});
+  // /slow.png never loads here, so the browser keeps the attributes' ratio: the layout before load, which the static
+  // check takes only under trustImageAttributes (#55; once a file of another ratio loads, the img's height follows it).
+  const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 320, max: 1280, height: {min: 500, max: 1000}}, trustImageAttributes: true});
   const warnings = (report.layoutWarnings ?? []).filter(w => w.code === 'W_LAYOUT_LAZY_IN_VIEWPORT');
   expect(warnings.length).toBe(1);
   for (const [width, height] of [[320, 600], [800, 699], [800, 701], [1280, 1000]]) {
@@ -618,7 +620,7 @@ test('object-fit on an img sized by its own ratio: the static warning fires exac
   for (const own of ['width:100%;height:auto', 'width:100%;height:120px', 'width:100%;height:auto;max-height:60px', 'width:100%;height:auto;aspect-ratio:1', 'width:240px;height:auto']) {
     const css = `*{box-sizing:border-box;margin:0}html,body,.p{${g}}.p{background:#fff}.i{display:block;max-width:300px;${own}}`;
     const html = `<main class="p"><img class="i" src="${src}" width="200" height="100" alt=""></main>`;
-    const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: `${css}.i{object-fit:cover}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}});
+    const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: `${css}.i{object-fit:cover}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, images: {[src]: {width: 200, height: 100}}});
     const warn = (report.layoutWarnings ?? []).some(w => w.code === 'W_LAYOUT_DECLARATION_INERT' && w.properties.includes('object-fit'));
     const shot = async fit => { await page.setContent(`<!doctype html><html lang="en"><head><style>${css}${fit ? '.i{object-fit:cover}' : ''}</style></head><body>${html}</body></html>`); await page.evaluate(() => document.querySelector('.i').decode()); await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); return (await page.screenshot({clip: {x: 0, y: 0, width: 320, height: 320}})).toString('base64'); };
     expect((await shot(true)) === (await shot(false)), `${own}: same pixels without object-fit`).toBe(warn);
