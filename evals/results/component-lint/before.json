@@ -37,7 +37,7 @@
       "count": 1
     },
     {
-      "reason": "U_A11Y_SCROLLED_COVER: .X paints over part of .X, a scroll container: whether it covers the text inside is not checked (positions there depend on the scroll offset). Keep controls out",
+      "reason": "U_A11Y_SCROLLED_COVER: .X paints over part of .X, a scroll container (overflow: auto): whether it covers the text inside is not checked (positions there depend on the scroll offset). ",
       "count": 1
     },
     {
@@ -461,7 +461,7 @@
       "notChecked": [
         {
           "code": "U_A11Y_SCROLLED_COVER",
-          "reason": ".X paints over part of .X, a scroll container: whether it covers the text inside is not checked (positions there depend on the scroll offset). Keep controls out",
+          "reason": ".X paints over part of .X, a scroll container (overflow: auto): whether it covers the text inside is not checked (positions there depend on the scroll offset). ",
           "line": 2
         },
         {
