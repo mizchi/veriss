@@ -26,7 +26,9 @@ CSS の書き間違いを、ページを描かずに静的に検査するライ�
 ## ツールと検証
 
 - push の前に `tools/gate.sh`(既定は全 package の単体テストだけ。1 分ほど)。ブラウザーの e2e と component-lint の eval は PR の CI
-  (`.github/workflows/ci.yml`)で回る。どこで何が走るかは `docs/handoff.md` の「どこで何が走るか」。重い検査を手元の Mac で回さない
+  (`.github/workflows/ci.yml`: 単体テスト、テストごとに切った e2e の shard、fuzz の固定 regressions、eval を attempt ごとに)で回る。
+  seed つきの fuzz は毎日 `fuzz.yml` で回り、結果は https://mizchi.github.io/veriss/fuzz/ 。macOS は毎週、被覆は手動。
+  どこで何が走るかは `docs/handoff.md` の「どこで何が走るか」。重い検査(ブラウザーの e2e 全体、fuzz)を手元の Mac で回さない
 - `node tools/probe.mjs '<css>'` で解析器の読み方を、`node tools/browser-diff.cjs '<css>' '<css + 宣言>' '<html>'` で 3 ブラウザーの差を見る。
 
 - Node.js 24+、pnpm 12。`pnpm install --frozen-lockfile` が通る状態を保つ。

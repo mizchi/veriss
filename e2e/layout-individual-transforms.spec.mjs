@@ -4,6 +4,9 @@
 // (packages/veriss/test/individual-transforms.test.mjs checks the analysis gives that list's result).
 import {test, expect} from '@playwright/test';
 
+// The tests draw from one generator in turn: they stay in one worker, in file order (playwright.layout.config.mjs is
+// fullyParallel).
+test.describe.configure({mode: 'default'});
 let seed = 7;
 const rand = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
 const pick = list => list[rand(list.length)];

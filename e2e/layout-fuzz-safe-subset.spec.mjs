@@ -5,7 +5,11 @@
 // is counted, and the decided share must stay high (a fuzzer whose cases are mostly Unknown proves little).
 // A mismatch is shrunk to a minimal page and printed as a regression case to paste into `regressions` below.
 //   FUZZ_CASES=5000 FUZZ_SEED=7 pnpm test:e2e -- layout-fuzz-safe-subset --project webkit
+// FUZZ_CASES=0 runs only the regression cases (ci.yml on every pull request); the seeded run is fuzz.yml's, daily.
+// FUZZ_REPORT=<file> also writes the run's tally and mismatches there as JSON (tools/ci/fuzz-summary.mjs reads it); the
+// decided-share and population checks are then made on the combined day, not per chunk.
 import {test, expect} from '@playwright/test';
+import {writeFileSync} from 'node:fs';
 import {generateLayoutCase, renderCase, shrink} from './support/layout-fuzz.mjs';
 import {checkCase} from './support/layout-fuzz-check.mjs';
 
@@ -59,9 +63,11 @@ test('safe-subset fuzz: the shrunk regression cases', async ({page}) => {
 });
 
 test(`safe-subset fuzz: ${cases} seeded pages agree with the browser wherever veriss decides`, async ({page}) => {
-  test.setTimeout(Math.max(120_000, cases * 400));
+  test.skip(cases === 0, 'FUZZ_CASES=0: the regression cases only');
+  // About 0.4s a page in Firefox on a CI runner, and a mismatch is shrunk on top of that.
+  test.setTimeout(Math.max(120_000, cases * 1_000));
   const tol = tolerance(), tally = {cases: 0, verified: 0, violated: 0, unknown: 0, boxes: 0, decidedBoxes: 0, violations: 0};
-  const failures = [];
+  const failures = [], found = [];
   for (let index = first; index < first + cases; index++) {
     const c = generateLayoutCase(seed, index), r = await checkCase(page, c, tol);
     tally.cases++; tally[r.status]++; tally.boxes += r.boxes; tally.decidedBoxes += r.verifiedBoxes; tally.violations += r.violations;
@@ -69,12 +75,18 @@ test(`safe-subset fuzz: ${cases} seeded pages agree with the browser wherever ve
     const kind = signature(r.mismatches[0]);
     const small = await shrink(c, async x => { try { return (await checkCase(page, x, tol)).mismatches.some(m => signature(m) === kind); } catch { return false; } });
     const again = await checkCase(page, small, tol);
-    failures.push(`seed ${seed} index ${index}: ${kind}\n  shrunk: ${JSON.stringify({width: small.width, height: small.height, fixed: small.fixed, root: small.root})}\n  css: ${renderCase(small).css}\n  body: ${renderCase(small).body}\n  ${JSON.stringify(again.mismatches.slice(0, 3))}`);
+    const shrunk = {width: small.width, height: small.height, fixed: small.fixed, root: small.root}, page2 = renderCase(small);
+    found.push({index, kind, shrunk, css: page2.css, body: page2.body, mismatches: again.mismatches.slice(0, 3)});
+    failures.push(`seed ${seed} index ${index}: ${kind}\n  shrunk: ${JSON.stringify(shrunk)}\n  css: ${page2.css}\n  body: ${page2.body}\n  ${JSON.stringify(again.mismatches.slice(0, 3))}`);
     if (failures.length >= 5) break;
   }
   const decided = (tally.verified + tally.violated) / tally.cases, boxShare = tally.decidedBoxes / tally.boxes;
   console.log(`safe-subset fuzz (${test.info().project.name}, seed ${seed}, ${first}..${first + cases - 1}): ${JSON.stringify(tally)}; decided cases ${(decided * 100).toFixed(1)}%, boxes with a rectangle ${(boxShare * 100).toFixed(1)}%`);
+  if (process.env.FUZZ_REPORT) writeFileSync(process.env.FUZZ_REPORT, JSON.stringify({browser: test.info().project.name, seed, first, cases, tally, decided, boxes: boxShare, stoppedEarly: failures.length >= 5, mismatches: found}, null, 1) + '\n');
   expect(failures, failures.join('\n\n')).toEqual([]);
+  // The population checks need a population: a chunk of the daily run (FUZZ_REPORT) is judged with the rest of its
+  // browser and seed (tools/ci/fuzz-summary.mjs, MIN_DECIDED), and a replay of a few cases checks agreement only.
+  if (process.env.FUZZ_REPORT || cases < 100) return;
   expect(decided).toBeGreaterThan(0.6);
   expect(tally.violated).toBeGreaterThan(0);
   expect(tally.verified).toBeGreaterThan(0);
