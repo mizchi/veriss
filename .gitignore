@@ -17,3 +17,8 @@ packages/veriss/text-metrics/_build/js/release/build/*
 packages/veriss/text-metrics/_build/js/release/build/font_ffi/*
 !packages/veriss/text-metrics/_build/js/release/build/font_ffi/font_ffi.js
 _site/
+# Snapshots of public pages are third-party content: rebuilt by tools/corpus/capture.mjs, not committed.
+evals/corpus/snapshots/*
+!evals/corpus/snapshots/vlmkit-*.json
+# The per-page measurement is ~20 MB: summary.json and tables.md are kept, coverage.json is a CI artifact.
+evals/results/safe-subset-coverage/coverage.json

@@ -1,0 +1,5993 @@
+{
+ "pages": [
+  {
+   "id": "astro-home",
+   "kind": "landing",
+   "system": "tailwind",
+   "source": "https://astro.build/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://astro.build/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://astro.build/_astro/tailwind.QfH26gv7.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 100487
+    },
+    {
+     "url": "https://astro.build/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4217
+    },
+    {
+     "url": "https://astro.build/_astro/ec.uumq6.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 15847
+    }
+   ],
+   "unordered": 6,
+   "htmlBytes": 310170,
+   "cssBytes": 121621,
+   "elements": 1802,
+   "images": 7,
+   "sha256": "2fe80845f82d43c76702d9bb88e16e5d8fea4b37bcd89b825ecf109c9b69f096"
+  },
+  {
+   "id": "bootstrap-album",
+   "kind": "landing",
+   "system": "bootstrap",
+   "source": "https://getbootstrap.com/docs/5.3/examples/album/",
+   "public": true,
+   "terms": "Bootstrap examples MIT",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://getbootstrap.com/docs/5.3/examples/album/",
+   "sheets": [
+    {
+     "url": "https://getbootstrap.com/docs/5.3/dist/css/bootstrap.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 232357
+    },
+    {
+     "url": "https://getbootstrap.com/docs/5.3/examples/album/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1347
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 14677,
+   "cssBytes": 233705,
+   "elements": 198,
+   "images": 0,
+   "sha256": "a7682abb6e4f3d96f10bf81a628fee36a044ddcf26c989d865054fa0e7518e28"
+  },
+  {
+   "id": "bootstrap-checkout",
+   "kind": "commerce",
+   "system": "bootstrap",
+   "source": "https://getbootstrap.com/docs/5.3/examples/checkout/",
+   "public": true,
+   "terms": "Bootstrap examples MIT",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://getbootstrap.com/docs/5.3/examples/checkout/",
+   "sheets": [
+    {
+     "url": "https://getbootstrap.com/docs/5.3/dist/css/bootstrap.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 232357
+    },
+    {
+     "url": "https://getbootstrap.com/docs/5.3/examples/checkout/checkout.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 35
+    },
+    {
+     "url": "https://getbootstrap.com/docs/5.3/examples/checkout/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1347
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 11094,
+   "cssBytes": 233741,
+   "elements": 171,
+   "images": 1,
+   "sha256": "f99f91cd56d48318cfb759e0ed7c911139520a6a2db91f41888452b53dd9d997"
+  },
+  {
+   "id": "bootstrap-dashboard",
+   "kind": "app-dashboard",
+   "system": "bootstrap",
+   "source": "https://getbootstrap.com/docs/5.3/examples/dashboard/",
+   "public": true,
+   "terms": "Bootstrap examples MIT",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://getbootstrap.com/docs/5.3/examples/dashboard/",
+   "sheets": [
+    {
+     "url": "https://getbootstrap.com/docs/5.3/dist/css/bootstrap.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 232357
+    },
+    {
+     "url": "https://getbootstrap.com/docs/5.3/examples/dashboard/dashboard.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 639
+    },
+    {
+     "url": "https://getbootstrap.com/docs/5.3/examples/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1347
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 19322,
+   "cssBytes": 234345,
+   "elements": 268,
+   "images": 0,
+   "sha256": "0ea21af935c8cfd005f2ff15d02565e4054c10802becaaac85583897b6755921"
+  },
+  {
+   "id": "bootstrap-docs",
+   "kind": "docs",
+   "system": "bootstrap",
+   "source": "https://getbootstrap.com/docs/5.3/getting-started/introduction/",
+   "public": true,
+   "terms": "Bootstrap docs CC-BY-3.0",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://getbootstrap.com/docs/5.3/getting-started/introduction/",
+   "sheets": [
+    {
+     "url": "https://getbootstrap.com/docs/5.3/dist/css/bootstrap.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 232357
+    },
+    {
+     "url": "https://getbootstrap.com/docs/5.3/assets/_slug_.ZhhCqGDD.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 49478
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 249
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 73883,
+   "cssBytes": 282086,
+   "elements": 1069,
+   "images": 1,
+   "sha256": "6c15d768e4aed72c8d02a41d5326ebb044bdcdea1f366ece3f7ff2b4862ab823"
+  },
+  {
+   "id": "cloudflare-blog",
+   "kind": "news-blog",
+   "system": "custom",
+   "source": "https://blog.cloudflare.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://blog.cloudflare.com/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 26945
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 22750
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://blog.cloudflare.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2386
+    },
+    {
+     "url": "https://blog.cloudflare.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1833
+    },
+    {
+     "url": "https://blog.cloudflare.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2220
+    },
+    {
+     "url": "https://blog.cloudflare.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2310
+    },
+    {
+     "url": "https://blog.cloudflare.com/_astro/load.CpIDbUzI.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4897
+    },
+    {
+     "url": "https://blog.cloudflare.com/_astro/Base.CO0VbNFS.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 123555
+    },
+    {
+     "url": "https://blog.cloudflare.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1857
+    },
+    {
+     "url": "https://blog.cloudflare.com/_astro/html-block-frame-csp.X8_nwxd_.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 20859
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 33389
+    },
+    {
+     "url": "https://blog.cloudflare.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 59
+    }
+   ],
+   "unordered": 6,
+   "htmlBytes": 186852,
+   "cssBytes": 243783,
+   "elements": 1140,
+   "images": 58,
+   "sha256": "9e6c67105de82bacc52c75bcb86b5441c27851e021cc59d3dd7f5447b757de7b"
+  },
+  {
+   "id": "css-tricks",
+   "kind": "news-blog",
+   "system": "wordpress",
+   "source": "https://css-tricks.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://css-tricks.com/",
+   "sheets": [
+    {
+     "url": "wp-img-auto-sizes-contain-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 135
+    },
+    {
+     "url": "/wp-includes/css/classic-themes.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 350
+    },
+    {
+     "url": "global-styles-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 10335
+    },
+    {
+     "url": "woocommerce-inline-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 111
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/themes/legacy/templates/learndash_quiz_front.min.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 12104
+    },
+    {
+     "url": "https://c0.wp.com/c/7.1.5/wp-includes/css/dashicons.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 59004
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/src/assets/dist/css/styles.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 20925
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/assets/css/jquery.dropdown.min.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1582
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/themes/legacy/templates/learndash_lesson_video.min.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1760
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/src/assets/dist/css/admin-bar/styles.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 464
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/jetpack-search/jetpack_vendor/automattic/jetpack-search/build/instant-search/jp-search.chunk-main-payload.css?minify=false&ver=27571e87d0bcc8dadeff",
+     "placed": true,
+     "constructed": false,
+     "bytes": 42347
+    },
+    {
+     "url": "jetpack-stats-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 69
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/includes/course-grid/templates/skins/grid/style.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 397
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/includes/course-grid/templates/pagination/style.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 989
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/includes/course-grid/templates/filter/style.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6539
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/includes/course-grid/templates/cards/grid-1/style.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3764
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/themes/CSS-Tricks-20/style.css?ver=1795789378",
+     "placed": true,
+     "constructed": false,
+     "bytes": 171576
+    },
+    {
+     "url": "https://css-tricks.com/wp-content/plugins/sfwd-lms/themes/ld30/assets/css/learndash.min.css?ver=5.2.3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 249619
+    },
+    {
+     "url": "learndash-front-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11444
+    },
+    {
+     "url": "https://c0.wp.com/c/7.1.5/wp-includes/blocks/paragraph/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 743
+    },
+    {
+     "url": "https://c0.wp.com/c/7.1.5/wp-includes/blocks/quote/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 783
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 269
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 199
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 283
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 128896,
+   "cssBytes": 595814,
+   "elements": 1229,
+   "images": 44,
+   "sha256": "b665f58baea393c46fc87ae29361576fd9374952c3dfa591753b27643d5261ec"
+  },
+  {
+   "id": "danluu",
+   "kind": "news-blog",
+   "system": "none (no CSS)",
+   "source": "https://danluu.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://danluu.com/",
+   "sheets": [
+    {
+     "url": "https://danluu.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 170
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 23036,
+   "cssBytes": 170,
+   "elements": 633,
+   "images": 0,
+   "sha256": "44d3b88b8cd454f947ed770ac526611f80e3943cc09df512ac4bb30e2027f3b1"
+  },
+  {
+   "id": "github-blog",
+   "kind": "news-blog",
+   "system": "wordpress",
+   "source": "https://github.blog/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://github.blog/",
+   "sheets": [
+    {
+     "url": "wp-img-auto-sizes-contain-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 135
+    },
+    {
+     "url": "wp-emoji-styles-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 340
+    },
+    {
+     "url": "/wp-includes/css/dist/block-library/common.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4274
+    },
+    {
+     "url": "https://github.blog/wp-includes/blocks/button/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2638
+    },
+    {
+     "url": "https://github.blog/wp-includes/blocks/image/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8889
+    },
+    {
+     "url": "https://github.blog/wp-includes/blocks/buttons/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1475
+    },
+    {
+     "url": "https://github.blog/wp-includes/blocks/post-template/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1543
+    },
+    {
+     "url": "https://github.blog/wp-includes/blocks/columns/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1664
+    },
+    {
+     "url": "https://github.blog/wp-includes/blocks/group/style.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 195
+    },
+    {
+     "url": "https://github.blog/wp-content/themes/github-2021/dist/blocks/category-filter/style.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 646
+    },
+    {
+     "url": "github-typography-presets-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1472
+    },
+    {
+     "url": "global-styles-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17832
+    },
+    {
+     "url": "https://github.blog/wp-content/plugins/wp-menu-image/assets/css/wmi-front-style.css?m=71626158088bg",
+     "placed": true,
+     "constructed": false,
+     "bytes": 273
+    },
+    {
+     "url": "jetpack-stats-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 69
+    },
+    {
+     "url": "https://github.blog/_static/??-eJx1y00OAiEMQOELyVTxZ2c8C5QONEKH0E4m3l62Lly+5HtwdIebGImBFWqkkNnKHp0/+wskVgNUBWUjpzi42zL7BPNjwbqnecS64VuhUEgsGdQ+lZbG8lf2MEIeoZdf+2pPT7d1feA9Rn/9ApFXOOM=",
+     "placed": true,
+     "constructed": false,
+     "bytes": 823043
+    },
+    {
+     "url": "block-style-variation-styles-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 445
+    },
+    {
+     "url": "wp-interactivity-router-animations-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 970
+    },
+    {
+     "url": "core-block-supports-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 761
+    },
+    {
+     "url": "wp-style-engine-github-typography-presets-inline-css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1488
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 9691
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3333
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 225026,
+   "cssBytes": 881196,
+   "elements": 1517,
+   "images": 21,
+   "sha256": "d9fbd7c87947e7f2e569668cc1b8ca71efbea4be7e0440daea44d9baffdf3698"
+  },
+  {
+   "id": "gov-uk",
+   "kind": "news-blog",
+   "system": "govuk-frontend",
+   "source": "https://www.gov.uk/",
+   "public": true,
+   "terms": "Open Government Licence v3.0",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://www.gov.uk/",
+   "sheets": [
+    {
+     "url": "https://www.gov.uk/assets/frontend/application-6996f83d6fb61f85eeb080c9a6db75bbca843dc8bfb47ed803563ae21e7b80e1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 399617
+    },
+    {
+     "url": "https://www.gov.uk/assets/frontend/views/_homepage-4b78ffd85484b305e392c489eec8af4fc215bd086f63d464f44372f72ad6d92b.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5960
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 97928,
+   "cssBytes": 405578,
+   "elements": 581,
+   "images": 4,
+   "sha256": "fcee7b17c77a86ec4638c2281f08c54a3d2ee6222eb7df7b3c099763c0a63a6a"
+  },
+  {
+   "id": "govuk-design-system",
+   "kind": "docs",
+   "system": "govuk-frontend",
+   "source": "https://design-system.service.gov.uk/components/button/",
+   "public": true,
+   "terms": "Open Government Licence v3.0",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://design-system.service.gov.uk/components/button/",
+   "sheets": [
+    {
+     "url": "https://design-system.service.gov.uk/stylesheets/main-206763ef36517e2a2f1a37045d34db0a.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 142757
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 108186,
+   "cssBytes": 142757,
+   "elements": 1273,
+   "images": 0,
+   "sha256": "0265c565537938bf67e0b035a9c41c581080a120c324e9dbd74f86eb391e5591"
+  },
+  {
+   "id": "hacker-news",
+   "kind": "news-blog",
+   "system": "table-layout",
+   "source": "https://news.ycombinator.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://news.ycombinator.com/",
+   "sheets": [
+    {
+     "url": "https://news.ycombinator.com/news.css?QYdOM7bV8T2xE2v2qj9a",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7456
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 32661,
+   "cssBytes": 7456,
+   "elements": 779,
+   "images": 2,
+   "sha256": "a51654d88e0535d0484e0f6f193c4c485f16045e0251ed4328b3796fc82bb3ac"
+  },
+  {
+   "id": "ikea-home",
+   "kind": "commerce",
+   "system": "custom (skapa)",
+   "source": "https://www.ikea.com/us/en/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://www.ikea.com/us/en/",
+   "sheets": [
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/nav/Header-CwKg-C7r.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 228557
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/nav/StorePicker-CCRU-Hds.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2519
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/fonts/en/fonts.490a082e.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3128
+    },
+    {
+     "url": "https://www.ikea.com/us/en/cookieconsent/styles/cookieconsent-onetrust-css-v2.css?v=mwf1j0y3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 32338
+    },
+    {
+     "url": "https://www.ikea.com/us/en/search/v2/box.8uW9Lgyk.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 45045
+    },
+    {
+     "url": "https://www.ikea.com/us/en/nudge/asset.tn0RQdqM.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://www.ikea.com/us/en/loyalty/wlo-modal/assets/index-DFB6fDOQ.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 47606
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/global-DjYvfhjn.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1085
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/adaptive-layout-page-content-DzDzL8Qg.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3847
+    },
+    {
+     "url": "https://www.ikea.com/us/en/user-generated-content/rr-pip/app/rr-pip.e83134b5.bundle.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 154703
+    },
+    {
+     "url": "https://www.ikea.com/us/en/ugc/ratings-reviews/leave-review/fragments/rr-leave-review.bundle-ca9d4bb0.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 128492
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 54052
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6873
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/global-a11y-vZLAoOJy.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 212
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/sharedComponents--cif0eqU.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11759
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/shared-reducer-DiDHvRjx.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 36345
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/CarouselContainer-DNYaT1U1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 47
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ProductCardContainer-wEIu3h2F.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 111569
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/GenericFragmentError-CGVIlqzZ.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 419
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ShelfCarousel-B2uMfC49.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 39044
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/Button-4cOtUvyM.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 26169
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ProductCardPlaceholder-C4S6dPxT.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3868
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/LoadOverlay-BkyXHCqt.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 146
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/store-picker-modal-DG9zCSA_.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4626
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/translation-context-DD4R6AYm.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 20915
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-BASu3Drk.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 57514
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-CJYy_fUA.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1397
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/sales-item-api-DmqHKj-C.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 21358
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-2jwqpsEQ.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3772
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-DNzd45oO.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1756
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/image-strikethrough-DLz_bkxU.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 15746
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-Daq5FlLf.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 10649
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-CnIwEOCZ.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 29191
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-z6kt6JcE.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6163
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-sDucjah-.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 819
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/lower-funnel-fragments/index-CHn00NnB.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3425
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/hri-fragments-Dxr-S8nF.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 32866
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/style-x1XGuNl0.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/style-DnYgEVuY.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1037
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/welcome-message-BMa3dxAv.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 275
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/style-VecjVFLP.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 29946
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/esm-CIuwd3mL.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7013
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/bento-Da0Qmppq.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17293
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/style-D6-5bsuU.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4719
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/commercial-message-badge-D4jk2YoN.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 344
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/countdown-banner-WgD3zpjg.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2074
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/use-newsletter-subscription-flow-DChknjmw.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2469
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/adaptive-video-DfSWbr4O.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 224
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/client-side-esi-include-CpQRkUr3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 688
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/markdown-body-L_5FfFmk.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 365
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/esm-FQv9wr8A.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 13195
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/disclaimer-modal-lVHU1dZb.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8036
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/style-BRYTqZ5T.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3672
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/showcase-shelf-CqzFkf8G.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 226
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/header-Cp70DOkE.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 327
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/media-showcase-mixed-DxW4SNiG.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4411
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/esm-CDPoFLm9.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3477
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/metadata-B1BUlbK6.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 10340
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/esm-DBdjadZ4.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 35423
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/deals-yYiFA3EF.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1701
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/pills-menu-DiTDbscE.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6047
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/product-shelf-Bz683KSa.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 418
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/sik-BkqLq-pH.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 572
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/global-a11y-vZLAoOJy.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 212
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/sharedComponents--cif0eqU.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11759
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/shared-reducer-DiDHvRjx.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 36345
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/CarouselContainer-DNYaT1U1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 47
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/GenericFragmentError-CGVIlqzZ.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 419
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ProductCardContainer-wEIu3h2F.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 111569
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/breakouts-BOzsj--l.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 48503
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/SimpleGridContainer-Cn9IiXQu.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 220
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ProductCardList-DltJTVcC.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 493
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/Button-4cOtUvyM.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 26169
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ListingContainer-uO7KOlbo.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11958
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/A11yFocusPointContainer-GEQt23Wk.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 94
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/LoadOverlay-BkyXHCqt.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 146
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ShelfCarousel-B2uMfC49.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 39044
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/ProductCardPlaceholder-C4S6dPxT.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3868
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/cross-small-BqmDGE5i.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6014
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/Modal-DzcBOClN.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 12563
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/listing/Card-eo9j_WXp.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 40367
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/article-carousel-CMhfZs11.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 316
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/store-D7p6Gab9.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1335
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/ChoiceItem-Bk81wU5N.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7925
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/esm-DK1aAYkx.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 348
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/compact-feed-vugc-DUYsziSG.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3022
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/legacy-episod-event-Bfv9QlF4.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2432
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/services-Bp7bGO58.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 311
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/recalls-banner-pE2tqhhC.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 106
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/long-feed-imc-DCEOlWDp.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 804
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/imc-feed-item-BCkRKUu8.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 479
+    },
+    {
+     "url": "https://www.ikea.com/global/assets/dwf/hri/seo-text-Ca_QspHi.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 316
+    },
+    {
+     "url": "https://www.ikea.com/us/en/content-rec/fragments/static/initer.baa4ef2e.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 112330
+    },
+    {
+     "url": "https://www.ikea.com/us/en/ingka-isx-billie-widget/assets/index-BcNbGYLr.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 44846
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 460064,
+   "cssBytes": 1826766,
+   "elements": 4574,
+   "images": 74,
+   "sha256": "6715f9a3dfb1bcbdd88637fd6577c0e42e3f1996ad47359e6554b4c752490c68"
+  },
+  {
+   "id": "linear-home",
+   "kind": "landing",
+   "system": "custom",
+   "source": "https://linear.app/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://linear.app/",
+   "sheets": [
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Tpxbzi3N.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1570
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BeNDNQQR.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6077
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/pcGZUK31.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 716
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/mYgpGelO.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 288
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CwQxFBtR.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3992
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DqxuRpSZ.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 295
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DM5BVKTu.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6451
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Bl8l9ltc.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 143
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/C-dCEHFh.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 257
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BEZjGLsi.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2688
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/B0UisQnY.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 859
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/3p32EmO1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 89
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Cj2HgZSq.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1104
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Bu8ZjQBR.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1506
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BTQ-VOOr.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 19048
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/D7fSgGbB.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2877
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BUY_OmUN.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 932
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/C5eK_nNg.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 681
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DbXWD_FZ.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4886
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Blq4ZW3W.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 230
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BENTb6HO.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1137
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BawEoh5D.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 172
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DklkrXO9.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 410
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Cy_1GE-8.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 9262
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CtZpBDKg.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4392
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/R1bMIsN1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 58582
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CIeOqJR6.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7121
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/D7oY0szr.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 57863
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DXLYRP78.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 16535
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BR9QoYmU.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6121
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/vfNSRYu7.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3135
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DJj5QfDN.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1808
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/yd2-J_YX.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 310
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/B1AV-EHC.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1516
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/B0k_GW3U.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1597
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CKbGNVib.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5217
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/GSpt6GhE.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 64827
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/ekSA4PCN.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3464
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/B18TDZc7.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 351
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CWXL7otR.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 748
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CDNJI-Em.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1030
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Cds8fjKR.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 921
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DDVl5FYP.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 16228
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CbcodEv9.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 148
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/DAb6YYB9.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 206
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CXgJnZ6d.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2031
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 260484
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 14859
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5117
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/Bn1GreAt.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7195
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/YvfkAVhR.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5910
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/xZCxmNS4.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2160
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/D0SVnLUb.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8705
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/BNSJaiNS.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17956
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/D4dFNO2Z.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7591
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/B3bY1KZ9.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3328
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/a-zkQYKO.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2278
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/RnTSqYU1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 726
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CejsdrhP.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 23934
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CglTyOw3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7351
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/B7Vj6PGO.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4038
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/CUeIRO5w.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1052
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/B9dP-jlk.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 308
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/PR-WOC0k.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1815
+    },
+    {
+     "url": "https://static.linear.app/web/_next/static/css/pCJmCDk0.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4071
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 3993
+    }
+   ],
+   "unordered": 1,
+   "htmlBytes": 686307,
+   "cssBytes": 702757,
+   "elements": 4556,
+   "images": 16,
+   "sha256": "fa115b195d5c01739513e7c22b9c11635da38b1999d7cd8882a2c95d2e014a7d"
+  },
+  {
+   "id": "mdn-css-display",
+   "kind": "docs",
+   "system": "custom (MDN)",
+   "source": "https://developer.mozilla.org/en-US/docs/Web/CSS/display",
+   "public": true,
+   "terms": "MDN content CC-BY-SA 2.5; code MIT/CC0",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 8276
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 1505
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 276
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 774
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 1875
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 106
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 8276
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 8276
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 401
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 8276
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 1954
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 774
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 960
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 8276
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/display",
+     "placed": false,
+     "constructed": false,
+     "bytes": 92
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-global.5a624d6779f5eb50.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 25117
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/270.c4deb27edf934078.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3201
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-reference-layout.632d2f3884f10ca3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 891
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/9228.c46ef79d5582674d.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1681
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-content-section.ee79aa021892f35a.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 15152
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-heading-anchor.0eec5185ab9425b7.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 694
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-baseline-indicator.dcd17e42ea043f53.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17925
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-reference-toc.9b9bd019efd16b86.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 743
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-article-footer.81ae18c89fc527dc.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 849
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-left-sidebar.46e37af4d0b5c883.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3088
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-page-layout.5a4354f33e894319.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 718
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-a11y-menu.5796ee87cb69f93f.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 548
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-navigation.c3ebf384e65df345.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1987
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-logo.aea5ff6edf1b9cfb.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 478
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-menu.e2c5c8a53a8854c2.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5013
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-breadcrumbs-bar.2d1bed1ab424b6b3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1325
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-breadcrumbs.87eb742f4e711dc3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 859
+    },
+    {
+     "url": "https://developer.mozilla.org/static/client/styles-footer.66072dd619a4ef50.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3116
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 8276
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 3099
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 696
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 10337
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 4309
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 6236
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 1174
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 6962
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 61
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 2214
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 46
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 7687
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 6203
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 371
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 1958
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 419
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 4648
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 13875
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": true,
+     "bytes": 389
+    }
+   ],
+   "unordered": 164,
+   "htmlBytes": 280619,
+   "cssBytes": 234868,
+   "elements": 5726,
+   "images": 0,
+   "sha256": "be0f7d7f02290a29b01994444682adbd87a612301b61c05c4b7af88a28a9a64e"
+  },
+  {
+   "id": "mui-dashboard",
+   "kind": "app-dashboard",
+   "system": "mui",
+   "source": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 40
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 33399
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 721
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 25063
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 21610
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 34406
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 37
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 116898
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 96005
+    },
+    {
+     "url": "https://mui.com/_next/static/css/4f8bba2f8f620a0f.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 80003
+    },
+    {
+     "url": "https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Two+Tone",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1254
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/static/styles/prism-okaidia.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2327
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/templates/dashboard/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 656
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2803
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 328433,
+   "cssBytes": 415239,
+   "elements": 2196,
+   "images": 1,
+   "sha256": "aae2ce76576d473c382830f55a2dca91d378003f77bcc0e1f699d29264730369"
+  },
+  {
+   "id": "mui-docs",
+   "kind": "docs",
+   "system": "mui",
+   "source": "https://mui.com/material-ui/getting-started/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://mui.com/material-ui/getting-started/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 40
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1018
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 21610
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 48
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 51
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 33399
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 34406
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 981
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8452
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2627
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 37
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 129348
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 68055
+    },
+    {
+     "url": "https://mui.com/_next/static/css/4f8bba2f8f620a0f.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 80003
+    },
+    {
+     "url": "https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Two+Tone",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1254
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 30385
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/static/styles/prism-okaidia.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2327
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/material-ui/getting-started/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 656
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 51592,
+   "cssBytes": 414718,
+   "elements": 378,
+   "images": 2,
+   "sha256": "697d3074137136c85d8e402ba482b0f57610830a1957023f73f4b236e989605e"
+  },
+  {
+   "id": "mui-home",
+   "kind": "landing",
+   "system": "mui",
+   "source": "https://mui.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://mui.com/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 40
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1018
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 48
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 33399
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 34406
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 981
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8452
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2627
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 37
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 122549
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 42566
+    },
+    {
+     "url": "https://mui.com/_next/static/css/4f8bba2f8f620a0f.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 80003
+    },
+    {
+     "url": "https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Two+Tone",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1254
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 30385
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/static/styles/prism-okaidia.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2327
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 0
+    },
+    {
+     "url": "https://mui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 656
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 94017,
+   "cssBytes": 360767,
+   "elements": 807,
+   "images": 12,
+   "sha256": "f42725a836ae4d39951e9adfe305dca3ea454952d54a6ec6fb322e9bf8573ded"
+  },
+  {
+   "id": "nodejs-home",
+   "kind": "landing",
+   "system": "tailwind",
+   "source": "https://nodejs.org/en",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://nodejs.org/en",
+   "sheets": [
+    {
+     "url": "https://nodejs.org/_next/static/immutable/chunks/3mirc08m9_-59.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 78627
+    },
+    {
+     "url": "https://nodejs.org/_next/static/immutable/chunks/1mgtdr0s8k5pn.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 42639
+    },
+    {
+     "url": "https://nodejs.org/_next/static/immutable/chunks/2nvx5eaocm-pz.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 50538
+    },
+    {
+     "url": "https://nodejs.org/_next/static/immutable/chunks/0v5fbxwu7mw7v.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 28739
+    },
+    {
+     "url": "https://nodejs.org/_next/static/immutable/chunks/1642sv3csm165.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4507
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 127405,
+   "cssBytes": 205054,
+   "elements": 1105,
+   "images": 0,
+   "sha256": "df87b22a57893602bf9b18c7af45edbbe3beb7ab51d48710ad6e285d66713522"
+  },
+  {
+   "id": "overreacted",
+   "kind": "news-blog",
+   "system": "tailwind",
+   "source": "https://overreacted.io/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://overreacted.io/",
+   "sheets": [
+    {
+     "url": "https://overreacted.io/_next/static/css/32243486fa3c683e.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 15716
+    },
+    {
+     "url": "https://overreacted.io/_next/static/css/bb2d49002d16b23a.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1687
+    },
+    {
+     "url": "https://overreacted.io/_next/static/css/7198505728be4078.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6380
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 37211,
+   "cssBytes": 23785,
+   "elements": 316,
+   "images": 1,
+   "sha256": "f4a3c6b4f74b7a422278f2fdb08041114b114fbcd0dc18c5c483e5d54b5ea880"
+  },
+  {
+   "id": "primer-docs",
+   "kind": "docs",
+   "system": "primer",
+   "source": "https://primer.style/product/getting-started/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://primer.style/product/getting-started/",
+   "sheets": [
+    {
+     "url": "https://primer.style/_next/static/chunks/3a1ypu7as9o0k.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1749
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/0lbq5b1-p8aqs.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 958672
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/3h3metndm9t56.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 87235
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/3g0vt-115gahv.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 97674
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/02-v6f_4_ldh0.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 28575
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/1202wcs9u857a.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6159
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/3kh8p33ba6rcr.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 88813
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/3ap4f4gcflne1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 78
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/0q-ykne_0-xi7.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7984
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/2gbdjcontl2i2.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 27222
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/1lgeq2htu45js.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7809
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/447orpj0f2m7x.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3519
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/3wra7pyk5uwvf.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 402
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/097ap26iinvlk.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 12701
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/2yi14t3tjl4qg.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3811
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/2ncl2swcin1co.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5755
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/09-tjqf0vqn_-.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 10725
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/1i8powol0ebbw.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 9890
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/314-_y-tbkalw.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 25638
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/1cqdsq4plc8lu.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5900
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/307vc_1m73ihn.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1865
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/29sl1yatw3-k3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 16299
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/3zfnonmolvvvu.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7795
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/1tbj0-e2v-6q8.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 539
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/44mj4wf5uwyzj.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5408
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/0ibtm302jy2-y.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6122
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/2i1-mh4553kqc.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1100
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/0s60ko5o3y5ag.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5579
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/2ck3trgw_8alb.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 71001
+    },
+    {
+     "url": "https://primer.style/_next/static/chunks/3--21h52_r349.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3301
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 165015,
+   "cssBytes": 1509349,
+   "elements": 1174,
+   "images": 0,
+   "sha256": "2f70fc738e6ec4e3a9260f541d1a9798374fb325b7da4fa5e17309a223188062"
+  },
+  {
+   "id": "python-tutorial",
+   "kind": "docs",
+   "system": "sphinx",
+   "source": "https://docs.python.org/3/tutorial/index.html",
+   "public": true,
+   "terms": "PSF documentation license",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://docs.python.org/3/tutorial/index.html",
+   "sheets": [
+    {
+     "url": "https://docs.python.org/3/_static/basic.css",
+     "placed": false,
+     "constructed": false,
+     "bytes": 14685
+    },
+    {
+     "url": "https://docs.python.org/3/_static/pygments.css?v=b86133f3",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4848
+    },
+    {
+     "url": "https://docs.python.org/3/_static/pygments_dark.css?v=0fc419ee",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5055
+    },
+    {
+     "url": "https://docs.python.org/3/_static/classic.css?v=234b1a7c",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5290
+    },
+    {
+     "url": "https://docs.python.org/3/_static/pydoctheme.css?v=48df1187",
+     "placed": true,
+     "constructed": false,
+     "bytes": 19803
+    },
+    {
+     "url": "https://docs.python.org/3/tutorial/index.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 108
+    },
+    {
+     "url": "https://docs.python.org/3/_static/pydoctheme_dark.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3669
+    }
+   ],
+   "unordered": 1,
+   "htmlBytes": 38566,
+   "cssBytes": 53544,
+   "elements": 626,
+   "images": 1,
+   "sha256": "5fc087a629e086f781d6650f225f42951d1874e0ced8fe0d73c00382466fe26c"
+  },
+  {
+   "id": "radix-home",
+   "kind": "landing",
+   "system": "radix themes",
+   "source": "https://www.radix-ui.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://www.radix-ui.com/",
+   "sheets": [
+    {
+     "url": "https://www.radix-ui.com/_next/static/chunks/14itwvo3v0p53.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1673
+    },
+    {
+     "url": "https://www.radix-ui.com/_next/static/chunks/1yxq7n_f2a7km.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 684641
+    },
+    {
+     "url": "https://www.radix-ui.com/_next/static/chunks/324lvqa2w_1vw.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4352
+    },
+    {
+     "url": "https://www.radix-ui.com/_next/static/chunks/15vdxrzhob4vr.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 75736
+    },
+    {
+     "url": "https://www.radix-ui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 294
+    },
+    {
+     "url": "https://www.radix-ui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 294
+    },
+    {
+     "url": "https://www.radix-ui.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 179
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 129835,
+   "cssBytes": 767175,
+   "elements": 880,
+   "images": 16,
+   "sha256": "19bce5adc101353a31f165a7cc7309deb7442342f1aac3c9ba05b67e9608224a"
+  },
+  {
+   "id": "react-learn",
+   "kind": "docs",
+   "system": "tailwind",
+   "source": "https://react.dev/learn",
+   "public": true,
+   "terms": "react.dev content CC-BY-4.0",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://react.dev/learn",
+   "sheets": [
+    {
+     "url": "https://react.dev/_next/static/css/675771107043529b.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 108711
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 224393,
+   "cssBytes": 108711,
+   "elements": 2284,
+   "images": 1,
+   "sha256": "57821e405aabf1bcb4d80ccb9a07bd0a1726460a66ad0d68e2044f1c7915129d"
+  },
+  {
+   "id": "rust-book",
+   "kind": "docs",
+   "system": "mdbook",
+   "source": "https://doc.rust-lang.org/book/ch01-00-getting-started.html",
+   "public": true,
+   "terms": "MIT/Apache-2.0",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://doc.rust-lang.org/book/ch01-00-getting-started.html",
+   "sheets": [
+    {
+     "url": "https://doc.rust-lang.org/book/css/variables-8adf115d.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 10422
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/css/general-e96d0476.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11475
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/css/chrome-d279d366.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 18030
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/css/print-9e4910d8.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 689
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/fonts/fonts-9644e21d.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3818
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/highlight-493f70e1.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1209
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/ferris-d33b75bf.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1196
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/theme/2018-edition-4e126c62.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 122
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/theme/semantic-notes-9b5766c0.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 419
+    },
+    {
+     "url": "https://doc.rust-lang.org/book/theme/listing-cab26221.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 97
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 39158,
+   "cssBytes": 47503,
+   "elements": 583,
+   "images": 0,
+   "sha256": "d913f24c8fa7d9fa1ea909cd959ce09c2b4d52d45d78b0c5ed95187e100ccdb8"
+  },
+  {
+   "id": "shadcn-dashboard",
+   "kind": "app-dashboard",
+   "system": "shadcn/radix + tailwind",
+   "source": "https://ui.shadcn.com/examples/dashboard",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://ui.shadcn.com/examples/dashboard",
+   "sheets": [
+    {
+     "url": "https://ui.shadcn.com/_next/static/immutable/chunks/14uxklup5irp3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11297
+    },
+    {
+     "url": "https://ui.shadcn.com/_next/static/immutable/chunks/3jrb0dof7ejty.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 626862
+    },
+    {
+     "url": "https://ui.shadcn.com/_next/static/immutable/chunks/1knqejli8nfbs.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17946
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5117
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 14859
+    },
+    {
+     "url": "https://ui.shadcn.com/examples/dashboard",
+     "placed": true,
+     "constructed": false,
+     "bytes": 179
+    },
+    {
+     "url": "https://ui.shadcn.com/examples/dashboard",
+     "placed": true,
+     "constructed": false,
+     "bytes": 232
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 220630,
+   "cssBytes": 676498,
+   "elements": 983,
+   "images": 3,
+   "sha256": "4584cba02c04c320e2e44d10c5153554c83dcac4b0e644e81eef542aaac8c051"
+  },
+  {
+   "id": "shadcn-home",
+   "kind": "landing",
+   "system": "shadcn/radix + tailwind",
+   "source": "https://ui.shadcn.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://ui.shadcn.com/",
+   "sheets": [
+    {
+     "url": "https://ui.shadcn.com/_next/static/immutable/chunks/14uxklup5irp3.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11297
+    },
+    {
+     "url": "https://ui.shadcn.com/_next/static/immutable/chunks/3jrb0dof7ejty.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 626862
+    },
+    {
+     "url": "https://ui.shadcn.com/_next/static/immutable/chunks/1knqejli8nfbs.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17946
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 14859
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 268472,
+   "cssBytes": 670967,
+   "elements": 1508,
+   "images": 2,
+   "sha256": "3194ad68d895f9fb57695cda3389b48217468e4e2f69cf3a59831c1fcc272dae"
+  },
+  {
+   "id": "shopify-dawn",
+   "kind": "commerce",
+   "system": "shopify dawn",
+   "source": "https://theme-dawn-demo.myshopify.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://theme-dawn-demo.myshopify.com/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 10857
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/base.css?v=144968985024194912401720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 66866
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-localization-form.css?v=120620094879297847921720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8249
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-predictive-search.css?v=118923337488134913561720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4976
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-slideshow.css?v=170654395204511176521720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3666
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-slider.css?v=14039311878856620671720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7896
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-list-social.css?v=35792976012981934991720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 504
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-list-menu.css?v=151968516119678728991720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 516
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-search.css?v=165164710990765432851720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1338
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-menu-drawer.css?v=110695408305392539491720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4641
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-cart-notification.css?v=54116361853792938221720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2692
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-cart-items.css?v=127384614032664249911720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4733
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-price.css?v=70172745017360139101720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1667
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 856
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 395
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 47
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/section-image-banner.css?v=124819179385751388401720118920",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8428
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 77
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/section-rich-text.css?v=155250126305810049721720118920",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1229
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 269
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-card.css?v=120341546515895839841720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11873
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-price.css?v=70172745017360139101720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1667
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-slider.css?v=14039311878856620671720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7896
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/template-collection.css?v=58558206033505836701720118920",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1509
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 291
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-rating.css?v=179577762467860590411720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1102
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-volume-pricing.css?v=111870094811454961941720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1134
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-price.css?v=70172745017360139101720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1667
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/quick-order-list.css?v=38387008350345892421720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 9465
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/quantity-popover.css?v=78745769908715669131720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2967
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/collage.css?v=146639449248111028491720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4407
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-card.css?v=120341546515895839841720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 11873
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-price.css?v=70172745017360139101720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1667
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-modal-video.css?v=48762958730556882751720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1565
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-deferred-media.css?v=14096082462203297471720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2303
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 267
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-rating.css?v=179577762467860590411720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1102
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-volume-pricing.css?v=111870094811454961941720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1134
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-price.css?v=70172745017360139101720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1667
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/quick-order-list.css?v=38387008350345892421720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 9465
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/quantity-popover.css?v=78745769908715669131720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2967
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/video-section.css?v=163092437706280852751720118920",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1057
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-deferred-media.css?v=14096082462203297471720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2303
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 263
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/section-multicolumn.css?v=81420361875458722681720118920",
+     "placed": true,
+     "constructed": false,
+     "bytes": 4122
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-slider.css?v=14039311878856620671720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7896
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 275
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/section-footer.css?v=61390616271034004541720118920",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7513
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-newsletter.css?v=4727253280200485261720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1305
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-list-menu.css?v=151968516119678728991720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 516
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-list-payment.css?v=69253961410771838501720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 362
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/cdn/shop/t/53/assets/component-list-social.css?v=35792976012981934991720118919",
+     "placed": true,
+     "constructed": false,
+     "bytes": 504
+    },
+    {
+     "url": "https://theme-dawn-demo.myshopify.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 349
+    }
+   ],
+   "unordered": 6,
+   "htmlBytes": 167160,
+   "cssBytes": 235475,
+   "elements": 1220,
+   "images": 25,
+   "sha256": "369ac892e50f5a3132b9d5414fe7720aef2daa3534cb895f68019697af65acee"
+  },
+  {
+   "id": "smashing",
+   "kind": "news-blog",
+   "system": "custom",
+   "source": "https://www.smashingmagazine.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://www.smashingmagazine.com/",
+   "sheets": [
+    {
+     "url": "https://www.smashingmagazine.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1118
+    },
+    {
+     "url": "https://www.smashingmagazine.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 50325
+    },
+    {
+     "url": "https://www.smashingmagazine.com/css/main.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 402155
+    },
+    {
+     "url": "https://www.smashingmagazine.com/css/print.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17134
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 102157,
+   "cssBytes": 470752,
+   "elements": 752,
+   "images": 10,
+   "sha256": "3c927c592f7ac9742a359f818bbee80d23afc6dfa79968c7c1a53f09475ad258"
+  },
+  {
+   "id": "stripe-home",
+   "kind": "landing",
+   "system": "custom",
+   "source": "https://stripe.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://stripe.com/jp",
+   "sheets": [
+    {
+     "url": "https://b.stripecdn.com/mkt-ssr-statics/assets/_next/static/css/60659a0c8c9a22ea.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 188262
+    },
+    {
+     "url": "https://b.stripecdn.com/mkt-ssr-statics/assets/_next/static/css/27238d8b7fd015ee.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 45833
+    },
+    {
+     "url": "https://b.stripecdn.com/mkt-ssr-statics/assets/_next/static/css/1c14f1443439cf9d.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 25545
+    },
+    {
+     "url": "https://b.stripecdn.com/mkt-ssr-statics/assets/_next/static/css/c1fced95b36a1d26.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 327797
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 503395,
+   "cssBytes": 587440,
+   "elements": 2891,
+   "images": 7,
+   "sha256": "b2afebffc905d611ae1c8f77ced517e3cb5d0d251903e4e51650e842b7ee7db8"
+  },
+  {
+   "id": "svelte-home",
+   "kind": "landing",
+   "system": "custom (svelte)",
+   "source": "https://svelte.dev/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://svelte.dev/",
+   "sheets": [
+    {
+     "url": "https://svelte.dev/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 227
+    },
+    {
+     "url": "https://svelte.dev/_app/immutable/assets/Text.DDg51-6Q.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 16040
+    },
+    {
+     "url": "https://svelte.dev/_app/immutable/assets/components.6RjPBBoY.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 44365
+    },
+    {
+     "url": "https://svelte.dev/_app/immutable/assets/search.Cq71CgeS.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 10623
+    },
+    {
+     "url": "https://svelte.dev/_app/immutable/assets/0.BxJkqFeS.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 28064
+    },
+    {
+     "url": "https://svelte.dev/_app/immutable/assets/5.yVnnGWAb.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 18320
+    },
+    {
+     "url": "https://svelte.dev/_app/immutable/assets/1.CciMtt34.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 365
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 65991,
+   "cssBytes": 118010,
+   "elements": 345,
+   "images": 21,
+   "sha256": "3ad48cfa708199e428cb01e1499781d524666b54d206b911427af23f5fdf90be"
+  },
+  {
+   "id": "tabler-preview",
+   "kind": "app-dashboard",
+   "system": "tabler (bootstrap)",
+   "source": "https://preview.tabler.io/",
+   "public": true,
+   "terms": "Tabler MIT",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://preview.tabler.io/",
+   "sheets": [
+    {
+     "url": "https://preview.tabler.io/dist/css/tabler.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 683727
+    },
+    {
+     "url": "https://preview.tabler.io/dist/css/tabler-flags.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 20436
+    },
+    {
+     "url": "https://preview.tabler.io/dist/css/tabler-vendors.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 26748
+    },
+    {
+     "url": "https://preview.tabler.io/dist/css/tabler-themes.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7205
+    },
+    {
+     "url": "https://preview.tabler.io/preview/css/demo.min.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1528
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 974
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 45137
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1369
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2090
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 294
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2090
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2090
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 295
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2090
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 310
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2090
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 196
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2090
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 410
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2090
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 325
+    },
+    {
+     "url": "https://preview.tabler.io/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1183
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 847577,
+   "cssBytes": 804788,
+   "elements": 4053,
+   "images": 73,
+   "sha256": "3b495e47c02942bcb13b4b342e66259306cda592f2c06f7669dd62391518f757"
+  },
+  {
+   "id": "tailwind-docs",
+   "kind": "docs",
+   "system": "tailwind",
+   "source": "https://tailwindcss.com/docs/installation/using-vite",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://tailwindcss.com/docs/installation/using-vite",
+   "sheets": [
+    {
+     "url": "https://tailwindcss.com/_next/static/chunks/017r-ibrf-le-.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 654791
+    },
+    {
+     "url": "https://tailwindcss.com/_next/static/chunks/0n9_1tq74i09x.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2908
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 156900,
+   "cssBytes": 657700,
+   "elements": 996,
+   "images": 0,
+   "sha256": "d8d782bee4aa0b876be2e433b5f06cfa030cc4003e7fd3df9104178d065f8fb1"
+  },
+  {
+   "id": "vercel-commerce",
+   "kind": "commerce",
+   "system": "tailwind (next.js commerce)",
+   "source": "https://demo.vercel.store/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "skipped": "capture failed: HTTP 404 or a bot check instead of the page"
+  },
+  {
+   "id": "vercel-home",
+   "kind": "landing",
+   "system": "tailwind + geist",
+   "source": "https://vercel.com/",
+   "public": true,
+   "terms": "public page; snapshot kept local, not redistributed",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://vercel.com/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 88
+    },
+    {
+     "url": "https://vercel.com/vc-ap-vercel-marketing/_next/static/immutable/chunks/3259cmdakdxro.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 966006
+    },
+    {
+     "url": "https://vercel.com/vc-ap-vercel-marketing/_next/static/immutable/chunks/295glthhzf82c.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 116420
+    },
+    {
+     "url": "https://vercel.com/vc-ap-vercel-marketing/_next/static/immutable/chunks/3u82rwmj_1n8p.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7373
+    },
+    {
+     "url": "https://vercel.com/",
+     "placed": true,
+     "constructed": false,
+     "bytes": 173
+    }
+   ],
+   "unordered": 2,
+   "htmlBytes": 234843,
+   "cssBytes": 1090420,
+   "elements": 1075,
+   "images": 12,
+   "sha256": "4701750f5cdaf4ff914af517fba4f38a18a5562822948835e1d0495e05158755"
+  },
+  {
+   "id": "vite-guide",
+   "kind": "docs",
+   "system": "vitepress",
+   "source": "https://vite.dev/guide/",
+   "public": true,
+   "terms": "vite docs MIT",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://vite.dev/guide/",
+   "sheets": [
+    {
+     "url": "constructed",
+     "placed": false,
+     "constructed": false,
+     "bytes": 177
+    },
+    {
+     "url": "https://vite.dev/assets/style.yjV_jJbj.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 260753
+    }
+   ],
+   "unordered": 1,
+   "htmlBytes": 108015,
+   "cssBytes": 260931,
+   "elements": 1218,
+   "images": 26,
+   "sha256": "61cc526abfada57dc4819d2cf62de04debf7b11b673848978b6459799e9a336c"
+  },
+  {
+   "id": "vlmkit-css-challenge-admin-panel",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/admin-panel.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/admin-panel.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/admin-panel.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8517
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 6409,
+   "cssBytes": 8517,
+   "elements": 145,
+   "images": 0,
+   "sha256": "4ff17ff0f278bbb7c33b13c01bc922e1d2ddf46f30027cc31d17ad8dda801641"
+  },
+  {
+   "id": "vlmkit-css-challenge-blog-magazine",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/blog-magazine.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/blog-magazine.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/blog-magazine.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6548
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 4264,
+   "cssBytes": 6548,
+   "elements": 82,
+   "images": 0,
+   "sha256": "4aa3014b930bf28292183740378415b16e6d041151475476b0d7804513c95c4a"
+  },
+  {
+   "id": "vlmkit-css-challenge-dashboard",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/dashboard.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/dashboard.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/dashboard.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8213
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 4680,
+   "cssBytes": 8213,
+   "elements": 111,
+   "images": 1,
+   "sha256": "6c0d7fb3927838dba36bd275c7579d2b1ffbf6daeb4c214378b8bc2da4cb9f92"
+  },
+  {
+   "id": "vlmkit-css-challenge-ecommerce-catalog",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/ecommerce-catalog.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/ecommerce-catalog.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/ecommerce-catalog.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8658
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 6291,
+   "cssBytes": 8658,
+   "elements": 123,
+   "images": 0,
+   "sha256": "d87e0fc0c356838a08bdb8df40c5ecc12471a798682bab56e2000058a6fd6dd7"
+  },
+  {
+   "id": "vlmkit-css-challenge-form-app",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/form-app.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/form-app.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/form-app.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6446
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 7028,
+   "cssBytes": 6446,
+   "elements": 116,
+   "images": 1,
+   "sha256": "00ec1fb8ec2775ed43c189e9da17d79b2fb848560b49b2c99e9e20023b7b9ba1"
+  },
+  {
+   "id": "vlmkit-css-challenge-grid-complex",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/grid-complex.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/grid-complex.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/grid-complex.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 7661
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 6524,
+   "cssBytes": 7661,
+   "elements": 130,
+   "images": 0,
+   "sha256": "793a17cfb321b6b88c09b39e86e1a459917960618561a988a83033744f342f31"
+  },
+  {
+   "id": "vlmkit-css-challenge-landing-product",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/landing-product.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/landing-product.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/landing-product.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 8153
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 5761,
+   "cssBytes": 8153,
+   "elements": 117,
+   "images": 0,
+   "sha256": "c355a51af1eba170aaa03fa05f0114fa5c83f1d5f95d84d3405dc0111bfe3389"
+  },
+  {
+   "id": "vlmkit-css-challenge-page",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/page.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/page.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/page.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6144
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 6028,
+   "cssBytes": 6144,
+   "elements": 142,
+   "images": 0,
+   "sha256": "2869f37a3d79664f036e1e1a5ed0a9169798a5c7eb4212ef935c7622d223e119"
+  },
+  {
+   "id": "vlmkit-css-challenge-stacking-context",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/css-challenge/stacking-context.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/css-challenge/stacking-context.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/css-challenge/stacking-context.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6998
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 4909,
+   "cssBytes": 6998,
+   "elements": 75,
+   "images": 0,
+   "sha256": "59d2b6d2bb118676d1f1a777053b778f3efec6f1696d6f94cd205959e7ab77e6"
+  },
+  {
+   "id": "vlmkit-intro-page",
+   "kind": "landing",
+   "system": "custom",
+   "source": "examples/vlmkit-intro-page/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/vlmkit-intro-page/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/vlmkit-intro-page/styles.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 55360
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 37402,
+   "cssBytes": 55360,
+   "elements": 512,
+   "images": 4,
+   "sha256": "3bd3de1204fd2e904a12bcab3d148cc99d33496aec67c528f954cf7197e6583e"
+  },
+  {
+   "id": "vlmkit-responsive-card-grid",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/card-grid.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/card-grid.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/card-grid.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1181
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 1232,
+   "cssBytes": 1181,
+   "elements": 28,
+   "images": 0,
+   "sha256": "67696bad8e37ab0c6d7cda412f995a5be2270e90ec9100d079f28e4ee88d92f6"
+  },
+  {
+   "id": "vlmkit-responsive-container-card",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/container-card.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/container-card.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/container-card.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1025
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 1211,
+   "cssBytes": 1025,
+   "elements": 28,
+   "images": 0,
+   "sha256": "824f208cd24544c21e5862ee0dac56c35fe6fa42f6843ebe511158b0504b0e5b"
+  },
+  {
+   "id": "vlmkit-responsive-data-table",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/data-table.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/data-table.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/data-table.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1186
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 1221,
+   "cssBytes": 1186,
+   "elements": 32,
+   "images": 0,
+   "sha256": "ba457c3f864046c251706678310b43280deede6b8441987794db72bfa1d1a809"
+  },
+  {
+   "id": "vlmkit-responsive-drawer",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/drawer.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/drawer.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/drawer.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1200
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 1023,
+   "cssBytes": 1200,
+   "elements": 19,
+   "images": 0,
+   "sha256": "f94162edb347cf7e214037b868cbad1cf83d89abf0033ecb5a96ed67581502e8"
+  },
+  {
+   "id": "vlmkit-responsive-form-row",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/form-row.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/form-row.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/form-row.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 831
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 851,
+   "cssBytes": 831,
+   "elements": 10,
+   "images": 0,
+   "sha256": "5df729461577722cf412526ea23f7285f52b5f51ace2fcccbe56c348bf4e80dc"
+  },
+  {
+   "id": "vlmkit-responsive-hero",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/hero.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/hero.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/hero.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1224
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 802,
+   "cssBytes": 1224,
+   "elements": 12,
+   "images": 0,
+   "sha256": "439ad98ea7f3956735d4872427dfe663509f1a1e51bf9526655f93924f876dd6"
+  },
+  {
+   "id": "vlmkit-responsive-masthead",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/masthead.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/masthead.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/masthead.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1381
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 884,
+   "cssBytes": 1381,
+   "elements": 24,
+   "images": 0,
+   "sha256": "6312160474fcabb400b5170425622adfdb379e94dc0760dccacb048e53da882f"
+  },
+  {
+   "id": "vlmkit-responsive-media-object",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/media-object.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/media-object.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/media-object.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1109
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 1149,
+   "cssBytes": 1109,
+   "elements": 21,
+   "images": 0,
+   "sha256": "2f05fefe914c34cbbee2f71da847ef036eaf9cbe8089e817ff2c3dbc6f5ca9c1"
+  },
+  {
+   "id": "vlmkit-responsive-pricing",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/pricing.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/pricing.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/pricing.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1167
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 758,
+   "cssBytes": 1167,
+   "elements": 28,
+   "images": 0,
+   "sha256": "b9d3f58298456531552cc9247ed8e9d987c73231698dd104c76ae3ba3cc43e5d"
+  },
+  {
+   "id": "vlmkit-responsive-sidebar-layout",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/sidebar-layout.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/sidebar-layout.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/sidebar-layout.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1229
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 1479,
+   "cssBytes": 1229,
+   "elements": 31,
+   "images": 0,
+   "sha256": "ec8b71c60a4173193bda3edad867c330abf839d0729f55072b3f6f430f9f84ba"
+  },
+  {
+   "id": "vlmkit-responsive-toolbar",
+   "kind": "fixture",
+   "system": "custom",
+   "source": "fixtures/responsive-patterns/patterns/toolbar.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:fixtures/responsive-patterns/patterns/toolbar.html",
+   "sheets": [
+    {
+     "url": "vlmkit:fixtures/responsive-patterns/patterns/toolbar.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 707
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 647,
+   "cssBytes": 707,
+   "elements": 11,
+   "images": 0,
+   "sha256": "843591f61e486a4ad100bac56d9cc60b496d86477e18f3a663162b8740cd6ab8"
+  },
+  {
+   "id": "vlmkit-sites-checkout",
+   "kind": "commerce",
+   "system": "custom",
+   "source": "examples/sites/checkout/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/checkout/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/checkout/styles.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 21735
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 32468,
+   "cssBytes": 21735,
+   "elements": 537,
+   "images": 0,
+   "sha256": "61de3cb14f355588bae9be76b489e9c676d069b06e90e4e94c1b6535636f936c"
+  },
+  {
+   "id": "vlmkit-sites-dashboard",
+   "kind": "app-dashboard",
+   "system": "custom",
+   "source": "examples/sites/dashboard/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/dashboard/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/dashboard/styles.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 25876
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 29881,
+   "cssBytes": 25876,
+   "elements": 392,
+   "images": 0,
+   "sha256": "4d3c5b6dc0bbf9d7ebb3df976f4698ccb4eb934673c812554a140b43958c17fe"
+  },
+  {
+   "id": "vlmkit-sites-docs",
+   "kind": "docs",
+   "system": "custom",
+   "source": "examples/sites/docs/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/docs/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/docs/quarry.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 28892
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 21449,
+   "cssBytes": 28892,
+   "elements": 332,
+   "images": 0,
+   "sha256": "5f0da770bbadebc66696000aa5d699f8540513902c21fb3c52af9bea73fac6e2"
+  },
+  {
+   "id": "vlmkit-sites-docs-cli",
+   "kind": "docs",
+   "system": "custom",
+   "source": "examples/sites/docs/cli.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/docs/cli.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/docs/quarry.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 28892
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 30793,
+   "cssBytes": 28892,
+   "elements": 693,
+   "images": 0,
+   "sha256": "1fad9973f1dbcc2b82923fee6b0759d80d24000eb8f0c5649cc845e008522940"
+  },
+  {
+   "id": "vlmkit-sites-docs-migrations",
+   "kind": "docs",
+   "system": "custom",
+   "source": "examples/sites/docs/migrations.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/docs/migrations.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/docs/quarry.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 28892
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 18838,
+   "cssBytes": 28892,
+   "elements": 294,
+   "images": 0,
+   "sha256": "ecb968cf281391d851c366cdd0b8b72cf865d0164923ef4ab4e257ffc2761ee3"
+  },
+  {
+   "id": "vlmkit-sites-gallery",
+   "kind": "landing",
+   "system": "custom",
+   "source": "examples/sites/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/index.html",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3694
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 7733,
+   "cssBytes": 3694,
+   "elements": 245,
+   "images": 0,
+   "sha256": "73093ca499fedc55b4e803e16dd5eec1f4fb7858f432ac55d8421d33a6cf0271"
+  },
+  {
+   "id": "vlmkit-sites-kanban",
+   "kind": "app-dashboard",
+   "system": "custom",
+   "source": "examples/sites/kanban/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/kanban/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/kanban/styles.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 24900
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 44482,
+   "cssBytes": 24900,
+   "elements": 629,
+   "images": 0,
+   "sha256": "b252eac61532d34382f8c3baa9b192abbd5a3fc409dfbd168bc4d4d8556f7b5c"
+  },
+  {
+   "id": "vlmkit-sites-magazine",
+   "kind": "news-blog",
+   "system": "custom",
+   "source": "examples/sites/magazine/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/magazine/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/magazine/style.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 19188
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 62068,
+   "cssBytes": 19188,
+   "elements": 933,
+   "images": 0,
+   "sha256": "c5c7b0e77971a06b92bee7cebb1bfd615805338808042c7deb9eb07f3a9cc14d"
+  },
+  {
+   "id": "vlmkit-sites-shop",
+   "kind": "commerce",
+   "system": "custom",
+   "source": "examples/sites/shop/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/sites/shop/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/sites/shop/styles.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 31016
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 68909,
+   "cssBytes": 31016,
+   "elements": 710,
+   "images": 0,
+   "sha256": "0835827ccf8e765f127002c7df4e48d342b1e2ce359d1efe8d47c9e42d3ea4b3"
+  },
+  {
+   "id": "vlmkit-solitaire",
+   "kind": "app-dashboard",
+   "system": "custom",
+   "source": "examples/solitaire/index.html",
+   "public": false,
+   "terms": "mizchi/vlmkit (MIT): agent-built demo pages and test fixtures",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "vlmkit:examples/solitaire/index.html",
+   "sheets": [
+    {
+     "url": "vlmkit:examples/solitaire/solitaire.css",
+     "placed": true,
+     "constructed": false,
+     "bytes": 23749
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 17316,
+   "cssBytes": 23749,
+   "elements": 110,
+   "images": 0,
+   "sha256": "240c8dfa6a973437a9f6ce0d201e4f0b8ed773d2cb3e19bcac4fb1a867efef0a"
+  },
+  {
+   "id": "w3c-css-grid",
+   "kind": "reference",
+   "system": "w3c-tr",
+   "source": "https://www.w3.org/TR/css-grid-2/",
+   "public": true,
+   "terms": "W3C Document License",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "skipped": "capture failed: HTTP 403 or a bot check instead of the page"
+  },
+  {
+   "id": "wikipedia-css",
+   "kind": "reference",
+   "system": "mediawiki",
+   "source": "https://en.wikipedia.org/wiki/CSS",
+   "public": true,
+   "terms": "CC-BY-SA 4.0",
+   "date": "2026-11-28",
+   "viewport": {
+    "width": 1280,
+    "height": 900
+   },
+   "browser": "chromium 156.0.8078.4",
+   "status": 200,
+   "finalUrl": "https://en.wikipedia.org/wiki/CSS",
+   "sheets": [
+    {
+     "url": "https://en.wikipedia.org/w/load.php?lang=en&modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.tmh.player.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cjquery.tablesorter.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022",
+     "placed": true,
+     "constructed": false,
+     "bytes": 223569
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 63245
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 5749
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3706
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 66387
+    },
+    {
+     "url": "constructed",
+     "placed": true,
+     "constructed": false,
+     "bytes": 17799
+    },
+    {
+     "url": "https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022",
+     "placed": true,
+     "constructed": false,
+     "bytes": 6782
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 303
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1339
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 62
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2340
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 205
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3237
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 553
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1109
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 393
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1151
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 2100
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 859
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 879
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 664
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 407
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 3298
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 1857
+    },
+    {
+     "url": "https://en.wikipedia.org/wiki/CSS",
+     "placed": true,
+     "constructed": false,
+     "bytes": 71
+    }
+   ],
+   "unordered": 0,
+   "htmlBytes": 592095,
+   "cssBytes": 408088,
+   "elements": 6472,
+   "images": 7,
+   "sha256": "67ad9b40519a24c0fa6d083adb7a956869e647f517194f5cca133990ba4b2851"
+  }
+ ],
+ "note": "Snapshots of public pages are third-party content and are not committed (evals/corpus/.gitignore); rebuild them with tools/corpus/capture.mjs. Pages change: the sha256 is of the snapshot measured."
+}

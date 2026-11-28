@@ -1,0 +1,60 @@
+# How much of real pages' CSS the safe subset (docs/safe-subset.md) covers: tools/safe-subset-coverage.mjs builds the
+# corpus (vlmkit's demo pages and fixtures, and the public pages of tools/corpus/sources.mjs, robots.txt honoured, one at
+# a time), runs veriss on every snapshot at a phone and a desktop width and writes coverage.json, summary.json and
+# tables.md (evals/reports/2026-11-28-safe-subset-coverage.md explains them). A report, not a gate: it exits 0.
+# Run it by hand (Actions → safe-subset-coverage → Run workflow); a pull request that changes the tool runs it too.
+name: safe-subset-coverage
+on:
+  workflow_dispatch:
+    inputs:
+      set:
+        description: Pages to measure
+        type: choice
+        options: [all, local, public]
+        default: all
+      budget:
+        description: Milliseconds per page and width before the rest of the page is charged to the step limit
+        default: '120000'
+  pull_request:
+    paths:
+      - tools/safe-subset-coverage.mjs
+      - tools/subset-coverage.mjs
+      - tools/subset-coverage-summary.mjs
+      - tools/corpus/**
+      - .github/workflows/safe-subset-coverage.yml
+permissions:
+  contents: read
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mizchi/vlmkit
+          path: _vlmkit
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Build the corpus and measure it
+        run: >
+          node tools/safe-subset-coverage.mjs --out test-results/safe-subset-coverage
+          --vlmkit _vlmkit --set ${{ inputs.set || 'all' }} --jobs 4 --budget ${{ inputs.budget || '120000' }}
+      - name: Tables in the job summary
+        if: always()
+        run: test -f test-results/safe-subset-coverage/tables.md && cat test-results/safe-subset-coverage/tables.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safe-subset-coverage
+          path: |
+            test-results/safe-subset-coverage/coverage.json
+            test-results/safe-subset-coverage/summary.json
+            test-results/safe-subset-coverage/tables.md
+            test-results/safe-subset-coverage/corpus/manifest.json
+          if-no-files-found: warn
