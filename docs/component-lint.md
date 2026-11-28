@@ -48,7 +48,7 @@ npx veriss-linaria --viewport 320-1280 src/**/*.tsx   # .js / .jsx / .ts / .tsx�
 | `--images <file.json>` | なし | 画像ファイルの自然な大きさ(`{"/logo.png": {"width": 120, "height": 30}}`)。`height: auto` の img の高さなどを、読み込むファイルの比で決める |
 | `--trust-image-attributes` | なし | `--images` にないファイルの img の `width` / `height` 属性を、ファイルの大きさとみなす(読み込み前の配置を検査する)。仮定として info に出す。付けないと、その比で大きさが決まる img(`height: auto` など)は検査しない(`U_LAYOUT_IMAGE`、#55)。幅記述子のある `srcset` の img はファイルが決まらないので、これだけが効く |
 | `--format text\|json` | `text` | 出力形式 |
-| `--resets none,modern-normalize,…\|all` | なし | UA × reset の枝ごとに検査する(下の「reset の行列」)。`--ua` を UA の軸にし、省くと chromium・firefox・webkit の 3 つ。`--page-css` の既定はなし(reset がページの初期条件になる) |
+| `--resets none,modern-normalize,…\|all` | なし | UA × reset の枝ごとに検査する(下の「reset の行列」)。`--ua` を UA の軸にし、省くと chromium・firefox・webkit の 3 つ(`webkit-macos` などのプラットフォームの profile も枝にできる: `webkit-macos:none`)。`--page-css` の既定はなし(reset がページの初期条件になる) |
 | `--sample N --seed S` | なし | `--resets` と一緒に: 枝から seed で決まる N 個だけを検査する |
 
 ## コンパイルできないコンポーネント(`E_ADAPTER_COMPILE`)
@@ -79,9 +79,9 @@ src/broken/ArticleMeta.svelte:5:1  error    E_ADAPTER_COMPILE  the component doe
 
 ## ブラウザーごとの UA スタイル(`--ua`)
 
-フォームの部品の UA スタイル(ボタンや入力欄の padding・border・margin など)は、ブラウザーごとに違います([CSS ベースライン](css-baseline.md))。`--ua webkit` は、そのブラウザーの値から解析します。`--ua chromium,firefox,webkit` は、それぞれの値で解析して結果をまとめ、一部のブラウザーでだけ成り立つ指摘には「(in chromium, webkit; not in firefox)」のようにブラウザーを添えます。たとえば、幅 100px のボタンの「Publish now」は、Chromium と WebKit(padding 6px)でははみ出し、Firefox(4px)では収まります。各ブラウザーで描いた結果と一致することを確かめました(`e2e/layout-ua-profiles.spec.mjs`)。
+フォームの部品の UA スタイル(ボタンや入力欄の padding・border・margin など)は、ブラウザーごとに違います([CSS ベースライン](css-baseline.md))。`--ua webkit` は、そのブラウザーの値から解析します。`chromium`・`firefox`・`webkit` はプラットフォームに依らない profile で、Linux と macOS で違う値(WebKit の入力欄・textarea・ボタンの padding、コントロールのフォント)は持たず、それに依る配置は Unknown(`U_LAYOUT_BROWSER`、両方の値を名指す)になります。1 つのプラットフォームの値で解析するときは `--ua webkit-macos`(`webkit-linux`、`firefox-macos`、`firefox-linux`)。macOS の WebKit の入力欄と textarea の padding はフォントの大きさで変わるので、`webkit-macos` でも、作者がフォントの大きさか `appearance: none` を書いた欄の padding は書くまで Unknown です。`--ua chromium,firefox,webkit` は、それぞれの値で解析して結果をまとめ、一部のブラウザーでだけ成り立つ指摘には「(in chromium, webkit; not in firefox)」のようにブラウザーを添えます。たとえば、幅 100px のボタンの「Publish now」は、Chromium と WebKit(padding 6px)でははみ出し、Firefox(4px)では収まります。各ブラウザーで描いた結果と一致することを確かめました(`e2e/layout-ua-profiles.spec.mjs`)。
 
-その差を打ち消す最小の reset は、`--suggest-reset chromium,firefox,webkit` で出せます。
+その差を打ち消す最小の reset は、`--suggest-reset chromium,firefox,webkit` で出せます(プラットフォームで違う値も打ち消す。値を残す `--ua` には、その値を知っている profile が要る: `--suggest-reset webkit-linux,webkit-macos --ua webkit-macos`)。
 
 ## reset の行列(`--resets`)
 

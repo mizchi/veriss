@@ -1,5 +1,8 @@
 import type {LayoutOptions} from './layout-contracts.d.ts';
-export type MatrixUA = 'chromium' | 'firefox' | 'webkit';
+/** A platform-agnostic UA profile (a value Linux and macOS disagree on is not known). */
+export type BrowserUA = 'chromium' | 'firefox' | 'webkit';
+/** Any UA profile id: the platform-agnostic three, or one platform's measured values. */
+export type MatrixUA = BrowserUA | 'firefox-linux' | 'firefox-macos' | 'webkit-linux' | 'webkit-macos';
 /** One vendored reset stylesheet (src/resets/manifest.json). css is the exact text a browser receives; '' for none. */
 export interface ResetEntry {
   id: string; name: string; version: string | null; license: string | null; url: string | null;
@@ -7,7 +10,10 @@ export interface ResetEntry {
 }
 export const resets: readonly ResetEntry[];
 export function resetById(id: string): ResetEntry;
-export const uas: readonly MatrixUA[];
+/** The UAs of the default space: chromium, firefox, webkit. */
+export const uas: readonly BrowserUA[];
+/** Every UA profile id a branch can name. */
+export const allUAs: readonly MatrixUA[];
 export interface Branch { id: string; ua: MatrixUA; reset: string }
 export function enumerateBranches(space?: {uas?: readonly MatrixUA[]; resets?: readonly string[]}): Branch[];
 export function sampleBranches(branches: readonly Branch[], options: {sample: number; seed?: number}): Branch[];

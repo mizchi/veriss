@@ -104,10 +104,16 @@ macOS(Chromium 156、Firefox 157、WebKit 27.2、Playwright 1.64.1)で測った�
 | textarea(107px の列) | firefox だけ x | v | ? | v | v | v | ? |
 | 画像のあるカード | v | v | v | v | v | v | v |
 
-決まった枝はすべて、3 つのブラウザーで描いた箱と一致しました(合わなかった枝はありません)。ただし macOS の WebKit は、フォームの部品の
-UA スタイルが Linux で測った profile と違う(文字の入力欄の padding 2px 5px、11px のフォント)ので、コントロールの部品(ボタン、
-入力欄、数値、textarea)は WebKit では照合を skip しています(既存の `e2e/layout-ua-profiles.spec.mjs` も macOS の WebKit では
-同じ理由で合いません)。Linux では照合します。
+決まった枝はすべて、3 つのブラウザーで描いた箱と一致しました(合わなかった枝はありません)。e2e は各ブラウザーを、動いている
+プラットフォームの profile(macOS では `webkit-macos`、Linux では `webkit-linux`。Chromium は `chromium`)で解析して照合します。
+この表は `webkit` の列を Linux で測ったものです。
+
+プラットフォームに依らない `webkit`(既定の UA の軸)は、Linux と macOS で違う WebKit の入力欄・textarea・ボタンの padding を
+持たないので、それを消さない reset の枝(none、modern-normalize、normalize.css、sanitize.css、Josh Comeau の reset)ではボタン・
+文字の入力欄・textarea が Unknown です。`webkit-macos` では、入力欄と textarea の padding がフォントの大きさで変わるので、それを変える
+reset(modern-normalize と normalize.css の `font-size: 100%`、Josh Comeau の `font: inherit`)の枝で文字の入力欄と textarea が
+Unknown、ほかの枝は macOS の WebKit で描いた箱と一致しました。枝は `analyzeResetMatrix(…, {uas: ['webkit-macos']})` か
+`--ua webkit-macos` で選びます(id は `webkit-macos:none`)。
 
 Unknown のまま残るもの:
 

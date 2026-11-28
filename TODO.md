@@ -171,6 +171,8 @@ CSS × DOM の静的検査パターンを、**カテゴリごとに洗う**。�
 - [x] `::-webkit-scrollbar` と `scrollbar-width` / `scrollbar-color`(F130。測り方: Chromium は `--hide-scrollbars` を外して従来型のスクロールバーにし、`offsetWidth - clientWidth` で幅を読む。WebKit は `::-webkit-scrollbar` の幅がそのまま測れる。Firefox は重ねて描くスクロールバーを止められないので `CSS.supports` で受け付けるかを読む)
 - [x] `-webkit-` だけの書き方(`-webkit-line-clamp` 以外): 大きさのキーワード(F122)。`-webkit-box-reflect` などの描画だけのものは測れていない
 - [x] フォーム部品の既定の大きさ(UA プロファイル `ua-profile.mjs` が Chromium・Firefox・WebKit ごとに持ち、cross-browser lint が差を報告する)
+- [x] UA プロファイルのプラットフォーム(`webkit-linux` / `webkit-macos`、`firefox-linux` / `firefox-macos`。`webkit` と `firefox` は両方が同じ値だけを持つ)
+- [ ] macOS の WebKit の入力欄と textarea の padding を、フォントの大きさから求める(`floor(大きさ / 4)` `floor(大きさ / 2)`、11-30px で測った。いまは作者がフォントの大きさを書くと Unknown)。Windows の profile は測っていない
 
 ### 11. 単位と計算値の落とし穴
 

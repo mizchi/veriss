@@ -1561,7 +1561,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     if (box.tag === 'textarea' || (box.tag === 'input' && ['text', 'email', 'search', 'password', 'tel', 'url', 'number', 'date', 'time', 'datetime-local', 'month', 'week', undefined].includes(box.inputType))) {
       values.display = 'inline-block'; values['box-sizing'] = box.inputType === 'search' ? 'border-box' : 'content-box'; values['min-inline-size'] = '0'; values['min-block-size'] = '0';
       // With a UA profile (ua option) the field's padding and border are known.
-      const edges = uaProfile && (box.tag === 'textarea' ? uaProfile.textarea : uaProfile.textField);
+      const edges = uaProfile && (box.tag === 'textarea' ? uaProfile.textarea : box.inputType === 'number' ? uaProfile.numberField : uaProfile.textField);
       if (edges) ['top', 'right', 'bottom', 'left'].forEach((side, i) => { values[`padding-${side}`] = edges.padding[i]; values[`border-${side}`] = edges.border[i]; });
     }
     if (uaProfile && box.tag === 'select') ['top', 'right', 'bottom', 'left'].forEach((side, i) => { values[`padding-${side}`] = uaProfile.select.padding[i]; values[`border-${side}`] = uaProfile.select.border[i]; });
@@ -1743,6 +1743,16 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   const wanted = [...(state ?? [])].find(s => s.startsWith('prefers-color-scheme:'))?.slice(21) ?? 'light';
   const used = schemes.includes(wanted) ? wanted : schemes[0] ?? 'light';
   values.$scheme = used;
+  // A profile whose control padding is native (macOS WebKit; 'ua' where the platforms disagree on it): the field and
+  // textarea padding follows the control's font-size (floor(size / 4) floor(size / 2), measured at 11-30px) and
+  // appearance: none, the button's appearance: none (any other appearance keeps it). Set by the author, either leaves
+  // the padding sides the author did not set unknown.
+  if (uaProfile && uaProfile.nativePadding !== false && !box.pseudo && ['button', 'input', 'textarea'].includes(box.tag)) {
+    const field = box.tag === 'textarea' || (box.tag === 'input' && ['text', 'email', 'search', 'password', 'tel', 'url', 'number', 'date', 'time', 'datetime-local', 'month', 'week', undefined].includes(box.inputType));
+    const button = box.tag === 'button' || (box.tag === 'input' && ['button', 'submit', 'reset'].includes(box.inputType));
+    if ((field && (sources['font-size'] || values.appearance === 'none')) || (button && values.appearance === 'none'))
+      for (const side of ['top', 'right', 'bottom', 'left']) if (!sources[`padding-${side}`]) values[`padding-${side}`] = 'ua';
+  }
   for (const property of ['color', 'background-color']) if (sources[property] && ['canvas', 'canvastext'].includes(String(values[property]).toLowerCase()))
     values[property] = { light: { canvas: '#ffffff', canvastext: '#000000' }, dark: { canvas: '#121212', canvastext: '#ffffff' } }[used][String(values[property]).toLowerCase()];
   // Buttons: the UA's button { color: ButtonText; background-color: ButtonFace } (not inherited; with or without

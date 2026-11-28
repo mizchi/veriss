@@ -93,7 +93,7 @@ stderr の時間の行と、最後のまとめの行は出ません。
 | `--font Roboto=fonts/Roboto.ttf` | なし | 計算後の font-family が Roboto のテキストを、フォントファイルで測る。渡さないとテキストは「1 行、最小幅なし」と仮定され、テキストのはみ出しは検査されない(`ASSUMPTION … text overflow is not checked`)。渡すと文字 200% の拡大も解析する(`E_A11Y_TEXT_RESIZE`)。繰り返し指定できる |
 | `--images images.json` | なし | 画像ファイルの自然な大きさ(`{"/avatar.png": {"width": 128, "height": 128}}`)。ないと、高さを確保しない img は `U_LAYOUT_IMAGE`(not checked)になり、`E_LAYOUT_IMAGE_UNRESERVED` は出ない。ビルドの時に画像の header から作るのが確実 |
 | `--trust-image-attributes` | なし | `--images` にない img の `width` / `height` 属性をファイルの大きさとみなす(仮定として info に出る) |
-| `--ua chromium,firefox,webkit` | Chromium の既定 | フォームの部品の UA スタイルをブラウザーごとに使い、一部のブラウザーでだけ成り立つ指摘にブラウザーを添える。`--suggest-reset chromium,firefox,webkit` は、その差を消す最小の reset を出して終わる |
+| `--ua chromium,firefox,webkit` | Chromium の既定 | フォームの部品の UA スタイルをブラウザーごとに使い、一部のブラウザーでだけ成り立つ指摘にブラウザーを添える。この 3 つはプラットフォームに依らない(Linux と macOS で違う値は Unknown)。1 つのプラットフォームの値は `webkit-macos`・`webkit-linux`・`firefox-macos`・`firefox-linux`。`--suggest-reset chromium,firefox,webkit` は、その差を消す最小の reset を出して終わる |
 | `--resets all` | なし | reset(none、modern-normalize、normalize、sanitize、josh-comeau、tailwind-preflight、destyle)のどれを先に読み込んでも成り立つかを、UA × reset の枝ごとに検査する。`--ua` が UA の軸(省くと 3 つ)。一部の枝だけの指摘は `only in firefox × none` のように出る。`--sample N --seed S` で枝の一部だけ |
 | `--profile strict` | `recommended` | `recommended` に、内容モデルだけが禁じる構造(`W_HTML_CONTENT_MODEL`: `<button>` や `<span>` の中の `<div>` など)を warning として足す。ブラウザーは書いたとおりに描くので recommended には入っていない。ベストプラクティスとして直したいときに選ぶ([component-lint.md](../component-lint.md) の「親子の構造と `strict`」) |
 | `--profile all` | `recommended` | ブラウザーと照合していないルールも error / warning として出す。最初は recommended のまま使い、info の「outside the recommended rules」を読むほうがよい |

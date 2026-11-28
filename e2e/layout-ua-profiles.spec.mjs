@@ -1,8 +1,14 @@
-// UA profiles (the ua layout option): unstyled form controls laid out with the profile of the browser the test runs in
-// match that browser's rectangles. The same page differs between Chromium, Firefox and WebKit (padding, borders,
-// margins); each profile carries its own browser's values (packages/veriss/src/layout/ua-profile.mjs).
+// UA profiles (the ua layout option): unstyled form controls laid out with the profile of the browser and platform the
+// test runs on match that browser's rectangles. The same page differs between Chromium, Firefox and WebKit (padding,
+// borders, margins), and WebKit's differs between Linux and macOS; each platform profile carries its own values
+// (packages/veriss/src/layout/ua-profile.mjs), and the platform-agnostic one (ua: 'webkit') is Unknown where they differ.
 import {test, expect} from '@playwright/test';
 import {analyzeHTML} from '../packages/veriss/src/html.mjs';
+import {uaProfiles, uaPlatforms} from '../packages/veriss/src/layout/ua-profile.mjs';
+
+// The profile of the platform this runs on: webkit-macos on macOS, webkit-linux on Linux (chromium has one profile).
+const platform = {darwin: 'macos', linux: 'linux'}[process.platform];
+const platformUA = engine => uaProfiles[`${engine}-${platform}`] ? `${engine}-${platform}` : engine;
 
 const reset = '*{margin:0}html,body{margin:0;display:grid;grid-template-columns:minmax(0,1fr)}';
 // Controls with only a size: their UA padding, border and margins decide where they and the boxes after them go.
@@ -18,8 +24,9 @@ const common = '.g{display:grid;grid-template-columns:minmax(0,1fr);justify-item
 const value = a => Number(String(a.constant).split('/').reduce((x, y) => x / y)) + (a.coefficient ? Number(String(a.coefficient).split('/').reduce((x, y) => x / y)) : 0);
 
 for (const [name, html, css] of cases) {
-  test(`${name}: the browser's UA profile places the control and the box after it as the browser does`, async ({page}, testInfo) => {
-    const ua = testInfo.project.name;
+  test(`${name}: the browser's UA profile for this platform places the control and the box after it as the browser does`, async ({page}, testInfo) => {
+    test.skip(!platform, `no measured UA profile for ${process.platform}`);
+    const ua = platformUA(testInfo.project.name);
     const sheet = reset + common + css;
     const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: sheet, viewport: {min: 400, max: 400, height: {min: 300, max: 300}}, ua});
     expect(report.status === 'unknown', `${ua}: ${JSON.stringify(report.diagnostics.map(d => d.message))}`).toBe(false);
@@ -31,6 +38,28 @@ for (const [name, html, css] of cases) {
       expect(row, `${ua} ${sel}: no rectangle`).toBeTruthy();
       const model = [row.rect.inlineStart, row.rect.blockStart, row.rect.inlineSize, row.rect.blockSize].map(value);
       model.forEach((v, i) => expect(Math.abs(v - browser[i]), `${ua} ${name} ${sel} [x, y, w, h][${i}]: model ${v}, browser ${browser[i]}`).toBeLessThanOrEqual(1 / 64 + 1e-6));
+    }
+  });
+}
+
+// The platform-agnostic profile (plain webkit, firefox) never verifies a geometry one of its platforms contradicts:
+// where the platforms' analyses place a box differently it is Unknown, and where it decides, it agrees with both and
+// with this browser.
+for (const [name, html, css] of cases) {
+  test(`${name}: the platform-agnostic profile is Unknown where the platforms differ, and agrees with both where it decides`, async ({page}, testInfo) => {
+    const engine = testInfo.project.name, sheet = reset + common + css;
+    const rects = ua => { const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: sheet, viewport: {min: 400, max: 400, height: {min: 300, max: 300}}, ua});
+      return {status: report.status, boxes: ['.f', '.after'].map(sel => { const row = report.sizes.find(r => r.box.startsWith(sel) && r.rect); return row && [row.rect.inlineStart, row.rect.blockStart, row.rect.inlineSize, row.rect.blockSize].map(value); })}; };
+    const any = rects(engine), platforms = uaPlatforms[engine].map(rects);
+    const agree = platforms.every(p => p.status !== 'unknown' && JSON.stringify(p.boxes) === JSON.stringify(platforms[0].boxes));
+    if (!agree) expect(any.status, `${engine} ${name}: the platforms differ (${JSON.stringify(platforms.map(p => p.boxes))}), so ${engine} must not decide`).toBe('unknown');
+    if (any.status === 'unknown') return;
+    for (const p of platforms) expect(any.boxes, `${engine} ${name}: agrees with every platform`).toEqual(p.boxes);
+    await page.setViewportSize({width: 400, height: 300});
+    await page.setContent(`<!doctype html><html lang="en"><head><style>${sheet}</style></head><body>${html}</body></html>`);
+    for (const [k, sel] of ['.f', '.after'].entries()) {
+      const browser = await page.evaluate(s => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }, sel);
+      any.boxes[k].forEach((v, i) => expect(Math.abs(v - browser[i]), `${engine} ${name} ${sel} [x, y, w, h][${i}]: model ${v}, browser ${browser[i]}`).toBeLessThanOrEqual(1 / 64 + 1e-6));
     }
   });
 }
@@ -68,7 +97,8 @@ test('a button label that fits one browser\'s padding only: the verdict with its
   const file = new URL('../packages/veriss/text-metrics/fixtures/roboto-variable.ttf', import.meta.url).pathname;
   const metrics = await loadTextMetrics({fonts: {Roboto: {file}}});
   const face = `@font-face{font-family:Roboto;src:url(data:font/ttf;base64,${readFileSync(file).toString('base64')})}`;
-  const ua = testInfo.project.name;
+  test.skip(!platform, `no measured UA profile for ${process.platform}`);
+  const ua = platformUA(testInfo.project.name);
   const html = '<main class="g"><button class="b" type="button">Publish now</button></main>';
   const sheet = reset + '.g{display:grid;grid-template-columns:100px}.b{display:block;white-space:nowrap;font-family:Roboto;font-size:16px;line-height:24px}';
   const report = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, metrics.resolveOptions({name: 'P', css: sheet, viewport: {min: 400, max: 400, height: {min: 300, max: 300}}, ua, boxes: {'.b': {text: {font: {family: 'Roboto', size: 16, lineHeight: 24, weight: 400}, content: 'Publish now'}, wrap: 'nowrap'}}}));
@@ -78,5 +108,5 @@ test('a button label that fits one browser\'s padding only: the verdict with its
   await page.evaluate(() => document.fonts.ready);
   const overflows = await page.evaluate(() => { const b = document.querySelector('.b'), r = document.createRange(); r.selectNodeContents(b); const t = r.getBoundingClientRect(), c = getComputedStyle(b), box = b.getBoundingClientRect(); return t.left < box.left + parseFloat(c.paddingLeft) + parseFloat(c.borderLeftWidth) - 0.01 || t.right > box.right - parseFloat(c.paddingRight) - parseFloat(c.borderRightWidth) + 0.01; });
   expect(flagged, `${ua}: the label overflows in the browser: ${overflows}`).toBe(overflows);
-  expect(flagged).toBe(ua !== 'firefox');
+  expect(flagged).toBe(!ua.startsWith('firefox'));
 });

@@ -284,7 +284,7 @@ React・Vue・Svelte の adapter がコンポーネントを状態ごとの箱�
 | `U_LAYOUT_FLEX` / `U_LAYOUT_GRID_FR` / `U_LAYOUT_GRID_SHRINK` / `U_LAYOUT_SUBGRID` / `U_LAYOUT_AXES` | 縮む項目どうしの重みが一定でない flex、中身の幅が分からない fr、subgrid の一部 |
 | `U_LAYOUT_POSITIONED` / `U_LAYOUT_POSITIONED_OWNER` / `U_LAYOUT_FIXED_CONTAINED` / `U_LAYOUT_ABSOLUTE_ALLOCATION` / `U_LAYOUT_DIALOG` / `U_LAYOUT_POPOVER` | `%` や rtl の relative オフセット、閉じ込められた fixed、描かれる閉じた dialog・popover |
 | `U_LAYOUT_ELEMENT` / `U_LAYOUT_IMAGE` / `U_LAYOUT_PSEUDO` / `U_LAYOUT_HTML` / `U_LAYOUT_STRUCTURE` | 大きさの adapter のない要素(`<br>` など)、動的な srcset、ファイルの大きさが分からず属性の比で大きさが決まる img(`images` か `trustImageAttributes` で渡す)、配置を変える擬似要素、文字と子要素の混在 |
-| `U_LAYOUT_SCROLLBAR` / `U_LAYOUT_BROWSER` / `U_LAYOUT_PROFILE` / `U_LAYOUT_OPTIONS` | スクロールバーの環境が宣言されていない、ブラウザーで測り方が違う文字、知らない設定 |
+| `U_LAYOUT_SCROLLBAR` / `U_LAYOUT_BROWSER` / `U_LAYOUT_PROFILE` / `U_LAYOUT_OPTIONS` | スクロールバーの環境が宣言されていない、ブラウザーで測り方が違う文字、プラットフォームで違うフォームの部品の UA の padding(`ua: 'webkit'`)、知らない設定 |
 | `U_LAYOUT_GEOMETRY` / `U_LAYOUT_ANCESTOR` / `U_LAYOUT_COVERAGE` / `U_LAYOUT_LIMIT` / `U_LAYOUT_SOLVER` / `U_LAYOUT_NOT_ANALYZED` | 扱わない長さ(`min-content` の行など)、祖先が Unknown、領域を覆いきれない、上限超過・timeout、CSS の誤りで配置を止めた状態 |
 | `U_A11Y_*`(約 30) | 動的な aria・alt・role・label、モデル化しない色、回転・スクロールの中の覆い、決まらない `:focus` の配置 |
 

@@ -8,19 +8,27 @@
 //
 // target is the browser whose values the reset keeps where it has to pick one (padding, sizes): the static checks'
 // reference (chromium) by default, so an analysis with ua: target describes every browser once the reset applies.
-import { uaProfiles, resolveUAProfile } from './ua-profile.mjs';
+//
+// A platform-agnostic profile (plain webkit, firefox) has 'ua' where its platforms disagree: such a value is reset as
+// one that differs (even for one browser), and a target cannot keep it (pick webkit-linux or webkit-macos).
+import { browserUAs, resolveUAProfile } from './ua-profile.mjs';
 
-const same = values => new Set(values.map(v => JSON.stringify(v))).size <= 1;
+const unknown = v => JSON.stringify(v).includes('"ua"');
+const same = values => !values.some(unknown) && new Set(values.map(v => JSON.stringify(v))).size <= 1;
 const box = ([t, r, b, l]) => t === b && r === l ? (t === r ? t : `${t} ${r}`) : `${t} ${r} ${b} ${l}`;
 const logical = (property, [t, r, b, l]) => t === b && r === l ? [`${property}-block: ${t}`, `${property}-inline: ${r}`] : [`${property}: ${box([t, r, b, l])}`];
-const per = (browsers, get) => browsers.map(b => `${b} ${typeof get(b) === 'string' ? get(b) : box(get(b))}`).join(', ');
+const per = (browsers, get) => browsers.map(b => { const v = get(b); return unknown(v) ? `${b} differs by platform` : `${b} ${typeof v === 'string' ? v : box(v)}`; }).join(', ');
 
 const textFields = ':where(input:not([type]), input[type="text"], input[type="email"], input[type="search"], input[type="password"], input[type="tel"], input[type="url"], input[type="number"])';
 const buttons = ':where(button, input[type="button"], input[type="submit"], input[type="reset"])';
 
-export function suggestReset({ browsers = Object.keys(uaProfiles), target = 'chromium' } = {}) {
+export function suggestReset({ browsers = browserUAs, target = 'chromium' } = {}) {
   const profiles = Object.fromEntries(browsers.map(b => [b, resolveUAProfile(b)]));
-  const goal = resolveUAProfile(target);
+  const known = resolveUAProfile(target);
+  // The target's values the reset keeps: one it does not know (it differs by platform) cannot be written.
+  const keep = (value, what) => { if (unknown(value)) throw new Error(`suggestReset: the target ${target} does not know the ${what} (it differs by platform): pick a platform's profile (${target}-linux or ${target}-macos)`); return value; };
+  const goal = { checkbox: { get size() { return keep(known.checkbox.size, 'checkbox size'); } }, get placeholder() { return keep(known.placeholder, 'placeholder color'); },
+    ...Object.fromEntries(['button', 'textField', 'textarea', 'select'].map(k => [k, { get padding() { return keep(known[k].padding, `${k} padding`); }, get border() { return keep(known[k].border, `${k} border`); } }])) };
   const P = b => profiles[b];
   const rules = [], notes = [];
   const rule = (selector, declarations, reason) => rules.push({ selector, declarations, reason });
@@ -28,7 +36,7 @@ export function suggestReset({ browsers = Object.keys(uaProfiles), target = 'chr
   // Fonts: controls take the platform control font (family and size differ per browser), not the page's.
   const fonts = browsers.map(b => P(b).controlFont);
   if (!same(fonts)) rule(':where(button, input, select, textarea)', ['font: inherit', 'letter-spacing: inherit', 'word-spacing: inherit'],
-    `the control font differs (${per(browsers, b => `${P(b).controlFont.family} ${P(b).controlFont.size}`)}; textarea ${per(browsers, b => `${P(b).controlFont.textareaFamily} ${P(b).controlFont.textareaSize}`)}); inheriting the page font also lets its text be measured`);
+    `the control font differs (${per(browsers, b => { const f = P(b).controlFont; return unknown([f.family, f.size]) ? f : `${f.family} ${f.size}`; })}; textarea ${per(browsers, b => { const f = P(b).controlFont; return unknown([f.textareaFamily, f.textareaSize]) ? f : `${f.textareaFamily} ${f.textareaSize}`; })}); inheriting the page font also lets its text be measured`);
   // Checkbox and radio margins: the current resets' margin: 0.
   if (!same(browsers.map(b => [P(b).checkbox.margin, P(b).radio.margin]))) rule(':where(input[type="checkbox"], input[type="radio"])', ['margin: 0'],
     `the UA margins differ (checkbox ${per(browsers, b => P(b).checkbox.margin)}; radio ${per(browsers, b => P(b).radio.margin)})`);
@@ -47,10 +55,10 @@ export function suggestReset({ browsers = Object.keys(uaProfiles), target = 'chr
   // The placeholder: its color is part of the contrast checks (Firefox dims it with opacity).
   if (!same(browsers.map(b => P(b).placeholder))) rule('::placeholder', [`color: ${goal.placeholder}`, 'opacity: 1'], `the placeholder color differs (${per(browsers, b => P(b).placeholder)})`);
   // Left to the design: one value would be arbitrary.
-  if (!same(browsers.map(b => [P(b).button.background, P(b).button.color]))) notes.push(`button colors differ (${per(browsers, b => `${P(b).button.color} on ${P(b).button.background}`)}): set background-color and color on your buttons`);
+  if (!same(browsers.map(b => [P(b).button.background, P(b).button.color]))) notes.push(`button colors differ (${per(browsers, b => unknown([P(b).button.color, P(b).button.background]) ? P(b).button : `${P(b).button.color} on ${P(b).button.background}`)}): set background-color and color on your buttons`);
   // What the controls inherit and size from, once the reset makes them inherit the page font (measured with the reset
   // applied in each browser: these are the differences it leaves open).
-  if (browsers.length > 1) notes.push('the default font differs (Chromium "Times New Roman", Firefox serif, WebKit -webkit-standard): set font-family on html (the controls inherit it with this reset)');
+  if (browsers.length > 1) notes.push('the default font differs (Chromium "Times New Roman" on Linux and Times on macOS, Firefox serif, WebKit -webkit-standard): set font-family on html (the controls inherit it with this reset)');
   notes.push('a field\'s default width (its size attribute) and a range\'s default size come from the font and the browser: give them an inline-size (and block-size)');
   if (!same(browsers.map(b => P(b).focusRing))) notes.push(`the focus ring width differs (${per(browsers, b => P(b).focusRing)}): give :focus-visible an outline of your own`);
 

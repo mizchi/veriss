@@ -18,15 +18,18 @@
 import manifest from './resets/manifest.json' with { type: 'json' };
 import { analyzeHTML } from './html.mjs';
 import { analyzeLayout } from './index.mjs';
-import { uaProfiles } from './layout/ua-profile.mjs';
+import { uaProfiles, browserUAs } from './layout/ua-profile.mjs';
 
 export const resets = manifest.resets;
 export const resetById = id => resets.find(r => r.id === id) ?? (() => { throw new Error(`Unknown reset: ${id} (one of ${resets.map(r => r.id).join(', ')})`); })();
-export const uas = Object.keys(uaProfiles);
+/** The UAs of the default space: the platform-agnostic profiles. */
+export const uas = [...browserUAs];
+/** Every UA profile id a branch can name (the platform ones too: 'webkit-macos:none'). */
+export const allUAs = Object.keys(uaProfiles);
 
 /** Every (ua, reset) pair, UA-major, in the order given. */
 export function enumerateBranches({ uas: u = uas, resets: r = resets.map(x => x.id) } = {}) {
-  for (const ua of u) if (!uaProfiles[ua]) throw new Error(`Invalid reset matrix: ua must be one of ${uas.join(', ')}`);
+  for (const ua of u) if (!uaProfiles[ua]) throw new Error(`Invalid reset matrix: ua must be one of ${allUAs.join(', ')}`);
   for (const id of r) resetById(id);
   return u.flatMap(ua => r.map(reset => ({ id: `${ua}:${reset}`, ua, reset })));
 }
