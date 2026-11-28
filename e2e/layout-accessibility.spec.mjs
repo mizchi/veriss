@@ -1413,7 +1413,9 @@ test('img width/height attributes and aspect-ratio size images like Chromium', a
   const src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR42mNk+M9Qz0AEYBxVSAAAAP//AwAOfQkB4x7nNgAAAABJRU5ErkJggg==';
   const css = `*{box-sizing:border-box;margin:0;padding:0}html,body{margin:0}.page{display:grid;grid-template-columns:minmax(0,1fr)}img{display:block}.a{width:100%;height:auto}.b{width:300px;aspect-ratio:16/9}.d{width:200px}.e{display:block;width:50%;aspect-ratio:2/1}.f{width:240px;height:auto;padding:10px;box-sizing:content-box}`;
   const html = `<div class="page"><img class="a" src="${src}" width="400" height="200" alt=""><img class="b" src="${src}" alt=""><img class="c" src="${src}" width="120" height="60" alt=""><img class="d" src="${src}" width="400" height="80" alt=""><div class="e"></div><img class="f" src="${src}" width="2" height="1" alt=""></div>`;
-  const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 320, max: 1280, height: {min: 600, max: 3000}}});
+  // The file is 2×1 (its natural size, as the browser has it after decode()); without it the attributes' ratio is not
+  // taken as the file's (#55).
+  const report = analyzeHTML(html, {name: 'Page', css, viewport: {min: 320, max: 1280, height: {min: 600, max: 3000}}, images: {[src]: {width: 2, height: 1}}});
   expect(report.status === 'unknown', JSON.stringify(report.diagnostics)).toBe(false);
   for (const width of [1280, 700, 375]) {
     await page.setViewportSize({width, height: 800});

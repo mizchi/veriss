@@ -3,8 +3,8 @@
   "browser": "chromium 156.0.8078.4",
   "cases": 72,
   "breaks": 101,
-  "caught": 101,
-  "missed": 0,
+  "caught": 98,
+  "missed": 3,
   "silentMisses": 0,
   "analysisFailures": [],
   "unconfirmedErrors": 0,
@@ -61,11 +61,19 @@
       "count": 1
     },
     {
+      "reason": "U_LAYOUT_IMAGE: .X: its size depends on the ratio of its width/height attributes (320/180), which holds only until the file loads, and its file's size is not known; pass the fi",
+      "count": 1
+    },
+    {
       "reason": "U_TEXT_NOT_MEASURED: .X: Font Roboto lacks U+00B7; fallback fonts are not modeled; its text is only assumed to fit, so its overflow is not checked",
       "count": 1
     },
     {
       "reason": "ASSUMPTION: 1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked",
+      "count": 1
+    },
+    {
+      "reason": "U_LAYOUT_IMAGE: .X: its size depends on the ratio of its width/height attributes (400/250), which holds only until the file loads, and its file's size is not known; pass the fi",
       "count": 1
     },
     {
@@ -1630,29 +1638,35 @@
       "file": "before.vue",
       "framework": "vue",
       "intent": "News cards with a thumbnail, a headline and a byline.",
-      "status": "violated",
+      "status": "unknown",
       "expected": [
         {
           "code": "E_A11Y_CONTRAST",
-          "found": true
+          "found": false
         },
         {
           "code": "E_LAYOUT_CONTENT",
-          "found": true
+          "found": false
         }
       ],
       "caught": [
-        "text-overflow-block .headline [1x@320 1x@375 1x@349 2x@320 2x@375 2x@349 dark@320 dark@375 dark@349]",
-        "text-covered .headline [1x@320 1x@375 1x@349 2x@320 2x@375 2x@349 dark@320 dark@375 dark@349]",
-        "clipped .headline [1x@320 1x@375 1x@349 2x@320 2x@375 2x@349 dark@320 dark@375 dark@349]",
-        "low-contrast .byline [1x@320 1x@375 1x@768 1x@1280 1x@349 2x@320 2x@375 2x@768 2x@1280 2x@349 dark@320 dark@375 dark@768 dark@1280 dark@349]"
+        "text-covered .headline [1x@320 1x@375 2x@320 2x@375 dark@320 dark@375]",
+        "low-contrast .byline [1x@320 1x@375 1x@768 1x@1280 2x@320 2x@375 2x@768 2x@1280 dark@320 dark@375 dark@768 dark@1280]"
       ],
-      "missed": [],
+      "missed": [
+        "text-overflow-block .headline [1x@320 1x@375 2x@320 2x@375 dark@320 dark@375]",
+        "clipped .headline [1x@320 1x@375 2x@320 2x@375 dark@320 dark@375]"
+      ],
       "silentMissed": [],
       "crashed": false,
       "unconfirmed": [],
       "environment": [],
       "notChecked": [
+        {
+          "code": "U_LAYOUT_IMAGE",
+          "reason": ".X: its size depends on the ratio of its width/height attributes (320/180), which holds only until the file loads, and its file's size is not known; pass the fi",
+          "line": 3
+        },
         {
           "code": "U_TEXT_NOT_MEASURED",
           "reason": ".X: Font Roboto lacks U+00B7; fallback fonts are not modeled; its text is only assumed to fit, so its overflow is not checked"
@@ -1670,8 +1684,8 @@
           "reason": "rem (and a root font-size in %, em or medium) resolved at a Npx browser default font size; other user settings are not checked"
         }
       ],
-      "errors": 2,
-      "warnings": 0,
+      "errors": 0,
+      "warnings": 1,
       "assumptions": [
         "1 text box(es) measured with the given font files (Roboto): their widths and line breaks are derived, not assumed",
         "1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked",
@@ -2225,22 +2239,27 @@
       "file": "before.svelte",
       "framework": "svelte",
       "intent": "A recipe card: photo, title, and cook time with a servings count.",
-      "status": "violated",
+      "status": "unknown",
       "expected": [
         {
           "code": "E_LAYOUT_TRACKS",
-          "found": true
+          "found": false
         }
       ],
-      "caught": [
-        "page-overflow html [1x@320 1x@336 2x@320 2x@336 dark@320 dark@336]"
+      "caught": [],
+      "missed": [
+        "page-overflow html [1x@320 2x@320 dark@320]"
       ],
-      "missed": [],
       "silentMissed": [],
       "crashed": false,
       "unconfirmed": [],
       "environment": [],
       "notChecked": [
+        {
+          "code": "U_LAYOUT_IMAGE",
+          "reason": ".X: its size depends on the ratio of its width/height attributes (400/250), which holds only until the file loads, and its file's size is not known; pass the fi",
+          "line": 2
+        },
         {
           "code": "ASSUMPTION",
           "reason": "the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own defaul"
@@ -2250,7 +2269,7 @@
           "reason": "rem (and a root font-size in %, em or medium) resolved at a Npx browser default font size; other user settings are not checked"
         }
       ],
-      "errors": 1,
+      "errors": 0,
       "warnings": 0,
       "assumptions": [
         "3 text box(es) measured with the given font files (Roboto): their widths and line breaks are derived, not assumed",

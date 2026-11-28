@@ -1769,7 +1769,7 @@ test('redundant-alt: a block image whose alt repeats the caption beside it', () 
   const css = '*{box-sizing:border-box;margin:0}.page{display:grid;grid-template-columns:minmax(0,1fr);background:#fff;color:#000}.p{display:block;width:100%;height:auto}.c{display:block;font-size:16px;line-height:24px;white-space:nowrap}';
   const warn = (alt, caption = 'Mount Fuji at dawn', order = 'img-first') => {
     const img = `<img class="p" src="/a.png" width="320" height="160" alt="${alt}">`, cap = `<p class="c">${caption}</p>`;
-    return analyzeHTML(`<main class="page">${order === 'img-first' ? img + cap : cap + img}</main>`, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, accessibility: true, boxes: {'.c': {minInlineSize: 10, intrinsicBlockSize: 24}}})
+    return analyzeHTML(`<main class="page">${order === 'img-first' ? img + cap : cap + img}</main>`, {name: 'P', css, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, accessibility: true, images: {'/a.png': {width: 320, height: 160}}, boxes: {'.c': {minInlineSize: 10, intrinsicBlockSize: 24}}})
       .accessibility.warnings.filter(w => w.code === 'W_A11Y_REDUNDANT_ALT').map(w => w.box);
   };
   assert.deepEqual(warn('Mount Fuji at dawn'), ['.p']);

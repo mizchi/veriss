@@ -25,7 +25,7 @@ test('@font-face is accepted, and web-font text whose box follows the font is a 
 
 test('a lazy image in the initial viewport is a warning with its region', () => {
   const css = page + 'img{display:block;width:100%;height:auto}.sp{height:700px}';
-  const run = html => analyzeHTML(`<div class="page">${html}</div>`, {name: 'P', css, viewport});
+  const run = html => analyzeHTML(`<div class="page">${html}</div>`, {name: 'P', css, viewport, images: {'/a.png': {width: 400, height: 200}}});
   const lazy = img => (run(img).layoutWarnings ?? []).filter(w => w.code === 'W_LAYOUT_LAZY_IN_VIEWPORT');
   assert.equal(lazy('<img src="/a.png" width="400" height="200" loading="lazy" alt="">').length, 1);
   assert.equal(lazy('<img src="/a.png" width="400" height="200" alt="">').length, 0);
