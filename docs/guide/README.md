@@ -89,7 +89,7 @@ stderr の時間の行と、最後のまとめの行は出ません。
 |---|---|---|
 | `--viewport 320-1280` | `320-1280` | 検査する幅の範囲。コンポーネントが置かれる幅に合わせる(サイドバーの部品なら `240-360` など)。`--viewport 480-1280` にすると、例の `ProfileCard` の 480px のはみ出しは出なくなる |
 | `--height 480-900` | `480-900` | 高さの範囲。fixed の部品やスクロールの終わりの判定に効く |
-| `--page-css page.css` | `*{box-sizing:border-box;margin:0}` | コンポーネントを置くページの CSS(reset、html と body)。ページの CSS の誤りも出る(`html { font-size: 16px }` を渡すと全コンポーネントに `W_LAYOUT_ROOT_FONT_FIXED`)。フォームの部品の reset がページにあるなら渡しておくと、`W_LAYOUT_CONTROL_FONT` が出なくなる。reset は `:where(button, input, select, textarea) { font: inherit }` と書く(`--suggest-reset` もこの形を出す)。`button, input, select, textarea { … }` と型セレクタで書くと、そのコンポーネントにない要素のぶん `W_CSS_SELECTOR_UNMATCHED` が出る(下の「検出しないもの」) |
+| `--page-css page.css` | `*{box-sizing:border-box;margin:0}` | コンポーネントを置くページの CSS(reset、html と body)。ページの CSS の誤りも出る(`html { font-size: 16px }` を渡すと全コンポーネントに `W_LAYOUT_ROOT_FONT_FIXED`)。フォームの部品の reset がページにあるなら渡しておくと、`W_LAYOUT_CONTROL_FONT` が出なくなる。`button, input, select, textarea { font: inherit }` と型セレクタで書いても、`:where(…)` で包んでもよい(`--suggest-reset` は `:where(…)` の形を出す)。ページの CSS のセレクタがコンポーネントの要素に当たらなくても、コンポーネントの未使用のセレクタ(`W_CSS_SELECTOR_UNMATCHED`)としては出ない |
 | `--font Roboto=fonts/Roboto.ttf` | なし | 計算後の font-family が Roboto のテキストを、フォントファイルで測る。渡さないとテキストは「1 行、最小幅なし」と仮定され、テキストのはみ出しは検査されない(`ASSUMPTION … text overflow is not checked`)。渡すと文字 200% の拡大も解析する(`E_A11Y_TEXT_RESIZE`)。繰り返し指定できる |
 | `--images images.json` | なし | 画像ファイルの自然な大きさ(`{"/avatar.png": {"width": 128, "height": 128}}`)。ないと、高さを確保しない img は `U_LAYOUT_IMAGE`(not checked)になり、`E_LAYOUT_IMAGE_UNRESERVED` は出ない。ビルドの時に画像の header から作るのが確実 |
 | `--trust-image-attributes` | なし | `--images` にない img の `width` / `height` 属性をファイルの大きさとみなす(仮定として info に出る) |
@@ -273,8 +273,7 @@ Svelte はセレクタのすべての部分をスコープするので、`.theme
   親の `<ul>` の中で使うなら、その warning は置き場所による。`<li>` は親のコンポーネントに書き、子は `<li>` の中身を描くようにすると
   どちらのファイルも検査が通る(例の `Menu.tsx` と `MenuLink.tsx`)。
 - **子のコンポーネントの中身**: 親のファイルでは見ない(`U_REACT_COMPONENT` / `U_SVELTE_*`)。子のファイルも checker に渡す。
-- **ページの CSS の型セレクタ**: `--page-css` に `button, input, select, textarea { font: inherit }` を渡すと、コンポーネントに
-  `input` などがなければ、その部分ごとに `W_CSS_SELECTOR_UNMATCHED`(warning)が出る。`html`、`body`、`*` で始まるセレクタと、
-  `:where(…)` で包んだものは出ない。
-- **行番号のない指摘**: Linaria の `E_SCOPE_ESCAPE` と `E_SCOPE_REACHES` は行番号なしで出る。クラスのない要素の指摘は、メッセージの
-  箱の名前が空になる(`spec:  is a list item outside ul/ol`)。
+
+以前ここにあった次のものは直りました: `--page-css` の型セレクタ(`button, input, select, textarea { … }`)がコンポーネントにない要素のぶん
+`W_CSS_SELECTOR_UNMATCHED` を出すこと、Linaria の `E_SCOPE_ESCAPE` / `E_SCOPE_REACHES` に行番号がないこと、クラスのない要素の
+指摘で箱の名前が空になること(今は `li@Component/0/0/0` のように tag と path で出る)、行の推定がテンプレートのコメントに当たること。

@@ -22,3 +22,12 @@ test('order with explicitly placed grid items or transformed items stays Unknown
   assert.equal(run('display:grid;grid-template-columns:100px 100px 100px', '.c{order:-1}.a{grid-column:3}').status, 'unknown');
   assert.equal(run('display:flex', '.c{order:-1;transform:translateX(4px)}').status, 'unknown');
 });
+
+test('visual order: empty siblings (no size to place them by) are not out of order; content another component renders is not checked', () => {
+  const page = inner => analyzeHTML(`<html lang="en"><body><ul class="l">${inner}</ul></body></html>`, {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body{${g}}.l{${g};padding:0;list-style:none}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, accessibility: true});
+  const codes = r => [...(r.accessibility.warnings ?? []), ...r.diagnostics].map(d => d.code).filter(c => /_A11Y_ORDER$/.test(c));
+  assert.deepEqual(codes(page('<li></li><li></li>')), []);
+  assert.deepEqual(codes(page('<li><!--isle-boundary:component MenuLink--></li><li><!--isle-boundary:component MenuLink--></li>')), ['U_A11Y_ORDER']);
+  // a real reversal is still reported
+  assert.ok(codes(analyzeHTML('<html lang="en"><body><div class="p"><div class="a"></div><div class="b"></div></div></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body{${g}}.p{display:flex}.a,.b{height:20px;width:40px}.b{order:-1}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, accessibility: true})).includes('W_A11Y_ORDER'));
+});

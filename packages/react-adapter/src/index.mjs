@@ -55,11 +55,14 @@ function literal(node) {
 }
 
 // Linaria: a css`` template's text as class rules: & is the class, nested @media and & blocks are lifted out.
-function linariaRules(className, text) {
+// lines (optional): the source line of each line of text; each rule's selector is recorded in where with its line.
+function linariaRules(className, text, lines, where) {
   const root = postcss.parse(`.${className}{${text}}`);
   const out = [];
   const walk = (rule, selector, media) => {
     const decls = rule.nodes.filter(n => n.type === 'decl').map(d => `${d.prop}:${d.value}${d.important ? ' !important' : ''}`);
+    const line = lines?.[(rule.source?.start?.line ?? 1) - 1];
+    if (where && line) for (const s of [selector, ...postcss.list.comma(selector)]) if (!where.has(s.trim())) where.set(s.trim(), line);
     if (decls.length) out.push(media ? `@media ${media}{${selector}{${decls.join(';')}}}` : `${selector}{${decls.join(';')}}`);
     for (const n of rule.nodes) {
       if (n.type === 'rule') walk(n, n.selector.includes('&') ? n.selector.replace(/&/g, selector) : `${selector} ${n.selector}`, media);
@@ -99,6 +102,9 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
 
   // Module-level styles: stylex.create objects, Linaria css`` classes and styled components.
   const stylex = new Map(), linaria = new Map(), styled = new Map(), constants = new Map(), cssText = [];
+  // Linaria: the source line of each rule's selector (as written, with :global(…), and as analysed, without), for the
+  // findings on a selector that the generated class names (.lx-form :global(body)) cannot locate in the source.
+  const linariaLines = new Map();
   // styled-components: the classes it generates for this component's elements (owned by it; component scope), and the
   // createGlobalStyle components, whose CSS applies to the whole page (an escape from the component).
   const scOwned = new Set(), globalStyles = new Map(), globalEscapes = [];
@@ -143,9 +149,19 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         if (failed) { unknown('U_LINARIA_INTERPOLATION', `${name}: the interpolation \${${text(failed)}} in a Linaria template is not a module constant or class`); continue; }
         const body = init.quasi.quasis.map((q, i) => q.value.cooked + (parts[i] ?? '')).join('');
         const className = `lx-${name}`;
+        // The source line of each line of the body: a line break in the template is one in the source; an
+        // interpolation's value (one line) stands where the source's ${…} was, which may span lines.
+        const bodyLines = [];
+        if (init.quasi.quasis[0]?.loc) {
+          let line = init.quasi.quasis[0].loc.start.line; bodyLines.push(line);
+          init.quasi.quasis.forEach((q, i) => {
+            for (const c of String(q.value.cooked ?? q.value.raw)) if (c === '\n') bodyLines.push(++line);
+            if (i < parts.length) { for (const c of parts[i]) if (c === '\n') bodyLines.push(line); line = init.quasi.quasis[i + 1].loc.start.line; }
+          });
+        }
         // CSS postcss cannot read (an unclosed block) is Unknown, as a styled-components template's is (U_STYLED_CSS):
         // the class is kept on its elements with no rules.
-        try { cssText.push(linariaRules(className, body)); }
+        try { cssText.push(linariaRules(className, body, bodyLines, linariaLines)); }
         catch (error) { if (error?.name !== 'CssSyntaxError') throw error; unknown('U_LINARIA_CSS', `${name}: its CSS cannot be read (${error.reason})`); }
         if (text(init.tag) === 'css') linaria.set(name, className);
         else styled.set(name, { tag: init.tag.type === 'MemberExpression' ? init.tag.property.name : literal(init.tag.arguments[0]), className });
@@ -554,7 +570,8 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
   // the dynamic values the rendered CSS has (an evaluation dropped for too many variants registered its own too)
   if (ignoredDynamics.size && !inject) assumptions.add(`dynamic values ignored by options.dynamicValues (${[...ignoredDynamics].sort().join(', ')}): their declarations are left out and not checked`);
   const used = new Set([...css.matchAll(/-veriss-dynamic\((\d+)\)/g)].map(m => Number(m[1])));
-  return { states, css, unknowns, assumptions: [...assumptions], dynamics: dynamics.filter(d => used.has(d.id)), ...(scope ? { scope } : {}), ...(lowered ? { styleMap: lowered.map, styleCSS: lowered.css } : {}) };
+  for (const [selector, line] of [...linariaLines]) { const plain = selector.replace(/:global\(([^()]*)\)/g, '$1'); if (!linariaLines.has(plain)) linariaLines.set(plain, line); }
+  return { states, css, unknowns, assumptions: [...assumptions], dynamics: dynamics.filter(d => used.has(d.id)), ...(linariaLines.size ? { linariaLines } : {}), ...(scope ? { scope } : {}), ...(lowered ? { styleMap: lowered.map, styleCSS: lowered.css } : {}) };
 }
 
 /**
@@ -588,6 +605,13 @@ export function analyzeReact(source, { component, maxStates, eachCounts, sourceL
     const all = expanded.scope ? `${pageCSS}\n${componentCSS}` : pageCSS + componentCSS;
     const offset = all.slice(0, all.lastIndexOf(expanded.styleCSS)).split('\n').length - 1;
     report.findings = relocateFindings(report.findings, expanded.styleMap, { offset });
+  }
+  // Linaria selectors are reported at the line of the template rule that wrote them (the scope findings and the
+  // selector usage name the generated class, .lx-form, which the source does not have).
+  if (expanded.linariaLines) {
+    const at = selector => expanded.linariaLines.get(String(selector ?? '').trim());
+    report.findings = report.findings.map(f => /^E_SCOPE_/.test(f.code) && f.line === undefined && at(f.selector ?? f.box) ? { ...f, line: at(f.selector ?? f.box) } : f);
+    if (report.selectors) report.selectors = { ...report.selectors, warnings: report.selectors.warnings.map(w => w.sourceLine === undefined && !w.nesting && at(w.selector) ? { ...w, sourceLine: at(w.selector) } : w) };
   }
   // A dynamic value that wins the cascade: said in terms of the template (where, what its value depends on) and of the
   // option that declares it.

@@ -382,3 +382,63 @@ test('lint: profile strict adds the content-model rules as warnings and changes 
     assert.deepEqual(errors('strict'), errors('recommended'));
   }
 });
+
+// Output fixes found writing docs/guide/ and examples/ (each a minimal fixture of what the guide listed as not caught).
+const lintOptions = {pageCSS: '*{box-sizing:border-box;margin:0}', viewport, assumeText: true, sourceLines: true, accessibility: true, selectors: true};
+
+test('lint (Linaria): E_SCOPE_ESCAPE and E_SCOPE_REACHES are reported at the template line of the :global(…) / nested selector', () => {
+  const source = [
+    "import { css } from '@linaria/core';",
+    'const form = css`',
+    '  display: grid;',
+    '  grid-template-columns: minmax(0, 1fr);',
+    '  :global(body) {',
+    '    margin: 0;',
+    '  }',
+    '`;',
+    'const list = css`',
+    '  display: grid;',
+    '  & a {',
+    '    padding: 4px;',
+    '  }',
+    '`;',
+    'export default function F() { return <form className={form}><ul className={list}><Item /></ul></form>; }',
+  ].join('\n');
+  const out = lint(analyzeReact(source, lintOptions), {file: 'F.tsx', source});
+  assert.equal(out.find(m => m.code === 'E_SCOPE_ESCAPE')?.line, 5, JSON.stringify(out.filter(m => /SCOPE/.test(m.code))));
+  assert.equal(out.find(m => m.code === 'E_SCOPE_REACHES' && /^.lx-list a /.test(m.message))?.line, 11, JSON.stringify(out.filter(m => /SCOPE/.test(m.code))));
+});
+
+test('lint: a finding on an element with no class names the element (tag@path), never an empty name', () => {
+  const source = '<div class="wrap">\n  <li>one</li>\n</div>\n<style>.wrap { display: grid; grid-template-columns: minmax(0, 1fr); }</style>';
+  const out = lint(analyzeSvelte(source, lintOptions), {file: 'L.svelte', source});
+  const list = out.find(m => m.code === 'E_A11Y_LIST');
+  assert.match(list?.message ?? '', /^spec: li@Component\/0\/0\/0 is a list item outside ul\/ol/, JSON.stringify(list));
+  const marker = out.find(m => m.code === 'W_LAYOUT_MARKER_HIDDEN');
+  assert.match(marker?.message ?? '', /^li@Component\/0\/0\/0's disc marker/, JSON.stringify(marker));
+  for (const m of out) assert.doesNotMatch(m.message, /(?:^|: )(?:'s |is |: |\s)/, `an empty name in ${m.code}: ${m.message}`);
+});
+
+test('lint: the line fallback skips comments that mention the selector', () => {
+  const source = '<!-- .nope was the old class; :global(.theme-dark) .b too -->\n<button class="b" type="button">Go</button>\n<style>\n  .b { display: block; }\n  .nope { color: red; }\n  :global(.theme-dark) .b { color: white; }\n</style>';
+  const out = lint(analyzeSvelte(source, lintOptions), {file: 'C.svelte', source});
+  assert.equal(out.find(m => m.code === 'W_CSS_SELECTOR_UNMATCHED')?.line, 5);
+  assert.equal(out.find(m => m.code === 'E_SCOPE_ESCAPE')?.line, 6);
+  // Linaria: a // comment above the template that names the class is not the rule.
+  const tsx = "import { css } from '@linaria/core';\n// .theme-dark & makes the notice dark\nconst notice = css`\n  display: grid;\n  .theme-dark & {\n    color: white;\n  }\n`;\nexport default function N() { return <aside className={notice}>x</aside>; }";
+  assert.equal(lint(analyzeReact(tsx, lintOptions), {file: 'N.tsx', source: tsx}).find(m => m.code === 'E_SCOPE_OUTSIDE')?.line, 5);
+});
+
+test('lint: page-CSS selectors that match nothing in the component are not its unmatched selectors; its own CSS still is', () => {
+  const pageCSS = '*{box-sizing:border-box;margin:0}\nbutton, input, select, textarea { font: inherit; }\nnav a { color: inherit; }';
+  const source = '<button class="b" type="button">Go</button>\n<style>.b { display: block; } .nope { color: red; } textarea { resize: none; }</style>';
+  const unmatched = r => lint(r, {file: 'B.svelte', source}).filter(m => /^W_CSS_SELECTOR_/.test(m.code)).map(m => m.message.split(' ')[0]).sort();
+  assert.deepEqual(unmatched(analyzeSvelte(source, {...lintOptions, pageCSS})), ['.nope', 'textarea']);
+  // the same through the CLI's --page-css
+  const tsx = "import { css } from '@linaria/core';\nconst b = css`display: block;`;\nexport default function B() { return <button className={b} type=\"button\">Go</button>; }";
+  assert.deepEqual(lint(analyzeReact(tsx, {...lintOptions, pageCSS}), {file: 'B.tsx', source: tsx}).filter(m => /^W_CSS_SELECTOR_/.test(m.code)), []);
+  // plain className (no component scope): the component's stylesheet follows the page CSS on its last line
+  const plain = 'export default function P() { return <button className="b" type="button">Go</button>; }';
+  const own = lint(analyzeReact(plain, {...lintOptions, pageCSS, css: '.b { display: block; } select { color: red; }'}), {file: 'P.jsx', source: plain});
+  assert.deepEqual(own.filter(m => /^W_CSS_SELECTOR_/.test(m.code)).map(m => m.message.split(' ')[0]), ['select']);
+});
