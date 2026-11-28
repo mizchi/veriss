@@ -1,6 +1,6 @@
 {
   "name": "veriss-linaria",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Linaria (css`` and styled.tag``) component checker for veriss: a CLI and an API over veriss-react.",
   "license": "MIT",
@@ -19,9 +19,9 @@
     "LICENSE"
   ],
   "peerDependencies": {
-    "veriss": "^0.1.1",
-    "veriss-adapter-core": "^0.1.1",
-    "veriss-react": "^0.1.1"
+    "veriss": "^0.1.2",
+    "veriss-adapter-core": "^0.1.2",
+    "veriss-react": "^0.1.2"
   },
   "devDependencies": {
     "veriss": "workspace:*",

@@ -1,6 +1,6 @@
 {
   "name": "veriss-adapter-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Shared part of the component adapters: template states as choices, analysing every state, and the findings per state.",
   "license": "MIT",
@@ -22,7 +22,7 @@
     "postcss": "8.5.32"
   },
   "peerDependencies": {
-    "veriss": "^0.1.1"
+    "veriss": "^0.1.2"
   },
   "devDependencies": {
     "veriss": "workspace:*"
