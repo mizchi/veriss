@@ -25,6 +25,13 @@ export interface LayoutOptions {
   boxes?: Record<string, LayoutBoxContract>;
   /** The device's safe-area insets in px, read by env(safe-area-inset-*) and the safe-area-target rule on a viewport-fit=cover page. */
   safeArea?: { top?: number; right?: number; bottom?: number; left?: number };
+  /** The natural size of static image files by src, in px (read at build time): an img's loaded ratio. */
+  images?: Record<string, { width: number; height: number }>;
+  /**
+   * Take an img's width/height attributes as its file's size where `images` does not give it (the layout before the
+   * file loads; stated in `assumptions`). Default false: an img whose size depends on the attributes' ratio is Unknown.
+   */
+  trustImageAttributes?: boolean;
   /** A dual-screen device's hinge in viewport px: what lies under it is not shown (the hinge-target rule). */
   hinge?: { left: number; top: number; width: number; height: number };
 }

@@ -30,6 +30,8 @@ error が 1 件でもあれば終了コードは 1 です。
 | `--font Family=file.ttf` | なし | 繰り返し指定できる。CSS の計算後のフォントがこの family になるテキストは、仮定の大きさの代わりに、フォントファイルから幅と改行を測る(`auto` の列や、中身で大きさの決まる flex の item を判定できるようになる)。測れないもの(px でない font-size、`line-height: normal`、letter-spacing、斜体)は仮定のまま。測った数は info に出す |
 | `--default-font-size 16` | `16` | ブラウザーの既定のフォントサイズ(px)。html が px のフォントサイズを指定しないとき、`rem`(と html の `%`/`em`/`medium`)をこの値で解決する。仮定として info に出す。`none` で解決せず Unknown にする |
 | `--default-colors light\|none` | `light` | ページが dark の color-scheme を宣言しないとき、light の preference では UA の既定の色(白い canvas に黒い文字)を仮定し、color を指定しないテキストのコントラストを検査する(Chromium で測った)。仮定として info に出す。dark の preference では Chromium が canvas を #121212 にするので仮定しない。`none` で Unknown のままにする |
+| `--images <file.json>` | なし | 画像ファイルの自然な大きさ(`{"/logo.png": {"width": 120, "height": 30}}`)。`height: auto` の img の高さなどを、読み込むファイルの比で決める |
+| `--trust-image-attributes` | なし | `--images` にないファイルの img の `width` / `height` 属性を、ファイルの大きさとみなす(読み込み前の配置を検査する)。仮定として info に出す。付けないと、その比で大きさが決まる img(`height: auto` など)は検査しない(`U_LAYOUT_IMAGE`、#55)。幅記述子のある `srcset` の img はファイルが決まらないので、これだけが効く |
 | `--format text\|json` | `text` | 出力形式 |
 
 ## ブラウザーごとの UA スタイル(`--ua`)

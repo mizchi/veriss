@@ -98,7 +98,7 @@ test('flex and grid container properties on a block container do nothing', () =>
 });
 
 test('object-fit on an img whose height (or width) follows its own ratio does nothing', () => {
-  const img = css => analyzeHTML('<html lang="en"><body><main class="p"><img class="i" src="/a.png" width="400" height="300" alt=""></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.p{${g}}.i{display:block;max-width:300px}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}});
+  const img = css => analyzeHTML('<html lang="en"><body><main class="p"><img class="i" src="/a.png" width="400" height="300" alt=""></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body,.p{${g}}.i{display:block;max-width:300px}${css}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, images: {'/a.png': {width: 400, height: 300}}});
   assert.deepEqual(inert(img('.i{width:100%;height:auto;object-fit:cover}')), [['.i', 'object-fit']]);
   // A box of another shape: object-fit crops or letterboxes.
   assert.deepEqual(inert(img('.i{width:100%;height:120px;object-fit:cover}')), []);

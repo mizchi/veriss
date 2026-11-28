@@ -5,7 +5,8 @@ import {analyzeHTML} from '../src/html.mjs';
 // Replaced and form elements inside a content-sized flex item (flex-basis auto, width auto): the item's min- and
 // max-content widths come from the element's own width. Measured in Chromium, Firefox and WebKit (checklist I20).
 // - An img with an auto width and a px height takes its width from the height through its ratio (the file's natural
-//   size, else the width/height attributes): a 120×30 picture 24px tall is 96px wide (min and max) in all three.
+//   size, else the width/height attributes under trustImageAttributes, #55): a 120×30 picture 24px tall is 96px wide
+//   (min and max) in all three.
 // - An auto-sized img with a known file is its natural size (120px).
 // - Form controls without a px width (input, select, textarea) differ between the browsers (a text input is 153px in
 //   Chromium, 189px in Firefox, 155.875px in WebKit): Unknown.
@@ -19,9 +20,10 @@ const decided = r => assert.notEqual(r.status, 'unknown', JSON.stringify(r.diagn
 const reason = r => r.diagnostics.filter(d => d.severity === 'unknown').map(d => d.message).join('\n');
 
 const img = (attrs = '', src = '/logo.png') => `<img src="${src}" alt="Logo"${attrs}>`;
-for (const [name, css, inner, width, height] of [
+for (const [name, css, inner, width, height, extra] of [
   ['px height and the file ratio', 'img{display:block;height:24px}', img(), 96, 24],
-  ['the attributes ratio under width: auto', 'img{display:block;width:auto;height:24px}', img(' width="120" height="30"', '/unknown.png'), 96, 24],
+  // The layout before the file loads (the attributes taken as its size; without the option it is Unknown, #55).
+  ['the attributes ratio under width: auto', 'img{display:block;width:auto;height:24px}', img(' width="120" height="30"', '/unknown.png'), 96, 24, {trustImageAttributes: true}],
   ['border-box padding and border', 'img{display:block;height:24px;padding:0 4px;border:1px solid red}', img(), 98, 24],
   ['content-box padding', 'img{display:block;height:24px;padding:2px;box-sizing:content-box}', img(), 100, 28],
   ['a px max-width caps it', 'img{display:block;height:24px;max-width:50px}', img(), 50, 24],
@@ -29,7 +31,7 @@ for (const [name, css, inner, width, height] of [
   ['a percentage of the parent\'s px height', '.a{height:24px}img{display:block;height:100%}', img(), 96, 24],
   ['an auto-sized img with a known file', 'img{display:block}', img(), 120, 30],
 ]) test(`img in a content-sized flex item: ${name}`, () => {
-  const r = run(css, inner);
+  const r = run(css, inner, extra);
   decided(r);
   assert.deepEqual(size(r, 'img@P/0/0/0/0'), [width, height]);
   assert.deepEqual(size(r, '.a')[0], width);

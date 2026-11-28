@@ -45,6 +45,12 @@ The HTML adapter accepts one fragment root. Unsupported rendering attributes,
 foreign/replaced elements, and parse recovery produce `unknown`. Inline `style`
 attributes currently need a different adapter; pass CSS as a complete stylesheet.
 
+Images: pass the natural size of each image file as `images: {'/logo.png': {width: 120, height: 30}}`.
+An `img`'s `width`/`height` attributes reserve a ratio only until its file loads, so an `img` whose size
+depends on that ratio (`height: auto`, or a width taken from its height) and whose file is not in `images`
+is `unknown` (`U_LAYOUT_IMAGE`). `trustImageAttributes: true` takes the attributes as the file's size
+instead: the layout before the files load is checked, and the report's `assumptions` say so.
+
 ## Supply a box tree from another tool
 
 ```js

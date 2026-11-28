@@ -228,7 +228,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // The untransformed re-layout (CSS transforms removed): the layout boxes, which is what a layout shift compares.
   const untransformed = preferences.includes('untransformed');
   let sawTransform = false;
-  const layoutWarnings = [], generatedTexts = [], textFonts = new Map(), transitionSizes = [];
+  const layoutWarnings = [], generatedTexts = [], textFonts = new Map(), transitionSizes = [], trustedImageAttributes = new Set();
   // Aligned boxes laid out from the start edge until their content height is known (finish shifts their descendants).
   const deferredAligns = new Map();
   // Checklist E1: whether the page fits the viewport and whether it overflows it somewhere in the viewport range, and
@@ -492,8 +492,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     tools: { matches, compileSelector, dynamicStates, positive: value => cmp(q(value), zero) > 0 } });
   // True while the style stage's walk reads styles: a declaration that is not modeled does not stop it there.
   let readingStyles = false;
+  // Issue #55: an img whose size depends on its width/height attributes' ratio, with no file size and no
+  // trustImageAttributes (the ratio was dropped where the style is computed: $untrustedImageRatio).
+  function untrustedImageRatio(box, style, region) {
+    const how = style.$untrustedImageRatio.dynamic ? 'trustImageAttributes: true to take the attributes as the file\'s size (the loaded file is not known here: a dynamic src or a srcset with width descriptors, so the images option cannot name it)' : 'pass the file\'s natural size in the images option, or trustImageAttributes: true to take the attributes as the file\'s size';
+    throw Object.assign(new Error(`${box.label}: its size depends on the ratio of its width/height attributes (${style.$untrustedImageRatio.ratio}), which holds only until the file loads, and its file's size is not known; ${how}`), { code: 'U_LAYOUT_IMAGE', box, region });
+  }
   // Checklist I20: an img with an auto width takes it from its height through its ratio (the file's natural size, else
-  // the width/height attributes as aspect-ratio: auto w / h), on the content box; with an auto height too, a known
+  // the width/height attributes as aspect-ratio: auto w / h under trustImageAttributes, #55), on the content box; with an auto height too, a known
   // file gives its natural width. Measured in Chromium, Firefox and WebKit: a 120×30 picture 24px tall is 96px wide
   // (border-box padding 0 4px and border 1px: 98px; content-box padding 2px: 100px; height: 100% of a 24px parent: 96px).
   // Left auto (Unknown where the width is needed): no ratio, a file whose ratio differs from the attributes (the width
@@ -508,9 +514,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     if (!parentStyle || !['block', 'flow-root', 'list-item'].includes(parentStyle.display) || !['static', 'relative'].includes(style.position)) return style;
     const written = /^auto (\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(String(style['aspect-ratio']));
     if (!written && style['aspect-ratio'] !== 'auto') return style;
-    // Without the file's size, the attributes' ratio is taken as the image's, as everywhere else in the engine (the
-    // height of a width-sized img; E_LAYOUT_IMAGE_RATIO reports a known file that differs): the attributes are the
-    // author's statement of the file's size, and the reserved layout is the one checked.
+    // Without the file's size, the attributes' ratio is here only under trustImageAttributes (#55: otherwise it was
+    // dropped with the style, and the img is Unknown where its width is needed); E_LAYOUT_IMAGE_RATIO reports a known
+    // file that differs.
     const file = natural?.width > 0 && natural?.height > 0 ? [natural.width, natural.height] : null;
     if (written && file && Number(written[1]) * file[1] !== Number(written[2]) * file[0]) return style;
     const ratio = file ? [null, ...file] : written;
@@ -792,7 +798,8 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         const { width: w, height: hgt } = imageFacts;
         if (Number.isFinite(w) && style['inline-size'] === 'auto' && !style.$sources['inline-size']) style = { ...style, 'inline-size': `${w}px`, ...(!style.$sources['max-inline-size'] ? { $widthFromAttribute: w } : {}) };
         if (Number.isFinite(hgt) && style['block-size'] === 'auto' && !style.$sources['block-size']) style = { ...style, 'block-size': `${hgt}px` };
-        if (Number.isFinite(w) && Number.isFinite(hgt) && w > 0 && hgt > 0 && style['aspect-ratio'] === 'auto' && !style.$sources['aspect-ratio']) style = { ...style, 'aspect-ratio': `auto ${w}/${hgt}` };
+        const fromAttributes = Number.isFinite(w) && Number.isFinite(hgt) && w > 0 && hgt > 0 && style['aspect-ratio'] === 'auto' && !style.$sources['aspect-ratio'];
+        if (fromAttributes) style = { ...style, 'aspect-ratio': `auto ${w}/${hgt}` };
         // The loaded image's natural size (a static file read at build time) against what was reserved before it loads.
         // Several density candidates without a device pixel ratio: decided only when every candidate file has one ratio.
         if (imageFacts.src?.candidates) {
@@ -801,6 +808,14 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
           imageFacts.src = sizes.every(Boolean) ? imageFacts.src.candidates[0] : 'dynamic';
         }
         const natural = typeof imageFacts.src === 'string' ? options.images?.[imageFacts.src] : undefined;
+        // Issue #55: the attributes' ratio holds only until the file loads (then the file's natural ratio wins: width="120"
+        // height="30" at a 24px height is 96px wide before load and 24px after for a square file, measured in #54). Without
+        // the file's size it is taken as the file's only under trustImageAttributes; otherwise the img has no known ratio,
+        // so whatever depends on it (an auto height, a width from a height, the distortion check) is Unknown. Sizes that
+        // do not use it (both axes definite) are unaffected.
+        const untrusted = box.tag === 'img' && fromAttributes && !natural && !options.trustImageAttributes;
+        if (untrusted) style = { ...style, 'aspect-ratio': 'auto', $untrustedImageRatio: { ratio: `${w}/${hgt}`, dynamic: typeof imageFacts.src !== 'string' || imageFacts.src === 'dynamic' } };
+        else if (box.tag === 'img' && fromAttributes && !natural) trustedImageAttributes.add(box.label);
         if (style['block-size'] === 'auto' && natural) {
           const reserved = /^auto (\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/.exec(style['aspect-ratio']);
           if (style['aspect-ratio'] === 'auto') style = { ...style, 'aspect-ratio': `auto ${natural.width}/${natural.height}`, $imageUnreserved: { ...natural, src: imageFacts.src } };
@@ -808,7 +823,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         }
         // The ratio an img's picture is drawn at (its file's size, else its width/height attributes), for object-fit: fill.
         // A box with aspect-ratio auto … and an auto size follows the loaded file, so it cannot stretch it.
-        const drawn = natural ?? (Number.isFinite(w) && Number.isFinite(hgt) && w > 0 && hgt > 0 ? { width: w, height: hgt } : null);
+        const drawn = natural ?? (options.trustImageAttributes && Number.isFinite(w) && Number.isFinite(hgt) && w > 0 && hgt > 0 ? { width: w, height: hgt } : null);
         // (After the width from the ratio: once that width is fixed, a max-width can cap it while the height stays, so the
         // box no longer follows the picture and the distortion check compares the drawn box.)
         if (box.tag === 'img' && style['inline-size'] === 'auto') style = imageWidthFromRatio(style, natural, ancestors.at(-1)?.style, !chosen && box.imageSize?.srcset === undefined);
@@ -963,6 +978,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     // loads; one whose reserved ratio differs from the file's changes height when it loads.
     if (['img', 'video'].includes(box.tag) && style.$imageUnreserved && emit) issue('E_LAYOUT_IMAGE_UNRESERVED', `${box.label} has no reserved height: it shifts the layout when ${style.$imageUnreserved.src} loads; add width="${style.$imageUnreserved.width}" height="${style.$imageUnreserved.height}" (the file's size) or an aspect-ratio`, box, region);
     if (['img', 'video'].includes(box.tag) && style.$imageRatioMismatch && emit) issue('E_LAYOUT_IMAGE_RATIO', `${box.label} reserves the ratio ${style.$imageRatioMismatch.reserved} but ${style.$imageRatioMismatch.src} is ${style.$imageRatioMismatch.natural.width}×${style.$imageRatioMismatch.natural.height}: its height changes when it loads`, box, region);
+    if (box.tag === 'img' && !box.pseudo && style.$untrustedImageRatio && ((style['block-size'] === 'auto' && block) || style['inline-size'] === 'auto')) untrustedImageRatio(box, style, region);
     if (box.tag === 'img' && !box.pseudo && style['block-size'] === 'auto' && !ratioOf(style) && block) throw Object.assign(new Error(`${box.label} has no reserved height (no height, aspect-ratio or width/height attributes) and its file's size is not known; it shifts the layout when it loads`), { code: 'U_LAYOUT_IMAGE' });
     // An img may leave its block-size auto when an aspect-ratio (CSS or its width/height attributes) gives it.
     // A text field that is a grid item (not block flow) with an auto width and justify-self normal/stretch is
@@ -2865,6 +2881,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const replaced = new Set(['img', 'svg', 'iframe', 'video', 'audio', 'canvas', 'input', 'select', 'textarea', 'embed', 'object']);
     // The min-content (or max-content) width (border box) of a box, or Unknown.
     const minContent = (target, st, at, max = false) => {
+      if (target.tag === 'img' && st?.$untrustedImageRatio) untrustedImageRatio(target, st, region);
       if (replaced.has(target.tag)) unknown(`has a replaced or form element (${target.label}) without a px width`);
       if (target.text || target.inline?.length) {
         const key = max ? 'maxInlineSize' : 'minInlineSize';
@@ -4829,6 +4846,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     assumptions: ['The supplied CSS is the complete author cascade and the selected root has no external query-container ancestors; host provides the declared containing sizes without unmodeled scrollbar gutters.',
       'Each minInlineSize/minBlockSize is a trusted sufficient content-size bound; intrinsicBlockSize is a trusted exact auto-height profile for the permitted content/fonts.',
       'Only horizontal-tb/ltr in-flow and explicitly sized local absolute geometry is checked; ink overflow and browser pixel rounding are outside the contract.',
+      ...(trustedImageAttributes.size ? [`trustImageAttributes: the width/height attributes of ${[...trustedImageAttributes].slice(0, 3).join(', ')}${trustedImageAttributes.size > 3 ? ` and ${trustedImageAttributes.size - 3} more` : ''} are taken as their files' sizes (the layout before the files load); a file of another ratio changes the height when it loads.`] : []),
       ...(rules.some(rule=>rule.declarations.some(d=>d.expression || d.pending)) ? ['Custom properties are unregistered; unknown external inheritance and cycles through fallback references prevent verification when used by geometry.'] : [])],
     styleSources: styleSources.map(({ kind, file }) => ({ kind, file })), diagnostics, policies, checks, sizes, queries, subgrids,
     elements:boxes.map(({path,tag,id,classes,owner,targets,targetIdentity})=>({path,tag,...(id ? {id} : {}),classes,owner,...(targets?.length ? {targets} : {}),...(targetIdentity ? {targetIdentity} : {})})),

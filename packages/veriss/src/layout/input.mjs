@@ -5,7 +5,7 @@ export const boxTags = new Set('canvas template datalist dialog details summary 
 // Form controls and images have UA intrinsic sizes and padding: checked only with resets and explicit sizes.
 export const controlTags = new Set(['button', 'input', 'select', 'textarea']), replacedTags = new Set(['img', 'input', 'select', 'textarea']);
 const ancestorTags=new Set([...boxTags].filter(tag=>!['button', 'img', 'input', 'select', 'textarea'].includes(tag)));
-const supportedOptions = new Set(['hinge', 'ua', 'knownFonts', 'scope', 'reportTextFonts', 'defaultFontSize', 'defaultColors', 'scrollIntent', 'name', 'css', 'cssFile', 'reset', 'ancestors', 'viewport', 'hostInset', 'hostBlockInset', 'block', 'boxes', 'scrollbars', 'integrity', 'accessibility', 'selectors', 'images', 'devicePixelRatios', '$devicePixelRatio', '$animationFrame', '$slideVariant', 'safeArea', 'shorthandConflicts']);
+const supportedOptions = new Set(['hinge', 'ua', 'knownFonts', 'scope', 'reportTextFonts', 'defaultFontSize', 'defaultColors', 'scrollIntent', 'name', 'css', 'cssFile', 'reset', 'ancestors', 'viewport', 'hostInset', 'hostBlockInset', 'block', 'boxes', 'scrollbars', 'integrity', 'accessibility', 'selectors', 'images', 'trustImageAttributes', 'devicePixelRatios', '$devicePixelRatio', '$animationFrame', '$slideVariant', 'safeArea', 'shorthandConflicts']);
 export const supportedContract = new Set(['placeholderInlineSize', 'minInlineSize', 'maxInlineSize', 'minBlockSize', 'intrinsicBlockSize', 'wrap', 'overflow', 'overflowBlock', 'font', 'textMetrics', 'textRuns']);
 function finiteSize(value, name) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1_000_000) throw new Error(`Invalid layout ${name}`);
@@ -37,6 +37,10 @@ export function validateOptions(options) {
   // images: the natural size of static image files by src (read at build time), {src: {width, height}} in pixels.
   if (options.images !== undefined && (!options.images || typeof options.images !== 'object' || Array.isArray(options.images) || Object.keys(options.images).length > 1024
     || Object.values(options.images).some(size => !size || Object.keys(size).some(k => !['width', 'height'].includes(k)) || !Number.isSafeInteger(size.width) || !Number.isSafeInteger(size.height) || size.width <= 0 || size.height <= 0))) throw new Error('Invalid images option: {src: {width, height}} with positive integer pixels');
+  // trustImageAttributes: take an img's width/height attributes as its file's size where the file's is not in images.
+  // The ratio they reserve (aspect-ratio: auto w / h) holds only until the file loads, so by default an img whose
+  // geometry depends on it is Unknown (issue #55).
+  if (options.trustImageAttributes !== undefined && typeof options.trustImageAttributes !== 'boolean') throw new Error('Invalid layout options: trustImageAttributes must be a boolean');
   if (options.name!==undefined && (typeof options.name!=='string' || !/^[A-Za-z][A-Za-z0-9_.-]{0,127}$/.test(options.name))) throw new Error('Invalid layout subject name');
   if (options.scrollbars!==undefined) {
     if (!Array.isArray(options.scrollbars) || !options.scrollbars.length || options.scrollbars.length>8 || new Set(options.scrollbars.map(p=>p?.name)).size!==options.scrollbars.length) throw new Error('Invalid scrollbar profiles');

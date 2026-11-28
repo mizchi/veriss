@@ -52,10 +52,16 @@ test('lint on a realistic Svelte component: icon button, grid areas, auto-fill c
   const {readFileSync} = await import('node:fs');
   const file = fileURLToPath(new URL('../../svelte-adapter/fixtures/Catalog.svelte', import.meta.url));
   const source = readFileSync(file, 'utf8');
-  const result = analyzeSvelte(source, {pageCSS: `${pageCSS}body{margin:0}`, viewport: {min: 320, max: 1280, height: {min: 480, max: 900}}, assumeText: true, sourceLines: true, accessibility: true, selectors: true, eachCounts: [0, 2], scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
+  const result = analyzeSvelte(source, {pageCSS: `${pageCSS}body{margin:0}`, viewport: {min: 320, max: 1280, height: {min: 480, max: 900}}, assumeText: true, sourceLines: true, accessibility: true, selectors: true, eachCounts: [0, 2], scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}],
+    // The thumbnails' height: auto follows their width/height attributes' ratio, and a srcset with width descriptors
+    // leaves the loaded file open: the attributes are taken as its size only under trustImageAttributes (#55).
+    trustImageAttributes: true});
   const found = lint(result, {file: 'Catalog.svelte', source}).filter(m => m.severity !== 'info').map(m => [m.code, m.line]);
   for (const expected of [['E_A11Y_NAME', 7], ['E_LAYOUT_TRACKS', 13], ['W_LAYOUT_GRID_AREA_UNKNOWN', 11], ['W_LAYOUT_SIZES_MISSING', 16]])
     assert.ok(found.some(([code, line]) => code === expected[0] && line === expected[1]), `${expected}: ${JSON.stringify(found)}`);
+  // By default the thumbnail's height is Unknown, with the reason (not a silent pass).
+  const untrusted = analyzeSvelte(source, {pageCSS: `${pageCSS}body{margin:0}`, viewport: {min: 320, max: 1280, height: {min: 480, max: 900}}, assumeText: true, sourceLines: true, eachCounts: [0, 2], scrollbars: [{name: 'overlay', inlineSize: 0, blockSize: 0}]});
+  assert.ok(lint(untrusted, {file: 'Catalog.svelte', source}).some(m => m.severity === 'info' && /trustImageAttributes/.test(m.message)));
   // The home link is named by its svg's <title>.
   assert.ok(!found.some(([code, line]) => code === 'E_A11Y_NAME' && line === 8));
 });
@@ -144,6 +150,17 @@ test('css-lint assumes the UA default colors (stated), and --default-colors none
   const on = out([]), off = out(['--default-colors', 'none']);
   assert.ok(on.some(m => m.code === 'ASSUMPTION' && /user-agent default colors/.test(m.message)));
   assert.ok(!off.some(m => m.code === 'ASSUMPTION' && /user-agent default colors/.test(m.message)));
+});
+
+test('css-lint: an img sized by its attributes\' ratio is not checked by default; --trust-image-attributes takes them (stated)', () => {
+  const file = fileURLToPath(new URL('../../svelte-adapter/fixtures/Catalog.svelte', import.meta.url));
+  const cli = fileURLToPath(new URL('../../../tools/css-lint.mjs', import.meta.url));
+  const out = args => { try { return JSON.parse(execFileSync('node', [cli, '--format', 'json', '--each-counts', '2', ...args, file], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']})); } catch (e) { return JSON.parse(e.stdout); } };
+  const off = out([]), on = out(['--trust-image-attributes']);
+  assert.ok(off.some(m => m.severity === 'info' && /trustImageAttributes/.test(m.message)), JSON.stringify(off.map(m => m.message)));
+  assert.ok(!on.some(m => m.severity === 'info' && m.code !== 'ASSUMPTION' && /trustImageAttributes/.test(m.message)));
+  assert.ok(on.some(m => m.code === 'ASSUMPTION' && /width\/height attributes/.test(m.message)));
+  assert.ok(on.some(m => m.code === 'W_LAYOUT_SIZES_MISSING'));
 });
 
 test('lint: an analysis that failed with an internal error is a warning that names it as the checker\'s failure, not a quiet "not checked"', () => {

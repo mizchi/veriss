@@ -28,10 +28,12 @@ test('a fixed height with a fluid width stretches a fill image (W_LAYOUT_IMAGE_D
   assert.equal(distorted(run(img, 'img{width:100%}')).length >= 1, true);
 });
 
-test('the file size wins over the attributes, and an unknown file falls back to the attributes', () => {
+test('the file size wins over the attributes, and an unknown file falls back to the attributes only under trustImageAttributes', () => {
   // The attributes say square, the file is 3:2: a square box (the attributes' ratio) stretches the 3:2 file.
   assert.equal(distorted(run('<img src="/photo.jpg" width="800" height="800" alt="A photo">', 'img{width:100%;height:auto;aspect-ratio:1}')).at(0)?.natural, '1200/800');
-  assert.equal(distorted(run('<img src="/other.jpg" width="800" height="800" alt="A photo">', 'img{width:100%;height:200px}')).at(0)?.natural, '800/800');
+  // An unknown file: the attributes are its picture only when trusted (#55); by default the picture's ratio is not known.
+  assert.equal(distorted(run('<img src="/other.jpg" width="800" height="800" alt="A photo">', 'img{width:100%;height:200px}', {trustImageAttributes: true})).at(0)?.natural, '800/800');
+  assert.deepEqual(distorted(run('<img src="/other.jpg" width="800" height="800" alt="A photo">', 'img{width:100%;height:200px}')), []);
   // No ratio known at all: nothing to compare.
   assert.deepEqual(distorted(run('<img src="/other.jpg" alt="A photo">', 'img{width:100%;height:200px}')), []);
 });

@@ -299,6 +299,7 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   const assumedLeft = unmeasured ?? assumedTexts - measuredTexts;
   if (assumedLeft > 0) assumptions = [...assumptions, `${assumedLeft} text box(es) sized by assumption (one line, no minimum width): text overflow is not checked`];
   if (options.defaultColors) assumptions = [...assumptions, 'the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user\'s own default colors and forced colors are not checked'];
+  if (options.trustImageAttributes) assumptions = [...assumptions, 'an img\'s width/height attributes are its file\'s size where the images option does not give it (the layout before the file loads); a file of another ratio changes its height when it loads'];
   if (options.defaultFontSize) assumptions = [...assumptions, `rem (and a root font-size in %, em or medium) resolved at a ${options.defaultFontSize}px browser default font size; other user settings are not checked`];
   const statuses = results.map(r => r.report.status);
   // Verified only when every state is verified and the adapter itself met nothing unknown.
