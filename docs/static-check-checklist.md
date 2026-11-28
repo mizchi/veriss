@@ -37,6 +37,16 @@
 - [x] **C2. `@scope` の中の `:scope` と `&`**: `:scope` は根そのもの、`&` は `:where(:scope)`(詳細度 0。最初は根のセレクターの詳細度と読み違えていた。3 つのブラウザーで測って直した)。
 - [x] **C3. 入れ子の `&` で、結合子を含む親が先頭以外にある場合**: セレクターの `:is()` に結合子を許す(いまは不可)。
 - [x] **C4. `revert-layer`**: ひとつ前のレイヤーまでの値に戻す(層に入っていない規則では明示した層に戻る)。
+- [x] **C5. reset のスタイルシートを読む**([UA × reset の行列](reset-matrix.md)): normalize.css 8.0.1、modern-normalize 3.0.1、
+  sanitize.css 13.0.0、Josh Comeau の reset、Tailwind Preflight 4.3.5、destyle.css 4.0.1 は、どれも最初はページ全体を Unknown にした。
+  効果が及ぶ箱だけ Unknown にするよう直した: `tab-size` / `-moz-tab-size` は継承してタブを残す箱でだけ、コントロールの部品の疑似要素・
+  `::backdrop`・`:-moz-ui-invalid` はそれを持つ要素だけ、`:is()` / `:where()` の読める条件は残す、`:host` は何にも当たらない、
+  `::-moz-focus-inner` は何にも当たらない(Firefox 157 で大きな padding・border・margin でもボタンの箱が変わらないことを 3 ブラウザーで測った)、
+  疑似要素の下の `@supports` の宣言、`interpolate-size`、`@supports (contain-intrinsic-size: 1px)`(3 ブラウザーの `CSS.supports` と照合)、
+  `-webkit-appearance` は別名、`-moz-appearance` は Firefox だけ、reset の中の一括指定の衝突は警告、`ua` があるときの body(8px)と
+  p(1em)の margin。`analyzeResetMatrix` で 21 の枝を解析し、`e2e/layout-reset-matrix.spec.mjs` で 9 つの部品 × 7 つの reset を
+  3 ブラウザーで描いて、決まった枝の箱がすべて一致することを確かめた。残り(Unknown): 見出し・リスト・dl の UA の margin、
+  spin button、`overflow: auto` の textarea のスクロールバー、reset のないチェックボックスの大きさ。
 
 ## D. 配置のモデル
 

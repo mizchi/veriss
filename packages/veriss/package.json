@@ -17,6 +17,11 @@
       "types": "./src/critical.d.mts",
       "import": "./src/critical.mjs"
     },
+    "./reset-matrix": {
+      "types": "./src/reset-matrix.d.mts",
+      "import": "./src/reset-matrix.mjs"
+    },
+    "./resets/manifest.json": "./src/resets/manifest.json",
     "./devices": {
       "types": "./src/devices/index.d.mts",
       "import": "./src/devices/index.mjs"

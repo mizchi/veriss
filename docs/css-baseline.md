@@ -142,6 +142,10 @@ e2e(Chromium で 390 件)のうち、Firefox で 34 件、WebKit で 43 件が C
 
 確かめ方: この reset を当てて 3 つのブラウザーでベースラインを測り直すと(`node tools/css-baseline.mjs --reset reset.css`)、違う項目は 25 から 13 に減り、profile の値はボタンの色を除いてすべて揃いました。残った 13 項目は、ページの既定のフォント(名前の違いと、それによるボタンの幅)、見出しの大きさの丸め、入力欄と range の既定の大きさ、ボタンの色、フォーカスの枠で、どれも注記に挙げたものです。また、reset を当てた何も指定していない部品は、3 つのブラウザーとも `ua: 'chromium'` のモデルどおりの位置と大きさになりました(`e2e/layout-ua-profiles.spec.mjs`、33 件)。
 
+## reset のスタイルシートごとの初期条件
+
+UA の profile と、作者が先に読み込む reset(7 つ)の組ごとに解析する `analyzeResetMatrix` と、各 reset を 3 ブラウザーで描いて照合した結果は [UA × reset の行列](reset-matrix.md) にあります。
+
 ## 検査をほかのブラウザーに広げるには
 
 1. (対応済み)**UA スタイルの値をブラウザーごとに持つ**: `ua` オプションの profile。

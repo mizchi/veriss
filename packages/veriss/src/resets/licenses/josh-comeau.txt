@@ -1,0 +1,9 @@
+Josh's Custom CSS Reset, by Josh W. Comeau
+Source: https://www.joshwcomeau.com/css/custom-css-reset/ ("Last updated on November 20th, 2026", read 2026-11-28)
+
+The page states:
+
+  "It's released without any restrictions, into the public domain (though if you wanted to keep the link to this
+  blog post, I'd appreciate it!)."
+
+The vendored copy keeps the link in its header comment.

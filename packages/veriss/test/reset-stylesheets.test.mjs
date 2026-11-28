@@ -36,7 +36,6 @@ test('a rule on a control\'s internal part reaches only the controls that have t
     ['[type="number"]::-webkit-inner-spin-button{height:auto}', '<input type="number" aria-label="n">', '<input type="text" aria-label="t">'],
     ['::-webkit-search-decoration{-webkit-appearance:none}', '<input type="search" aria-label="s">', '<input type="text" aria-label="t">'],
     ['::-webkit-datetime-edit-fields-wrapper{padding:0}', '<input type="date" aria-label="d">', '<input type="text" aria-label="t">'],
-    ['button::-moz-focus-inner{border-style:none;padding:0}', '<button type="button" aria-label="b"></button>', '<input type="text" aria-label="t">'],
   ]) {
     const sized = 'input,button{display:block;inline-size:100px;block-size:20px;padding:0;border:0;font:16px/20px sans-serif}';
     assert.equal(run(sized + css, `<div class="a">${other}</div>`, {ua: 'chromium'}).status, 'verified', `${css} without its control`);
@@ -103,4 +102,24 @@ test('with a UA profile, body and p margins are the UA values every engine share
   const y = r => Number(r.sizes.find(s => s.box.startsWith('.b') && s.rect)?.rect.blockStart.constant);
   // p { margin-block: 1em }: 16px at its 16px size, above and below it
   assert.equal(y(page('body{margin:0}p{height:10px;font-size:16px}.b{height:10px}', '<p></p><div class="b"></div>', 'webkit')), 42);
+});
+
+test('-webkit-appearance is appearance in every engine; -moz-appearance only in Firefox', () => {
+  const sized = 'input{display:block;inline-size:100px;block-size:20px;padding:0;border:0}';
+  const field = '<div class="a"><input type="number" aria-label="n"></div>';
+  // destyle.css: -webkit-appearance: none; appearance: none on every control
+  assert.equal(run(`${sized}input{-webkit-appearance:none;appearance:none}`, field, {ua: 'chromium'}).status, 'verified');
+  assert.equal(run(`${sized}input{-webkit-appearance:none}`, field, {ua: 'chromium'}).status, 'verified');
+  // [type="number"] { -moz-appearance: textfield }: Chromium and WebKit drop it
+  for (const ua of ['chromium', 'webkit']) assert.equal(run(`${sized}input{appearance:none}[type="number"]{-moz-appearance:textfield}`, field, {ua}).status, 'verified', ua);
+  // Firefox takes it (a different appearance from the one the analysis reads), and without a profile the engine is not known
+  assert.equal(run(`${sized}input{appearance:none}[type="number"]{-moz-appearance:textfield}`, field, {ua: 'firefox'}).status, 'unknown');
+  assert.equal(run(`${sized}input{appearance:none}[type="number"]{-moz-appearance:textfield}`, field).status, 'unknown');
+  // no control under it: nothing to read
+  assert.equal(run('[type="number"]{-moz-appearance:textfield}', '<div class="a"></div>', {ua: 'firefox'}).status, 'verified');
+});
+
+test('::-moz-focus-inner moves no button in any engine (normalize.css)', () => {
+  const sized = 'button{display:block;inline-size:100px;block-size:20px;padding:0;border:0}';
+  for (const ua of ['chromium', 'firefox', 'webkit']) assert.equal(run(`${sized}button::-moz-focus-inner,[type="button"]::-moz-focus-inner{border-style:none;padding:0}`, '<div class="a"><button type="button" aria-label="b"></button></div>', {ua}).status, 'verified', ua);
 });

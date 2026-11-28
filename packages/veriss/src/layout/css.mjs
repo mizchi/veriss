@@ -72,7 +72,8 @@ export function px(text) {
   return q(text.replace(/px$/, ''));
 }
 
-const aliases = { width: 'inline-size', 'min-width': 'min-inline-size', 'max-width': 'max-inline-size', height: 'block-size', 'min-height': 'min-block-size', 'max-height': 'max-block-size' };
+// -webkit-appearance is an alias of appearance in Chromium, Firefox and WebKit (CSS UI 4 §7.2).
+const aliases = { '-webkit-appearance': 'appearance', width: 'inline-size', 'min-width': 'min-inline-size', 'max-width': 'max-inline-size', height: 'block-size', 'min-height': 'min-block-size', 'max-height': 'max-block-size' };
 const insets = { 'inset-inline-start':'left', 'inset-inline-end':'right', 'inset-block-start':'top', 'inset-block-end':'bottom' };
 // Why a grid-template-areas value is invalid, or null (a list of strings with equal cell counts, each name a rectangle).
 function invalidAreas(value) {
@@ -138,7 +139,6 @@ const controlParts = [
   [/^-webkit-search-(?:decoration|cancel-button|results-button|results-decoration)$/i, typed(['search'])],
   [/^-webkit-(?:datetime-edit(?:-[a-z-]+)?|date-and-time-value)$/i, typed(dateTypes)],
   [/^-webkit-calendar-picker-indicator$/i, `${typed(dateTypes)}, input[list]`],
-  [/^-moz-focus-inner$/i, `button, ${typed(['button', 'submit', 'reset', 'file', 'color'])}`],
   // the top layer's backdrop: a modal dialog or an open popover (a fullscreen element is a runtime state)
   [/^backdrop$/i, 'dialog, [popover]'],
 ];
@@ -149,6 +149,9 @@ function candidateSelector(text) {
     const base = candidateSelector(text.slice(0, part.index).trim() || '*');
     try { return base && compileSelector(`${base.source}:is(${owner})`); } catch { return null; }
   }
+  // ::-moz-focus-inner (normalize.css): Chromium and WebKit drop the rule, and Firefox (157) draws no box for it: a
+  // padding, border or margin on it moves no button (measured, e2e/layout-reset-matrix.spec.mjs).
+  if (/::-moz-focus-inner\s*$/i.test(text)) return compileSelector(':not(*)');
   // :host, :host() and :host-context() match only in a shadow tree, which a document's stylesheet never reaches (the
   // analysis has no shadow trees: a declarative one is Unknown in the HTML adapter).
   if (/:host(?:-context)?(?![\w-])/i.test(text.replace(/\[[^\]]*\]/g, ''))) return compileSelector(':not(*)');
@@ -258,6 +261,8 @@ function expand(property, value) {
     if (!m || (m[1] && m[4]) || Number(m[2]) <= 0 || (m[3] !== undefined && Number(m[3]) <= 0)) throw new Error(`Unsupported aspect-ratio: ${value}`);
     return [[property, `${m[1] || m[4] ? 'auto ' : ''}${m[2]}/${m[3] ?? '1'}`]];
   }
+  // -moz-appearance: Firefox's only (Chromium and WebKit drop it); computeStyle reads it per engine.
+  if (property === '-moz-appearance') return [['$moz-appearance', value.trim()]];
   if (geometry.has(property)) return [[property, value]];
   if (['left','right','top','bottom'].includes(property)) return [[property,value]];
   if (['inset','inset-inline','inset-block'].includes(property)) {
@@ -1928,6 +1933,14 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     // word-break: break-all where lines wrap: kept; the layout lays out its text only where it was measured with it.
     else if (key === 'word-break' && values[key] === 'break-all') continue;
     else throw new Error(key === 'line-break' ? `Unsupported layout property: line-break (${values[key]} changes line breaking, which is not modeled)` : `Unsupported word-break: ${values[key]} (it changes line breaking, shaping, containing blocks or paint, which are not modeled)`);
+  }
+  // -moz-appearance applies in Firefox only: dropped for a Chromium or WebKit profile; on a control in Firefox (or with no
+  // profile, where the engine is not known) a value other than the appearance read here is not modeled.
+  if (values['$moz-appearance'] !== undefined) {
+    const moz = String(values['$moz-appearance']);
+    delete values['$moz-appearance'];
+    if (uaProfile?.engine !== 'chromium' && uaProfile?.engine !== 'webkit' && !box.pseudo && ['button', 'input', 'select', 'textarea'].includes(box.tag) && !wide.has(moz) && moz !== String(values.appearance))
+      throw new Error(`Unsupported layout property: -moz-appearance: ${moz} (Firefox reads it, ${uaProfile ? 'and' : 'and without a ua profile the engine is not known;'} the control's appearance there is not modeled)`);
   }
   // F84: white-space normal, nowrap and pre-line turn a tab into a space that collapses, so tab-size does nothing there
   // (measured in Chromium, Firefox and WebKit). It is inherited (8 by default), and each box whose
