@@ -1,6 +1,6 @@
 {
   "name": "veriss",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Static responsive CSS verification over a closed box-tree model.",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "veriss-svelte",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Svelte 5 component adapter for veriss: template branches as states, scoped styles, selector usage.",
   "license": "MIT",
@@ -22,8 +22,8 @@
     "svelte": "5.57.2"
   },
   "peerDependencies": {
-    "veriss": "^0.1.1",
-    "veriss-adapter-core": "^0.1.1"
+    "veriss": "^0.1.2",
+    "veriss-adapter-core": "^0.1.2"
   },
   "devDependencies": {
     "veriss": "workspace:*",

@@ -1,6 +1,6 @@
 {
   "name": "veriss-react",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "React (JSX) adapter for veriss with StyleX and Linaria style resolution: JSX branches as states.",
   "license": "MIT",
@@ -22,8 +22,8 @@
     "postcss": "8.5.32"
   },
   "peerDependencies": {
-    "veriss": "^0.1.1",
-    "veriss-adapter-core": "^0.1.1"
+    "veriss": "^0.1.2",
+    "veriss-adapter-core": "^0.1.2"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
