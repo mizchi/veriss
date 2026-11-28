@@ -8,7 +8,7 @@
 // :slotted(x) and :global(x) become x): analysed alone, a component's scoped selectors match its own elements.
 import { parse } from 'vue/compiler-sfc';
 import { parseExpression, parse as parseScript } from '@babel/parser';
-import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree } from '@mizchi/veriss-adapter-core';
+import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree } from 'veriss-adapter-core';
 
 const ELEMENT = 1, TEXT = 2, COMMENT = 3, INTERPOLATION = 5, ATTRIBUTE = 6, DIRECTIVE = 7;
 const COMPONENT = 1, SLOT = 2, TEMPLATE = 3;

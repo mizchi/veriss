@@ -1,10 +1,10 @@
-# @mizchi/veriss-svelte
+# veriss-svelte
 
 A Svelte 5 component adapter for `veriss`, written to check that the verifier core is not tied to
 Isle's template language. It depends on the core; the core does not depend on it.
 
 ```js
-import {analyzeSvelte} from '@mizchi/veriss-svelte';
+import {analyzeSvelte} from 'veriss-svelte';
 const report = analyzeSvelte(source, {pageCSS, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, selectors: true});
 report.status;            // verified only if every template state is verified and nothing was Unknown
 report.states;            // [{choices, html, report}] — one veriss report per state
@@ -47,3 +47,13 @@ text is placeholder text, sized by the box contracts.
   against the compiler's `css_unused_selector`, and the Unknown cases.
 - `e2e/layout-svelte.spec.mjs`: the server-rendered component with Svelte's scoped CSS in Chromium; box heights and
   the violated state agree with the analysis.
+
+## Command line
+
+```sh
+npm install -D veriss-svelte
+npx veriss-svelte --viewport 320-1280 src/**/*.svelte
+```
+
+The options and output are `css-lint`'s ([docs/component-lint.md](../../docs/component-lint.md)); the exit status is 1
+when any error is reported.

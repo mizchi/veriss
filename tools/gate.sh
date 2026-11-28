@@ -6,7 +6,7 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 bad=0
 f=$(node --test tests/*.test.mjs 2>&1 | grep -E "^(# |ℹ )fail" | awk '{print $3}'); echo "root fail=$f"; [ "$f" = "0" ] || bad=1
-for p in veriss adapter-core react-adapter vue-adapter svelte-adapter; do
+for p in veriss adapter-core react-adapter vue-adapter svelte-adapter linaria; do
   f=$(cd packages/$p && node --test test/*.test.mjs 2>&1 | grep -E "^(# |ℹ )fail" | awk '{print $3}'); echo "$p fail=$f"; [ "$f" = "0" ] || bad=1
 done
 for a in '' run-1 run-2 run-3; do err=$(node tools/eval-component-lint.mjs ${a:+--attempt $a} 2>&1 >/dev/null) || { echo "eval failed ($a): $(echo "$err" | grep -m1 -E 'Error|error' )"; bad=1; }; done

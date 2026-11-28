@@ -1,11 +1,11 @@
-# @mizchi/veriss-adapter-core
+# veriss-adapter-core
 
 The part the component adapters (Svelte, Vue, React with StyleX or Linaria) share: template states as choices,
 the analysis of every state with `veriss`, the findings per state, and the lint output. It depends
 on the core; the core knows nothing of components.
 
 ```js
-import {analyzeStates, lint, formatText, recommended} from '@mizchi/veriss-adapter-core';
+import {analyzeStates, lint, formatText, recommended} from 'veriss-adapter-core';
 
 // An adapter turns a component into its states ({html, choices}) and its CSS.
 const result = analyzeStates({states, css, unknowns, assumptions}, {pageCSS, viewport, accessibility: true, assumeText: true});
@@ -40,4 +40,6 @@ more than `maxStates` states is Unknown.
   contracts). The CLI's `--font Family=file.ttf` sets them.
 - A state whose analysis throws is Unknown (`U_ADAPTER_ANALYSIS`), never a crash.
 
-The CLI is `tools/css-lint.mjs` ([docs/component-lint.md](../../docs/component-lint.md)).
+The command line is `runLint({argv, adapters, name})` from `veriss-adapter-core/cli` ([docs/component-lint.md](../../docs/component-lint.md)):
+`tools/css-lint.mjs` runs it with every adapter of the workspace, and the `veriss-svelte` and `veriss-linaria` bins with
+their own. It returns the exit status (1 on any error, 2 on a usage error).

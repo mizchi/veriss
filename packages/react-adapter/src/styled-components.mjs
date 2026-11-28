@@ -10,7 +10,7 @@
 // leaves its declaration out (never guessed) and is reported: U_STYLED_THEME, U_STYLED_VALUE, U_STYLED_INTERPOLATION.
 import postcss from 'postcss';
 import { parse } from '@babel/parser';
-import { merge, choose } from '@mizchi/veriss-adapter-core';
+import { merge, choose } from 'veriss-adapter-core';
 
 const UNK = Symbol('unknown'), SYM = Symbol('symbol'), PROPS = Symbol('props'), FN = Symbol('function'), NS = Symbol('namespace'), NATIVE = Symbol('native');
 // pure globals a helper may call (only when the module does not define the name itself)

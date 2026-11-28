@@ -1,9 +1,9 @@
-# @mizchi/veriss-react
+# veriss-react
 
 A React (JSX/TSX) adapter for `veriss`, with the style systems that leave a static stylesheet.
 
 ```js
-import {analyzeReact} from '@mizchi/veriss-react';
+import {analyzeReact} from 'veriss-react';
 analyzeReact(source, {pageCSS, viewport, accessibility: true});            // StyleX or Linaria in the module
 analyzeReact(source, {pageCSS, viewport, css: readFileSync('app.css', 'utf8')}); // plain classNames
 ```
@@ -58,12 +58,12 @@ on a styled element and `.attrs` are Unknown.
 Styled components, `css``` fragments and constants imported from other modules (`import * as Styled from './styled'`,
 `<Styled.Container>`, `${trimVertical}` from a typography module) are read through `resolveModule(specifier,
 importerFile) -> {file, source} | null`; each template is evaluated in the module that holds it, and its warnings carry
-that module's file and line. `nodeModuleResolver()` (`@mizchi/veriss-react/resolve-node`) reads relative specifiers from the file
+that module's file and line. `nodeModuleResolver()` (`veriss-react/resolve-node`) reads relative specifiers from the file
 system with the usual extensions and index files; packages are not read. Without a resolver, an imported component is
 Unknown and says so.
 
 ```js
-import {nodeModuleResolver} from '@mizchi/veriss-react/resolve-node';
+import {nodeModuleResolver} from 'veriss-react/resolve-node';
 analyzeReact(source, {pageCSS, viewport, theme, file: '/abs/Card.tsx', resolveModule: nodeModuleResolver(), selectors: true});
 ```
 

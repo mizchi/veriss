@@ -141,7 +141,7 @@ tools/gate.sh                                     # push の前に毎回。20〜
 - 複数の PR が同じ箇所(チェックリストの末尾の「残り」の直前)に書き足すと、毎回そこが衝突する。git の rerere は以前の解き方を
   黙って再適用し、片方の記述を落とした。この repo では rerere を切ってある。解いたら必ず中身を確かめる
 - この環境の `git diff` は外部の diff(difftastic)を通すので、出力はパッチにならない。パッチを取るときは `git diff --no-ext-diff`
-- pnpm の git 依存では `workspace:*` が解決しない(内部パッケージは peerDependencies `*`)。`font_ffi.js` のビルド結果は `.gitignore` の否定でコミットしている
+- pnpm の git 依存では `workspace:*` が解決しない(内部パッケージは peerDependencies で、公開するものは `^<version>`)。`font_ffi.js` のビルド結果は `.gitignore` の否定でコミットしている
 
 ### ブラウザーでの実測と e2e
 
