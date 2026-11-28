@@ -18,10 +18,10 @@ const run = (dir, script) => {
   return {status: r.status, stdout: r.stdout, stderr: r.stderr};
 };
 
-// Error and warning codes per file in the text output: "src/broken/X.svelte:12  error    CODE  …".
+// Error and warning codes per file in the text output: "src/broken/X.svelte:12  error    CODE  …" (or file:line:column).
 const codesByFile = text => {
   const out = new Map();
-  for (const m of text.matchAll(/^src\/broken\/([^:\s]+)(?::\d+)?\s+(?:error|warning)\s+(\S+)/gm)) {
+  for (const m of text.matchAll(/^src\/broken\/([^:\s]+)(?::\d+){0,2}\s+(?:error|warning)\s+(\S+)/gm)) {
     if (!out.has(m[1])) out.set(m[1], new Set());
     out.get(m[1]).add(m[2]);
   }

@@ -15,7 +15,10 @@ Card.vue:25  warning  W_CSS_SELECTOR_UNMATCHED  .empty.active matches no element
 Card.vue  info     ASSUMPTION  v-for is checked at 0, 2 items, all items taking the same branch choices
 ```
 
-error が 1 件でもあれば終了コードは 1 です。
+1 行は `ファイル:行  重大度  コード  メッセージ  [状態]` で、コンパイラが列を返す指摘(下の `E_ADAPTER_COMPILE`)は `ファイル:行:列` です
+(`--format json` では `column`)。error が 1 件でもあれば終了コードは 1 です。引数の誤りは終了コード 2 で、何も検査しません。知らない
+オプションもその一つで、いちばん近い既知のオプションを示します(`css-lint: unknown option --image; did you mean --images?`)。
+以前は知らない `--xxx` が次の引数を値として黙って取っていました。値を取るオプションに値がないとき(最後の `--css` など)も 2 です。
 
 npm では、Svelte と Linaria の検査を CLI 付きの package として配っています。オプションと出力は `css-lint` と同じです(実装は
 `veriss-adapter-core/cli` の `runLint` 一つ)。
@@ -45,6 +48,32 @@ npx veriss-linaria --viewport 320-1280 src/**/*.tsx   # .js / .jsx / .ts / .tsx�
 | `--images <file.json>` | なし | 画像ファイルの自然な大きさ(`{"/logo.png": {"width": 120, "height": 30}}`)。`height: auto` の img の高さなどを、読み込むファイルの比で決める |
 | `--trust-image-attributes` | なし | `--images` にないファイルの img の `width` / `height` 属性を、ファイルの大きさとみなす(読み込み前の配置を検査する)。仮定として info に出す。付けないと、その比で大きさが決まる img(`height: auto` など)は検査しない(`U_LAYOUT_IMAGE`、#55)。幅記述子のある `srcset` の img はファイルが決まらないので、これだけが効く |
 | `--format text\|json` | `text` | 出力形式 |
+
+## コンパイルできないコンポーネント(`E_ADAPTER_COMPILE`)
+
+フレームワークのコンパイラが拒否するコンポーネントはビルドできないので、その位置の error になります。checker は止まらず、残りの
+ファイルも検査します。たとえば Svelte 5 は `<p>` の中の `<div>` を拒否します(HTML の解析器は `<div>` の前で `<p>` を閉じるため):
+
+```
+src/broken/ArticleMeta.svelte:5:1  error    E_ADAPTER_COMPILE  the component does not compile (element_invalid_closing_tag_autoclosed): `</p>` attempted to close element that was already automatically closed by `<div>` (cannot nest `<div>` inside `<p>`); nothing else in it was checked
+    fix: a <p> holds phrasing content only (text, <span>, <a>, <strong>, <img>…), so the HTML parser closes it before the <div>: make the <p> a <div> container, or make the <div> inside it a <span>
+```
+
+- Svelte: `svelte/compiler` のすべての `CompileError`。コード(`element_invalid_closing_tag_autoclosed`、`js_parse_error` など)と
+  メッセージは Svelte のもの。「cannot nest `<X>` inside `<Y>`」には内容モデルの直し方を出し、ほかは汎用の直し方を出す。
+- React(Linaria・StyleX を含む): Babel の構文エラー。import した module の中のものは、その module のファイルと位置で出す。
+  Linaria の `css` のテンプレートの CSS が読めないとき(閉じていないブロックなど)は、styled-components の `U_STYLED_CSS` と同じく
+  Unknown(`U_LINARIA_CSS`)にし、そのクラスの規則なしで検査を続ける。
+- Vue: SFC の解析エラー(閉じていないタグなど)と `<script setup>` の構文エラー。以前は解析エラーは info(`U_VUE_PARSE`)で、
+  `<script setup>` の構文エラーは黙って無視していた。今はどちらも error。Vue の解析器は立ち直るので、立ち直ったテンプレートは
+  続けて検査する。
+- パーサーが立ち直れないとき(Svelte と React)は、メッセージの最後に「nothing else in it was checked」と付き、そのファイルの
+  ほかの検査はしない。
+- API では、adapter はコンパイラの例外を投げず、`compileErrors`(`{code?, message, line, column, file?}`)を持つ結果を返す
+  (`veriss-adapter-core` の `notCompiled`)。`lint` がそれを `E_ADAPTER_COMPILE` にする。
+- コンパイルの誤りではない例外(checker の不具合)は、そのファイルについての `W_LINT_ANALYSIS_FAILED`(warning)になり、残りの
+  ファイルは検査を続ける。状態ごとの解析の例外も同じコードの warning になる。どちらも checker の不具合なので、コンポーネントを添えて
+  報告してください。
 
 ## ブラウザーごとの UA スタイル(`--ua`)
 

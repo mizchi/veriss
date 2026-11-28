@@ -40,11 +40,13 @@ src/broken/TagList.svelte:8  warning  E_A11Y_LIST  spec: .tag is a list item out
     fix: put only li (and script/template) directly inside ul/ol
 src/broken/ProfileCard.svelte  info     ASSUMPTION  1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
 
-7 error(s), 2 warning(s), 30 not checked or assumed
+9 error(s), 3 warning(s), 30 not checked or assumed
 ```
 
-1 行が 1 件です。`ファイル:行  重大度  コード  メッセージ  [状態]` の順で、次の行の `fix:` が直し方です。
-最後の行が件数のまとめで、`error` が 1 件でもあれば終了コードは 1、なければ 0、引数の誤り(ファイルがない、など)は 2 です。
+1 行が 1 件です。`ファイル:行  重大度  コード  メッセージ  [状態]` の順で、次の行の `fix:` が直し方です。コンパイラが列を返す
+指摘(下の「コンパイルできないコンポーネント」)は `ファイル:行:列` です。
+最後の行が件数のまとめで、`error` が 1 件でもあれば終了コードは 1、なければ 0、引数の誤り(ファイルがない、知らないオプション、
+値のないオプション)は 2 です。
 各ファイルを何状態・何秒で解いたか(`ProfileCard.svelte: 1 states in 0.1s`)は stderr に出ます。
 
 ### 重大度
@@ -73,7 +75,7 @@ src/broken/ProfileCard.svelte  info     ASSUMPTION  1 text box(es) sized by assu
 
 ### JSON
 
-`--format json` で、同じ内容が配列で出ます(`file`、`line`、`severity`、`code`、`message`、`fix`、`states`、spec の行は `tier`)。
+`--format json` で、同じ内容が配列で出ます(`file`、`line`、列があれば `column`、`severity`、`code`、`message`、`fix`、`states`、spec の行は `tier`)。
 stderr の時間の行と、最後のまとめの行は出ません。
 
 ```json
@@ -92,6 +94,7 @@ stderr の時間の行と、最後のまとめの行は出ません。
 | `--images images.json` | なし | 画像ファイルの自然な大きさ(`{"/avatar.png": {"width": 128, "height": 128}}`)。ないと、高さを確保しない img は `U_LAYOUT_IMAGE`(not checked)になり、`E_LAYOUT_IMAGE_UNRESERVED` は出ない。ビルドの時に画像の header から作るのが確実 |
 | `--trust-image-attributes` | なし | `--images` にない img の `width` / `height` 属性をファイルの大きさとみなす(仮定として info に出る) |
 | `--ua chromium,firefox,webkit` | Chromium の既定 | フォームの部品の UA スタイルをブラウザーごとに使い、一部のブラウザーでだけ成り立つ指摘にブラウザーを添える。`--suggest-reset chromium,firefox,webkit` は、その差を消す最小の reset を出して終わる |
+| `--profile strict` | `recommended` | `recommended` に、内容モデルだけが禁じる構造(`W_HTML_CONTENT_MODEL`: `<button>` や `<span>` の中の `<div>` など)を warning として足す。ブラウザーは書いたとおりに描くので recommended には入っていない。ベストプラクティスとして直したいときに選ぶ([component-lint.md](../component-lint.md) の「親子の構造と `strict`」) |
 | `--profile all` | `recommended` | ブラウザーと照合していないルールも error / warning として出す。最初は recommended のまま使い、info の「outside the recommended rules」を読むほうがよい |
 
 `--ua` の例(幅 100px のボタンの「Publish now」を Roboto で測る):
@@ -100,8 +103,29 @@ stderr の時間の行と、最後のまとめの行は出ません。
 U.svelte:2  error    E_LAYOUT_CONTENT  .publish requires 86.72px but receives 84px on inline axis at viewport 800px × 690px (in chromium, webkit; not in firefox)
 ```
 
-**オプション名の綴りに注意**: CLI は知らない `--xxx` を、次の引数を値として取るオプションとして読みます。`--image images.json`
-と書くとエラーにならず、`images.json` が消費されて画像の大きさが渡りません。`not checked` が減らないときは綴りを疑ってください。
+知らないオプションは引数の誤り(終了コード 2)で、何も検査せずに、いちばん近い既知のオプションを示します:
+
+```
+veriss-svelte: unknown option --image; did you mean --images? (run with no files for the usage)
+```
+
+## コンパイルできないコンポーネント(`E_ADAPTER_COMPILE`)
+
+コンパイラが拒否するコンポーネントはビルドできないので、その位置の `error` になります。checker は止まらず、残りのファイルも検査します。
+Svelte 5 は `<p>` の中の `<div>` を拒否します(HTML の解析器が `<div>` の前で `<p>` を閉じるため。例: [ArticleMeta.svelte](../../examples/svelte/src/broken/ArticleMeta.svelte)):
+
+```
+src/broken/ArticleMeta.svelte:5:1  error    E_ADAPTER_COMPILE  the component does not compile (element_invalid_closing_tag_autoclosed): `</p>` attempted to close element that was already automatically closed by `<div>` (cannot nest `<div>` inside `<p>`); nothing else in it was checked
+    fix: a <p> holds phrasing content only (text, <span>, <a>, <strong>, <img>…), so the HTML parser closes it before the <div>: make the <p> a <div> container, or make the <div> inside it a <span>
+```
+
+Svelte のコンパイルエラー、JSX / TSX の構文エラー(import した module の中のものはそのファイルで)、Vue SFC の解析エラーと
+`<script setup>` の構文エラーが対象です。パーサーが立ち直れない Svelte と React では、そのファイルのほかの検査はしません
+(「nothing else in it was checked」)。Vue の解析エラーは以前は info(`U_VUE_PARSE`)でしたが、今は error で、立ち直った
+テンプレートは続けて検査します。
+
+コンパイルの誤りでない例外は checker の不具合で、そのファイルの `W_LINT_ANALYSIS_FAILED`(warning)になり、残りのファイルは検査を
+続けます。状態ごとの解析の例外も同じコードの warning になります。コンポーネントを添えて報告してください。
 
 ## package.json と CI
 
@@ -180,7 +204,8 @@ Svelte はセレクタのすべての部分をスコープするので、`.theme
   `th` の `scope`
 - HTML の解析で組み替わる構造(`<p>` の中の `<div>`、入れ子の `<a>`、`<form>` の中の `<form>`)は `W_HTML_RESTRUCTURED` ですが、
   これはソースの HTML の位置から判定するので、DOM API で木を組み立てる React には当たりません(下の「検出しないもの」)。
-  Svelte では、Svelte のコンパイラ自身が `<p>` の中の `<div>` を拒否します。
+  Svelte では、Svelte のコンパイラ自身が `<p>` の中の `<div>` を拒否し、checker はそれを `E_ADAPTER_COMPILE`(error)として出します
+  (上の「コンパイルできないコンポーネント」)。
 
 内容モデルのルールは別の PR で増えています。一覧の文書ができたら、ここからリンクします。
 
@@ -215,8 +240,6 @@ Svelte はセレクタのすべての部分をスコープするので、`.theme
 
 - **React(Linaria)の `<p>` の中の `<div>`**: 何も出ない。React は DOM API で木を作るので `W_HTML_RESTRUCTURED` の対象外。
   実行時の React の警告(validateDOMNesting)とハイドレーションの不一致で気づくことになる。
-- **Svelte のコンパイルエラー**: `<p>` の中の `<div>` のようにコンパイラが拒否するものは、checker の指摘ではなく、例外の
-  スタックトレース(終了コード 1)になる。メッセージは Svelte のもの(`element_invalid_closing_tag_autoclosed`)。
 - **配置が Unknown の部分の内容モデル**: `ul` の外の `li` の `E_A11Y_LIST` は、その部分の配置が解けたときにだけ出る。
   例の `TagList.svelte` は、タグの文字の箱に幅がない(`.text` の幅を消す)と `U_LAYOUT_FLEX`(not checked)になり、`E_A11Y_LIST` も
   消える(`E_A11Y_NAME` はマークアップから出る)。`not checked` が出ている部分は、内容モデルも見ていないと考える。
