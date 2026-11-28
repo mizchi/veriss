@@ -78,7 +78,7 @@ tools/gate.sh                                     # push の前に毎回。単�
 |---|---|---|---|
 | 手元 `tools/gate.sh` | push の前 | root と全 package の単体テスト(並列、1 分ほど) | `tools/gate.sh` |
 | 手元 `tools/gate.sh --full` | 必要なときだけ | 以前の gate(単体テスト、eval、css-mistakes の e2e を 3 ブラウザー。20〜30 分) | `tools/gate.sh --full` |
-| `ci.yml`(Linux) | PR と main への push | `unit`(単体テスト)、`e2e`(layout の e2e 全部を 3 ブラウザー × 4 shard)、`eval`(component-lint の eval 4 回分を記録と比べる。いまは止めない) | PR を開く、または `tools/gate.sh --remote` |
+| `ci.yml`(Linux) | PR と main への push | `unit`(単体テスト)、`e2e`(layout の e2e 全部を 3 ブラウザー × 4 shard)、`eval`(component-lint の eval 4 回分が記録と同じこと) | PR を開く、または `tools/gate.sh --remote` |
 | `fuzz.yml`(Linux) | 毎晩 | 安全なサブセットの fuzz(既定 5000 ケース × seed 1,2,3 × 3 ブラウザー) | `gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit` |
 | `macos.yml`(macOS) | 毎週 | platform で UA プロファイルを選ぶ spec(ua-profiles、reset-matrix)を 3 ブラウザー。`webkit-macos` / `firefox-macos` の照合 | `gh workflow run macos.yml` |
 | `coverage.yml` | 手動だけ | 安全なサブセットの被覆(`tools/subset-coverage.mjs`、mizchi/vlmkit を `.corpus/vlmkit` に checkout して渡す) | `gh workflow run coverage.yml` |
@@ -158,18 +158,15 @@ tools/gate.sh                                     # push の前に毎回。単�
     `/usr/share/fonts` から読む。CI は `tools/ci/install-fonts.sh` でそのフォント(Inter は記録と同じ 4.0)と fontconfig の
     `sans-serif` / `system-ui` → Inter を入れ、通る。Ubuntu 26.04 の Inter 4.1 では "Pricing" が 0.09px ずれる
   - e2e の F130(スクロールバー)、100vw とクラシックスクロールバー、invalid-fields-and-messages、フォントの差し替えの警告は Linux で通る
-  - component-lint の eval の 320〜375px の行の揺れは Linux では出ない(Roboto をファイルで渡すので)
+  - component-lint の eval の 320〜375px の行の揺れは Linux では出ない。記録は CI で取るので、手元の `--full` で eval が変わっても push は止めない
   - svelte-adapter の `text-max-length` は実時間を測る。CI では上限を 30s にした(runner は 3.5 倍ほど遅い)。gate.sh はこれだけ他と並べずに回す
-- CI(Linux)でも落ちるもの。環境ではなく本物の所見(PR #83 で報告):
-  - `layout-cls-facts` の inert sizes on a display: inline span(3 ブラウザー): 解析器が inline の span の `aspect-ratio:1` に
-    `W_LAYOUT_DECLARATION_INERT` を出さない(width・height などには出す)。ブラウザーを使う前の静的な判定で落ちる
-  - 同じ spec の transition of display(Firefox)、inert text-overflow と inert resize(WebKit): Chromium で測った警告を
-    Firefox・WebKit でも比べていて、そのブラウザーでは描画が違う(警告がそのブラウザーでは正しくないか、spec が Chromium 専用)
-  - `layout-svelte` の anonymous flex items of text(Chromium): Linux の Chromium が Roboto の文字を model と 0.5625px 違う幅に組む
-  - fuzz(Firefox、seed 3 の index 63): `white-space: nowrap` の "Sign in" に 57.133px 要るところ 57.111px(514/9)しかないと
-    veriss は違反を出すが、Firefox(LayoutUnit 1/60px)ははみ出さない
-  - component-lint の eval: 記録が `U_LAYOUT_IMAGE`(img の width/height 属性の比)より前のもので、main のコードとずれている。
-    ci.yml の eval は止めない job のまま。記録を取り直せば止める job にできる
+- CI(Linux)で初めて見つかり、PR #83 で直したもの:
+  - inline の span の `aspect-ratio` が `W_LAYOUT_DECLARATION_INERT` にならなかった(style の段で捨てた値が auto に見えていた)
+  - 足りない幅が 1/16px 以内の違反は `U_LAYOUT_ROUNDING`(Unknown)。Firefox は 1/60px で組み、0.022px の不足を描かなかった(fuzz seed 3 の index 63)
+  - grid container の `text-overflow` は inert として報告しない(WebKit は匿名の item の文字に省略記号を描く)。flex は 3 ブラウザーで inert
+  - e2e の期待をブラウザーごとに: Firefox は display を transition しない。WebKit は Playwright の mouse で角をドラッグしても大きさが変わらない(対照は Chromium・Firefox で測る)
+  - Linux の Chromium は既定で字形の送り幅を hinting する(フォントファイルの文字が 1 語で 0.5625px 広がった)。chromium の project は `--font-render-hinting=none`(macOS と同じ、モデルと同じ)
+  - component-lint の eval の記録は CI(Linux)で取り直した(`U_LAYOUT_IMAGE` の分)。ci.yml の eval は止める job。取り直すときは run の `component-lint-eval` artifact を commit する
 - ゲートの実行中に作業ツリーを変えると、結果がどの版のものか分からなくなる。ゲートの間はツリーの外(一時ディレクトリ)で準備する
 - `css-mistakes.test.mjs` は 1 ファイルで 20 秒以上かかる(止まっているのではない)
 - ブラウザーが Playwright の期待する場所にない環境(クラウドのセッションなど)では、e2e も `tools/eval-component-lint.mjs` も起動の時点で

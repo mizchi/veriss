@@ -2,7 +2,7 @@
 # default; this workflow runs the rest on Linux:
 #   unit  root tests and every package's tests
 #   e2e   the layout e2e (playwright.layout.config.mjs), one job per browser x shard
-#   eval  the component-lint eval (before + 3 attempts) compared with evals/results/component-lint/
+#   eval  the component-lint eval (before + 3 attempts) must reproduce evals/results/component-lint/
 name: ci
 on:
   pull_request:
@@ -82,9 +82,8 @@ jobs:
   eval:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Not blocking yet: the committed results were recorded on macOS (docs/handoff.md). Make it blocking once Linux
-    # reproduces them.
-    continue-on-error: true
+    # evals/results/component-lint/ is recorded by this job (Linux, Chromium of the pinned Playwright): to record again,
+    # download the component-lint-eval artifact of a run and commit its files.
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
