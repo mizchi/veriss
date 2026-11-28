@@ -34,7 +34,8 @@ function resolve(parents, nested) {
 // The plain nodes of one style rule with nested children.
 function flattenRule(rule) {
   const parents = rule.selectors;
-  if (parents.some(p => /::/.test(p))) fail(`${rule.selector}: nesting under a pseudo-element is not modeled`);
+  // Declarations (also inside a nested conditional group rule) apply to a pseudo-element; a nested style rule does not.
+  const pseudo = parents.some(p => /::/.test(p));
   const out = [];
   let current = null;
   const declarations = () => { if (!current) { current = rule.clone({ nodes: [] }); out.push(current); } return current; };
@@ -42,6 +43,7 @@ function flattenRule(rule) {
     if (node.type === 'decl' || node.type === 'comment') { declarations().append(node.clone()); continue; }
     current = null; // declarations after a nested rule start a new rule after it
     if (node.type === 'rule') {
+      if (pseudo) fail(`${rule.selector}: nesting under a pseudo-element is not modeled`);
       const nested = node.clone({ selector: resolve(parents, node.selectors).join(', ') });
       out.push(...(nested.nodes.some(n => n.type !== 'decl' && n.type !== 'comment') ? flattenRule(nested) : [nested]));
     } else if (node.type === 'atrule' && conditional.has(node.name.toLowerCase()) && node.nodes) {

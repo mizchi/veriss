@@ -126,7 +126,38 @@ const decoration = /^(?:background-(?:position|size|repeat|clip|origin|attachmen
 // The selector with its pseudo-classes and pseudo-elements removed (:not(), :is(), :has() and states included; tags,
 // classes, ids, attributes and combinators kept): fewer conditions, so it matches a superset of the boxes the selector
 // matches, in any state. An empty compound becomes *. Null when even that does not compile.
+// The pseudo-elements of a control's own parts (the file button, a number field's spin buttons, a search field's
+// decorations, a date field's edit fields, the inner focus border of a button) and the Firefox UI-validity states, which
+// reset stylesheets restyle: the elements that can have them, so a rule on one marks only those (a superset: every
+// engine's part names together, whichever engine reads the rule).
+const dateTypes = ['date', 'time', 'datetime-local', 'month', 'week'];
+const typed = types => types.map(t => `input[type="${t}" i]`).join(', ');
+const controlParts = [
+  [/^(?:file-selector-button|-webkit-file-upload-button)$/i, typed(['file'])],
+  [/^-webkit-(?:inner|outer)-spin-button$/i, typed(['number', ...dateTypes])],
+  [/^-webkit-search-(?:decoration|cancel-button|results-button|results-decoration)$/i, typed(['search'])],
+  [/^-webkit-(?:datetime-edit(?:-[a-z-]+)?|date-and-time-value)$/i, typed(dateTypes)],
+  [/^-webkit-calendar-picker-indicator$/i, `${typed(dateTypes)}, input[list]`],
+  [/^-moz-focus-inner$/i, `button, ${typed(['button', 'submit', 'reset', 'file', 'color'])}`],
+  // the top layer's backdrop: a modal dialog or an open popover (a fullscreen element is a runtime state)
+  [/^backdrop$/i, 'dialog, [popover]'],
+];
 function candidateSelector(text) {
+  // A control part ends the selector: the candidate is its originating compound, narrowed to the controls that have it.
+  const part = /::([\w-]+)\s*$/.exec(text), owner = part && controlParts.find(([name]) => name.test(part[1]))?.[1];
+  if (owner) {
+    const base = candidateSelector(text.slice(0, part.index).trim() || '*');
+    try { return base && compileSelector(`${base.source}:is(${owner})`); } catch { return null; }
+  }
+  // :host, :host() and :host-context() match only in a shadow tree, which a document's stylesheet never reaches (the
+  // analysis has no shadow trees: a declarative one is Unknown in the HTML adapter).
+  if (/:host(?:-context)?(?![\w-])/i.test(text.replace(/\[[^\]]*\]/g, ''))) return compileSelector(':not(*)');
+  // :-moz-ui-invalid / :-moz-ui-valid in the subject: form controls only.
+  const last = text.split(/[\s>+~]+/).at(-1) ?? '';
+  if (/:-moz-ui-(?:in)?valid(?![\w-])/i.test(last)) {
+    const base = candidateSelector(text.replace(/:-moz-ui-(?:in)?valid(?![\w-])/gi, ''));
+    try { return base && compileSelector(`${base.source}:is(input, select, textarea)`); } catch { return null; }
+  }
   let out = '';
   for (let i = 0; i < text.length;) {
     const c = text[i];
@@ -135,7 +166,13 @@ function candidateSelector(text) {
     if (c === ':') {
       let j = i + 1; if (text[j] === ':') j++;
       while (j < text.length && /[\w-]/.test(text[j])) j++;
+      const name = text.slice(i, j).toLowerCase(), open = j;
       if (text[j] === '(') { let depth = 0; for (; j < text.length; j++) { if (text[j] === '(') depth++; else if (text[j] === ')' && --depth === 0) { j++; break; } } }
+      // :is() / :where(): the candidates of its arguments (each a superset), so the rule keeps their conditions.
+      if ((name === ':is' || name === ':where') && text[open] === '(') {
+        const args = postcss.list.comma(text.slice(open + 1, j - 1)).map(arg => candidateSelector(arg.trim()));
+        if (args.length && args.every(Boolean)) out += `:is(${args.map(a => a.source).join(', ')})`;
+      }
       i = j; continue;
     }
     out += c; i++;
@@ -156,7 +193,7 @@ function markRule(candidates, message, node, contexts, layer, file, preferences,
 }
 // Declarations that only repaint (the state paint list, and custom properties).
 const paintsOnly = node => (node.nodes ?? []).every(d => d.type !== 'decl' || d.prop.startsWith('--') || statePaint.test(d.prop.toLowerCase()));
-const statePaint = /^(?:z-index|color|clip|clip-path|background(?:-.*)?|border-(?:(?:top|right|bottom|left)-)?color|border-radius|outline(?:-.*)?|box-shadow|text-shadow|text-decoration(?:-.*)?|text-underline-offset|cursor|opacity|visibility|pointer-events|animation(?:-.*)?|transition(?:-.*)?|color-scheme)$/;
+const statePaint = /^(?:z-index|color|clip|clip-path|background(?:-.*)?|border-(?:(?:top|right|bottom|left)-)?color|border-radius|outline(?:-.*)?|box-shadow|text-shadow|text-decoration(?:-.*)?|text-underline-offset|cursor|opacity|visibility|pointer-events|animation(?:-.*)?|transition(?:-.*)?|interpolate-size|color-scheme)$/;
 // Paint and hit-testing facts for the accessibility rules (never geometry).
 // An element that is the containing block of its fixed (and absolute) descendants: a transform, a backdrop filter,
 // transform-style: preserve-3d (not on an inline box; even where a grouping property flattens it, measured in Chromium,
@@ -664,7 +701,8 @@ function expand(property, value) {
   if (property === 'word-break' || property === 'line-break') { const v = value.trim().toLowerCase(), allowed = property === 'word-break' ? ['normal', 'break-all', 'keep-all', 'break-word', 'auto-phrase'] : ['auto', 'loose', 'normal', 'strict', 'anywhere'];
     if (!wide.has(v) && !allowed.includes(v)) throw new Error(`Unsupported ${property}: ${value}`); return [[property, v]]; }
   // F84: tab-size is kept so computeStyle can tell an inert one (white-space collapses tabs) from one that moves text.
-  if (property === 'tab-size') { const v = value.trim().toLowerCase(); if (!wide.has(v) && !/^(?:\d+(?:\.\d+)?|\d+(?:\.\d+)?px)$/.test(v)) throw new Error(`Unsupported tab-size: ${value}`); return [['tab-size', v]]; }
+  // -moz-tab-size (sanitize.css): Firefox's alias, dropped by Chromium and WebKit. Kept apart, and Unknown like tab-size.
+  if (property === 'tab-size' || property === '-moz-tab-size') { const v = value.trim().toLowerCase(); if (!wide.has(v) && !/^(?:\d+(?:\.\d+)?|\d+(?:\.\d+)?px)$/.test(v)) throw new Error(`Unsupported ${property}: ${value}`); return [[property, v]]; }
   if (Object.hasOwn(neutral, property)) {
     if (wide.has(value) || neutral[property].includes(value.trim().toLowerCase())) return [];
     throw new Error(`Unsupported ${property}: ${value} (it changes line breaking, shaping, containing blocks or paint, which are not modeled)`);
@@ -801,6 +839,8 @@ export function repairStrayColons(css) {
 export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error' } = {}) {
   sheets = sheets.map(sheet => { const { css, repaired } = repairStrayColons(sheet.css); return { ...sheet, css, repaired }; });
   let repairedOffsets = [];
+  // A reset stylesheet is CSS this rule was not written for: its shorthand conflicts warn (the later declaration wins).
+  const resetFiles = new Set(sheets.filter(sheet => sheet.kind === 'reset').map(sheet => sheet.file));
   // Findings of the syntax stage, one shape: { code, ...data } (ADR-0016 M3). The rules/syntax-notes.mjs catalog words them.
   const notes = [], note = (code, data) => { notes.push({ code, ...data }); }, notesOf = code => notes.filter(n => n.code === code);
   const dependentDeclarations = [], markerSizing = [], firstPseudo = [], radiusRules = [], contentRules = [], userSelectNone = [], rules = [], layers = [], keyframes = new Set(), keyframeRules = new Map(), declaredProperties = new Set(), transitionedCustom = [], keyframeFrames = new Map(), fontFaces = [], registered = new Map(), defaultNamespace = [], startingRules = [], unreadContainers = [];
@@ -1179,12 +1219,12 @@ export function parseLayoutCSS(sheets, diagnostic, { shorthandConflicts = 'error
         const css=location(conflict.later);
         // 'warning' (CSS this rule was not written for, such as an adapter's CSS-in-JS): reported, and the rule is kept
         // (within one rule the later declaration wins)
-        if(shorthandConflicts==='warning') { note('W_CSS_SHORTHAND_CONFLICT',{selector:node.selector,properties:conflict.properties,longhands:conflict.longhands,later:css,earlier:location(conflict.earlier)}); continue; }
+        if(shorthandConflicts==='warning' || resetFiles.has(filename)) { note('W_CSS_SHORTHAND_CONFLICT',{selector:node.selector,properties:conflict.properties,longhands:conflict.longhands,later:css,earlier:location(conflict.earlier)}); continue; }
         diagnostic('E_CSS_SHORTHAND_CONFLICT',cssWriteConflictMessage(conflict),css.line,filename,
           {severity:'error',css,hint:conflict.hint,conflict:{properties:conflict.properties,longhands:conflict.longhands},
             related:[{css:location(conflict.earlier),message:`Earlier ${conflict.properties[0]} declaration`}]});
       }
-      if(conflicts.length && shorthandConflicts!=='warning') continue;
+      if(conflicts.length && shorthandConflicts!=='warning' && !resetFiles.has(filename)) continue;
       // F123: isolation: isolate next to mix-blend-mode on the same element isolates its descendants, not the element: it
       // still blends with what is behind it (measured in Chromium, Firefox and WebKit). The parent needs the isolation.
       { const decls = node.nodes.filter(d => d.type === 'decl'), last = prop => decls.findLast(d => d.prop.toLowerCase() === prop);
@@ -1450,7 +1490,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     'column-gap': 'normal', 'column-span': 'none', 'grid-template-areas': 'none', 'grid-column': 'auto', 'grid-row': 'auto',
     'background-color': 'transparent', 'background-image': 'none',
     'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none',
-    hyphens: inherited.hyphens ?? 'manual', 'object-fit': 'fill', 'object-position': '50% 50%', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': inherited['text-wrap-mode'] ?? 'white-space', 'text-wrap-style': inherited['text-wrap-style'] ?? 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', clip: 'auto', 'clip-path': 'none', ...Object.fromEntries(['margin', 'padding'].flatMap(kind => ['top', 'right', 'bottom', 'left'].map(side => [`scroll-${kind}-${side}`, kind === 'padding' ? 'auto' : '0']))), 'color-scheme': inherited['color-scheme'] ?? 'normal', cursor: inherited.cursor ?? 'auto', 'list-style-type': inherited['list-style-type'] ?? 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s',
+    hyphens: inherited.hyphens ?? 'manual', 'tab-size': inherited['tab-size'] ?? '8', '-moz-tab-size': inherited['-moz-tab-size'] ?? '8', 'object-fit': 'fill', 'object-position': '50% 50%', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': inherited['text-wrap-mode'] ?? 'white-space', 'text-wrap-style': inherited['text-wrap-style'] ?? 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', clip: 'auto', 'clip-path': 'none', ...Object.fromEntries(['margin', 'padding'].flatMap(kind => ['top', 'right', 'bottom', 'left'].map(side => [`scroll-${kind}-${side}`, kind === 'padding' ? 'auto' : '0']))), 'color-scheme': inherited['color-scheme'] ?? 'normal', cursor: inherited.cursor ?? 'auto', 'list-style-type': inherited['list-style-type'] ?? 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s',
     'table-layout': 'auto', // HTML UA: table { border-collapse: separate; border-spacing: 2px } (a UA rule on table, not inherited from above).
     'border-collapse': box.tag === 'table' ? 'separate' : inherited['border-collapse'] ?? 'separate', 'border-spacing': box.tag === 'table' ? '2px' : inherited['border-spacing'] ?? '0', 'caption-side': inherited['caption-side'] ?? 'top', 'empty-cells': 'show',
     // HTML UA: thead, tbody, tfoot, tr { vertical-align: middle } and td, th { vertical-align: inherit }.
@@ -1476,6 +1516,10 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   // dl margins and the dd indent (1em / 40px) stay UA until reset; marquee is inline-block.
   if(box.tag==='dl') { values['margin-top']='ua'; values['margin-bottom']='ua'; }
   if(box.tag==='dd') values['margin-left']='ua';
+  // With a UA profile: the body and p margins, the same in Chromium, Firefox and WebKit (tools/css-baseline.mjs: body 8px,
+  // p 1em 0). The other UA margins (headings, lists, dl, dd) stay 'ua'.
+  if (uaProfile && !box.pseudo && box.tag === 'body') for (const side of ['top', 'right', 'bottom', 'left']) values[`margin-${side}`] = '8px';
+  if (uaProfile && !box.pseudo && box.tag === 'p') { values['margin-top'] = '1em'; values['margin-bottom'] = '1em'; }
   if(box.tag==='marquee') values.display='inline-block';
   // Tables keep their UA table-* display (unsupported) until the author restyles them; th is bold and centred.
   const tableDisplay = {table: 'table', caption: 'table-caption', thead: 'table-header-group', tbody: 'table-row-group', tfoot: 'table-footer-group', tr: 'table-row', th: 'table-cell', td: 'table-cell'};
@@ -1566,10 +1610,10 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
   if(box.popover==='dynamic') throw Object.assign(new Error('A dynamic popover attribute decides whether it renders'),{code:'U_LAYOUT_ELEMENT'});
   if(box.hiddenAttr==='until-found' || box.hiddenAttr==='dynamic') throw Object.assign(new Error(`hidden=${box.hiddenAttr === 'dynamic' ? '(dynamic)' : 'until-found'} is outside the modeled rendering`),{code:'U_LAYOUT_ELEMENT'});
   const ua = { ...values };
-  const initial = { ...defaults, ...textInitial, fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0',
+  const initial = { ...defaults, ...textInitial, 'tab-size': '8', '-moz-tab-size': '8', fill: 'black', stroke: 'none', 'list-style-position': 'outside', 'caret-color': 'auto', hyphens: 'manual', 'object-fit': 'fill', 'scroll-behavior': 'auto', 'overscroll-behavior-x': 'auto', 'overscroll-behavior-y': 'auto', 'scroll-snap-type': 'none', 'scroll-snap-align': 'none', resize: 'none', 'text-wrap-mode': 'white-space', 'text-wrap-style': 'auto', 'text-overflow': 'clip', 'line-clamp': 'none', 'box-orient': 'horizontal', 'touch-action': 'auto', 'table-layout': 'auto', clear: 'none', 'column-count': 'auto', 'column-width': 'auto', 'column-span': 'none', 'border-collapse': 'separate', 'border-spacing': '0', 'caption-side': 'top', 'empty-cells': 'show', 'vertical-align': 'baseline', 'outline-style': 'none', 'outline-width': 'medium', 'outline-color': 'currentcolor', 'outline-offset': '0', 'box-shadow': 'none', 'z-index': 'auto', 'content-visibility': 'visible', 'contain-intrinsic-block-size': 'none', isolation: 'auto', 'transform-style': 'flat', 'backface-visibility': 'visible', transform: 'none', 'transform-origin': 'origin(0 0.5 0 0.5)', translate: 'none', rotate: 'none', scale: 'none', 'backdrop-filter': 'none', filter: 'none', 'will-change': 'auto', 'justify-self': 'auto', 'justify-items': 'normal', 'color-scheme': 'normal', cursor: 'auto', 'list-style-type': 'disc', 'animation-name': 'none', 'animation-duration': '0s', 'animation-iteration-count': '1', 'animation-play-state': 'running', 'animation-direction': 'normal', 'animation-timing-function': 'ease', 'animation-delay': '0s', 'animation-fill-mode': 'none', 'animation-timeline': 'auto', 'transition-property': 'all', 'transition-duration': '0s', 'transition-timing-function': 'ease', 'transition-delay': '0s', color: 'canvastext', 'text-decoration-line': 'none', visibility: 'visible', 'pointer-events': 'auto', display: 'inline', 'white-space': 'normal', 'overflow-wrap': 'normal', 'writing-mode': 'horizontal-tb', direction: 'ltr', 'margin-left': '0', 'margin-right': '0', 'margin-top': '0', 'margin-bottom': '0',
     // A side's border width and style as the border properties keep them ($bw-/$bs-side): medium and none.
     ...Object.fromEntries(['top', 'right', 'bottom', 'left'].flatMap(side => [[`$bw-${side}`, '3px'], [`$bs-${side}`, 'none']])) };
-  const inheritedProperties = new Set(['white-space', 'overflow-wrap', 'word-break', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
+  const inheritedProperties = new Set(['tab-size', '-moz-tab-size', 'white-space', 'overflow-wrap', 'word-break', 'writing-mode', 'direction', 'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', ...textProperties, ...inheritedPaint]);
   const priorities = new Map(), sources = {},custom=new Map(),dormant={},overridden={}, candidates = {};
   // The declarations not modeled that apply here (kept apart from values, whose objects are pending substitutions), and
   // whether a rule the analysis cannot read may repaint the box.
@@ -1886,11 +1930,14 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
     else throw new Error(key === 'line-break' ? `Unsupported layout property: line-break (${values[key]} changes line breaking, which is not modeled)` : `Unsupported word-break: ${values[key]} (it changes line breaking, shaping, containing blocks or paint, which are not modeled)`);
   }
   // F84: white-space normal, nowrap and pre-line turn a tab into a space that collapses, so tab-size does nothing there
-  // (measured in Chromium, Firefox and WebKit). It is inherited, so only a box with no element inside is judged.
-  if (values['tab-size'] !== undefined) {
-    if (['8', 'initial', 'unset', 'revert', 'revert-layer'].includes(String(values['tab-size']))) delete values['tab-size'];
-    else if (!box.pseudo && ['normal', 'nowrap', 'pre-line'].includes(String(values['white-space'])) && !(box.children ?? []).some(c => !c.anonymous) && !(box.inline ?? []).length) { drop(values, 'tab-collapsed', 'tab-size', values['tab-size']); delete values['tab-size']; }
-    else throw new Error(`Unsupported tab-size: ${values['tab-size']} (it changes line breaking, shaping, containing blocks or paint, which are not modeled)`);
+  // (measured in Chromium, Firefox and WebKit). It is inherited (8 by default), and each box whose
+  // white-space keeps tabs (pre, pre-wrap, break-spaces) with a tab size other than 8 is Unknown (html { tab-size: 4 }
+  // in modern-normalize, sanitize.css and Tailwind Preflight changes nothing until a pre below it).
+  if (values['tab-size'] !== '8' || values['-moz-tab-size'] !== '8') {
+    const key = values['tab-size'] !== '8' ? 'tab-size' : '-moz-tab-size', tab = String(values[key]), own = sources[key];
+    if (!['normal', 'nowrap', 'pre-line'].includes(String(values['white-space']))) throw new Error(`Unsupported ${key}: ${tab}${own ? '' : ' (inherited)'} (it changes line breaking, shaping, containing blocks or paint, which are not modeled)`);
+    // A box with no element inside: the declaration does nothing (a box with elements inside passes it down).
+    if (own && !box.pseudo && !(box.children ?? []).some(c => !c.anonymous) && !(box.inline ?? []).length) drop(values, 'tab-collapsed', key, tab);
   }
   for (const [key, idle] of [['text-indent', ['0', '0px', 'initial', 'unset', 'revert', 'revert-layer']], ['text-align-last', ['auto', 'initial', 'unset', 'revert', 'revert-layer']]]) {
     if (values[key] === undefined || idle.includes(String(values[key]))) continue;

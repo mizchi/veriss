@@ -55,6 +55,7 @@ export const supportedDeclarations = {
   'text-underline-offset': v => v === 'auto' || length.test(v), '-webkit-line-clamp': v => v === 'none' || /^\d+$/.test(v),
   appearance: v => ['none', 'auto'].includes(v), 'touch-action': v => ['auto', 'none', 'manipulation', 'pan-x', 'pan-y', 'pinch-zoom', 'pan-x pan-y', 'pan-x pinch-zoom', 'pan-y pinch-zoom', 'pan-x pan-y pinch-zoom'].includes(v),
   'content-visibility': v => ['visible', 'auto', 'hidden'].includes(v),
+  'contain-intrinsic-size': v => /^(?:none|(?:auto )?(?:0|\d*\.?\d+px))(?: (?:auto )?(?:0|\d*\.?\d+px))?$/.test(v),
   transform: v => v === 'none' || (() => {
     const fns = v.match(/[a-z0-9]+\([^)]*\)/g) ?? [];
     if (!fns.length || v.replace(/[a-z0-9]+\([^)]*\)/g, '').trim()) return false;
