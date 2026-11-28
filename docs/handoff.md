@@ -79,7 +79,7 @@ tools/gate.sh                                     # push の前に毎回。単�
 | 手元 `tools/gate.sh` | push の前 | root と全 package の単体テスト(並列、1 分ほど) | `tools/gate.sh` |
 | 手元 `tools/gate.sh --full` | 必要なときだけ | 以前の gate(単体テスト、eval、css-mistakes の e2e を 3 ブラウザー。20〜30 分) | `tools/gate.sh --full` |
 | `ci.yml`(Linux) | PR と main への push | `unit`(単体テスト)、`e2e`(layout の e2e 全部を 3 ブラウザー × 6 shard。shard はテストごとに実測時間で切る。安全なサブセットの fuzz は固定の `regressions` だけ、`FUZZ_CASES=0`)、`eval`(component-lint の eval を before / run-1 / run-2 / run-3 の 4 job で)と `eval-compare`(4 つそろったときだけ記録と比べる)。どの job も数分 | PR を開く、または `tools/gate.sh --remote` |
-| `fuzz.yml`(Linux) | 毎日 03:17 JST(記録の日付は UTC。前日の日付で記録される) | 安全なサブセットの seed つき fuzz(既定 5000 ケース × seed 1,2,3 × 3 ブラウザーを 500 ケースずつ 90 job)。結果を `fuzz-data` branch に足し、[fuzz dashboard](https://mizchi.github.io/veriss/fuzz/) を出し直す | `gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit`(記録するときは `-f record=true`) |
+| `fuzz.yml`(Linux) | 毎日 03:17 JST(記録の日付は UTC。前日の日付で記録される)。main が最後に記録した commit から動いていなければ何もしない(手動の実行は常に走る) | 安全なサブセットの seed つき fuzz(既定 5000 ケース × seed 1,2,3 × 3 ブラウザーを 500 ケースずつ 90 job)。結果を `fuzz-data` branch に足し、[fuzz dashboard](https://mizchi.github.io/veriss/fuzz/) を出し直す | `gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit`(記録するときは `-f record=true`) |
 | `macos.yml`(macOS) | 毎週 | platform で UA プロファイルを選ぶ spec(ua-profiles、reset-matrix)を 3 ブラウザー。`webkit-macos` / `firefox-macos` の照合 | `gh workflow run macos.yml` |
 | `coverage.yml` | 手動だけ | 安全なサブセットの被覆(`tools/subset-coverage.mjs`、mizchi/vlmkit を `.corpus/vlmkit` に checkout して渡す) | `gh workflow run coverage.yml` |
 | `text-widths.yml` | 手動だけ | Windows / macOS の文字幅の記録と照合 | `gh workflow run text-widths.yml -f os=both` |
