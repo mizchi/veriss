@@ -330,13 +330,16 @@ export function createCssMistakes({ report, facts, tools }) {
         const beatenBy = { selector: winner.selector, written: winner.written ?? d.property, specified: winner.specified, file: winner.file, line: winner.line };
         // Equal text is the same value only through the same property: one var() maps onto other longhands through
         // another shorthand (padding-inline: 4px 8px puts 4px on the left, padding puts 8px there).
-        if (beatenBy.written === written && String(beatenBy.specified ?? '').trim().toLowerCase() === String(value ?? '').trim().toLowerCase()) continue;
+        // Keywords compare case-folded, custom-property names as written (var(--S) is not var(--s)).
+        const comparable = text => String(text ?? '').trim().split(/(--[A-Za-z_][\w-]*)/).map((part, i) => i % 2 ? part : part.toLowerCase()).join('');
+        if (beatenBy.written === written && comparable(beatenBy.specified) === comparable(value)) continue;
         if (layoutWarnings.some(w => w.code === 'W_CSS_STATE_SHADOWED' && w.path === box.path && w.selector === sel.source && w.property === d.property)) continue;
         // One warning per declaration as written, naming every rule that beats one of its longhands.
         const same = layoutWarnings.find(w => w.code === 'W_CSS_STATE_SHADOWED' && w.path === box.path && w.selector === sel.source && w.written === written && w.line === d.line && w.file === d.file);
         const shadowed = (w, by) => `${box.label}: ${sel.source} { ${written}: ${value} } never shows: ${by.map(b => `${b.selector} { ${b.written}: ${b.specified} }`).join(' and ')} also ${by.length > 1 ? 'apply' : 'applies'} while it is :${st} and ${by.length > 1 ? 'win' : 'wins'} (later or more specific). Put the :${st} rule after ${by.length > 1 ? 'them' : 'it'} (for links: :link, :visited, :hover, :active), or make it more specific`;
         if (same) {
-          if (!same.beatenBy.some(b => b.selector === beatenBy.selector && b.written === beatenBy.written)) {
+          // One winning declaration is one entry however many longhands it sets; two declarations of one selector are two.
+          if (!same.beatenBy.some(b => b.selector === beatenBy.selector && b.written === beatenBy.written && b.file === beatenBy.file && b.line === beatenBy.line && b.specified === beatenBy.specified)) {
             same.beatenBy.push(beatenBy);
             same.css.push({ property: d.property, file: winner.file, line: winner.line, selector: winner.selector });
             same.message = shadowed(same, same.beatenBy);

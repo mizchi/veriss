@@ -1534,6 +1534,12 @@ test('F131: a var() shorthand is named as written, once, and compared as written
   assert.equal(both.length, 1, JSON.stringify(both.map(x => x.message)));
   assert.match(both[0].message, /\.b\.c \{ background-color: #fff \}/);
   assert.match(both[0].message, /\.b\.d \{ background-image: none \}/);
+  // Custom-property names are case-sensitive: var(--S) and var(--s) are two values.
+  assert.equal(hit(':root{--S:#111;--s:#eee}.b:hover{background:var(--S)}.b.c{background:var(--s)}').length, 1);
+  // Two declarations of one selector that each win a longhand are two winners (here across layers).
+  const layered = hit('@layer base, top;:root{--s:#111;--base:#222;--top:#eee}@layer base{.b:hover{background:var(--s)}.b.c{background:var(--base)}}@layer top{.b.c{background:var(--top)}.b.c{background-image:revert-layer}}');
+  assert.equal(layered.length, 1, JSON.stringify(layered.map(x => x.message)));
+  assert.equal(layered[0].beatenBy.length, 2, JSON.stringify(layered[0].beatenBy));
 });
 
 test('F132: a -moz- or -ms- selector in a list drops the whole rule where it is invalid', () => {
