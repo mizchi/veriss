@@ -21,6 +21,7 @@ export interface MatrixFinding {
   absent: string[]; undecided: string[];
   where: BranchSetPart | BranchSetPart[]; summary: string;
 }
+export function compareBranches<F>(branches: readonly {id: string; ua: string; reset: string; status: string; findings: readonly F[]}[], options?: {space?: {uas: readonly string[]; resets: readonly string[]}; keyOf?: (finding: F) => string; fields?: (finding: F) => object; message?: (finding: F) => string}): {holdsEverywhere: MatrixFinding[]; onlyIn: MatrixFinding[]};
 export interface ResetMatrix {
   status: 'verified' | 'violated' | 'unknown';
   branches: (Branch & {status: 'verified' | 'violated' | 'unknown'; findings: any[]; resetFindings: any[]; unknowns: any[]; report: any})[];

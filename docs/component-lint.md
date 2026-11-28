@@ -48,6 +48,8 @@ npx veriss-linaria --viewport 320-1280 src/**/*.tsx   # .js / .jsx / .ts / .tsx�
 | `--images <file.json>` | なし | 画像ファイルの自然な大きさ(`{"/logo.png": {"width": 120, "height": 30}}`)。`height: auto` の img の高さなどを、読み込むファイルの比で決める |
 | `--trust-image-attributes` | なし | `--images` にないファイルの img の `width` / `height` 属性を、ファイルの大きさとみなす(読み込み前の配置を検査する)。仮定として info に出す。付けないと、その比で大きさが決まる img(`height: auto` など)は検査しない(`U_LAYOUT_IMAGE`、#55)。幅記述子のある `srcset` の img はファイルが決まらないので、これだけが効く |
 | `--format text\|json` | `text` | 出力形式 |
+| `--resets none,modern-normalize,…\|all` | なし | UA × reset の枝ごとに検査する(下の「reset の行列」)。`--ua` を UA の軸にし、省くと chromium・firefox・webkit の 3 つ。`--page-css` の既定はなし(reset がページの初期条件になる) |
+| `--sample N --seed S` | なし | `--resets` と一緒に: 枝から seed で決まる N 個だけを検査する |
 
 ## コンパイルできないコンポーネント(`E_ADAPTER_COMPILE`)
 
@@ -81,7 +83,16 @@ src/broken/ArticleMeta.svelte:5:1  error    E_ADAPTER_COMPILE  the component doe
 
 その差を打ち消す最小の reset は、`--suggest-reset chromium,firefox,webkit` で出せます。
 
-よく使われる reset(normalize.css、modern-normalize、sanitize.css、Josh Comeau の reset、Tailwind Preflight、destyle.css)のどれを先に読み込んでも成り立つかは、UA × reset の行列で調べられます(`analyzeResetMatrix`、[UA × reset の行列](reset-matrix.md))。今は API だけで、CLI のフラグはまだありません。
+## reset の行列(`--resets`)
+
+よく使われる reset(normalize.css、modern-normalize、sanitize.css、Josh Comeau の reset、Tailwind Preflight、destyle.css)のどれを先に読み込んでも成り立つかは、`--resets` で調べられます([UA × reset の行列](reset-matrix.md))。各 reset をページの CSS の前に置き、`--ua` の UA(省くと 3 つすべて)ごとに検査して、指摘を「すべての枝で出るもの」と「一部の枝だけで出るもの」に分けます。一部の枝のものは、それが出る枝を覆ういちばん小さい UA × reset の組で示し(`only in firefox × none, normalize`)、解析が決まらなかった枝を「not decided in …」と理由付きで名指しします。決まらなかった枝は、指摘が出なかった枝に数えません。reset のスタイルシートそのものについての指摘(コンポーネントのどの要素にも当たらない reset のセレクタなど)は出しません。どれかの枝で error があれば終了コードは 1 です。`--format json` は、枝ごとの status とメッセージ(`branches`)、`holdsEverywhere`、`onlyIn`(`in` / `absent` / `undecided` / `summary`)、`unknownBranches` をファイルごとに出します。`--sample 5 --seed 1` で枝の一部だけを検査します(同じ seed なら同じ枝)。
+
+```bash
+node tools/css-lint.mjs --resets all Note.svelte
+node tools/css-lint.mjs --resets none,modern-normalize,tailwind-preflight --ua firefox,webkit Note.svelte
+```
+
+`--resets` があるときは、`--page-css` の既定(`*{box-sizing:border-box;margin:0}`)を置きません。reset がページの初期条件で、既定の CSS はその違いを消してしまうからです。ページに固有の CSS があれば `--page-css` で渡します(reset の後に置かれる)。
 
 ## ルールセット
 

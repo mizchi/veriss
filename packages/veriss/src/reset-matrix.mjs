@@ -70,6 +70,29 @@ const findingsOf = report => [
 const sources = f => (Array.isArray(f.css) ? f.css : f.css ? [f.css] : []).map(c => c.file);
 const inReset = f => { const files = sources(f); return files.length > 0 && files.every(file => String(file).startsWith('reset:')); };
 const keyOf = f => JSON.stringify([f.code, f.path ?? f.box ?? f.selector ?? '', f.property ?? f.properties ?? '']);
+/**
+ * The findings of analysed branches ({ id, ua, reset, status, findings }) compared: those in every branch, and those in
+ * some, each with the branches it is in, the decided branches it is absent from, the Unknown branches where its absence is
+ * not shown, and the smallest UA × reset product that covers it (describeBranchSet over the axes analysed). keyOf tells
+ * one finding across branches; fields picks what an entry keeps of the first one seen. Shared with the component CLI.
+ */
+export function compareBranches(branches, { space = { uas, resets: resets.map(x => x.id) }, keyOf: key = keyOf, fields = f => ({ ...f }), message = f => f.message } = {}) {
+  const byKey = new Map();
+  for (const b of branches) for (const f of b.findings) {
+    const k = key(f);
+    if (!byKey.has(k)) byKey.set(k, { ...fields(f), in: [], messages: {} });
+    const e = byKey.get(k);
+    if (!e.in.includes(b.id)) { e.in.push(b.id); e.messages[b.id] = message(f); }
+  }
+  const analysed = { uas: space.uas.filter(x => branches.some(c => c.ua === x)), resets: space.resets.filter(x => branches.some(c => c.reset === x)) };
+  const holdsEverywhere = [], onlyIn = [];
+  for (const e of byKey.values()) {
+    const others = branches.filter(b => !e.in.includes(b.id));
+    const out = { ...e, absent: others.filter(b => b.status !== 'unknown').map(b => b.id), undecided: others.filter(b => b.status === 'unknown').map(b => b.id), ...describeBranchSet(e.in, analysed) };
+    (e.in.length === branches.length ? holdsEverywhere : onlyIn).push(out);
+  }
+  return { holdsEverywhere, onlyIn };
+}
 const resultKey = branch => JSON.stringify([branch.status, branch.findings.map(f => [keyOf(f), f.message]), branch.unknowns.map(u => [u.code, u.message])]);
 
 /**
@@ -88,21 +111,7 @@ export function analyzeResetMatrix(input, { uas: u = uas, resets: r = resets.map
     const found = findingsOf(report);
     return { id, ua, reset, status: report.status, findings: found.filter(f => !inReset(f)), resetFindings: found.filter(inReset), unknowns: (report.diagnostics ?? []).filter(d => d.severity === 'unknown'), report };
   });
-  // Findings across branches.
-  const byKey = new Map();
-  for (const b of branches) for (const f of b.findings) {
-    const k = keyOf(f);
-    if (!byKey.has(k)) byKey.set(k, { code: f.code, severity: f.severity, box: f.box, path: f.path, property: f.property ?? f.properties, in: [], messages: {} });
-    const e = byKey.get(k);
-    if (!e.in.includes(b.id)) { e.in.push(b.id); e.messages[b.id] = f.message; }
-  }
-  const analysed = { uas: u.filter(x => chosen.some(c => c.ua === x)), resets: r.filter(x => chosen.some(c => c.reset === x)) };
-  const holdsEverywhere = [], onlyIn = [];
-  for (const e of byKey.values()) {
-    const others = branches.filter(b => !e.in.includes(b.id));
-    const out = { ...e, absent: others.filter(b => b.status !== 'unknown').map(b => b.id), undecided: others.filter(b => b.status === 'unknown').map(b => b.id), ...describeBranchSet(e.in, analysed) };
-    (e.in.length === branches.length ? holdsEverywhere : onlyIn).push(out);
-  }
+  const { holdsEverywhere, onlyIn } = compareBranches(branches, { space, keyOf, fields: f => ({ code: f.code, severity: f.severity, box: f.box, path: f.path, property: f.property ?? f.properties }) });
   // The resets' own findings, once per reset (the first branch that analysed it).
   const resetFindings = {};
   for (const b of branches) if (!(b.reset in resetFindings)) resetFindings[b.reset] = b.resetFindings;
