@@ -25,6 +25,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The fonts models/text/linux-widths.json was recorded with (its "fonts" table): the text-width tests read them from
+      # /usr/share/fonts, and Firefox and WebKit resolve sans-serif / system-ui to Inter.
+      - name: Install the recorded Linux fonts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends fonts-inter fonts-crosextra-caladea fonts-crosextra-carlito \
+            fonts-jetbrains-mono fonts-dejavu-core fonts-liberation fonts-freefont-ttf fonts-ipafont-gothic \
+            fonts-tlwg-loma-otf fonts-unifont fonts-opensymbol
       - name: Root tests
         run: node --test tests/*.test.mjs
       - name: Package tests
@@ -50,6 +58,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The fonts models/text/linux-widths.json was recorded with (its "fonts" table): the text-width tests read them from
+      # /usr/share/fonts, and Firefox and WebKit resolve sans-serif / system-ui to Inter.
+      - name: Install the recorded Linux fonts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends fonts-inter fonts-crosextra-caladea fonts-crosextra-carlito \
+            fonts-jetbrains-mono fonts-dejavu-core fonts-liberation fonts-freefont-ttf fonts-ipafont-gothic \
+            fonts-tlwg-loma-otf fonts-unifont fonts-opensymbol
       - id: pw
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4

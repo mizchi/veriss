@@ -17,5 +17,8 @@ test('data-text-max-length in {#each}: the output is unchanged and it runs in se
   try { stdout = execFileSync(process.execPath, args, {cwd, encoding: 'utf8'}); } catch (error) { assert.equal(error.status, 1); stdout = error.stdout; }
   const seconds = (Date.now() - started) / 1000;
   assert.deepEqual(JSON.parse(stdout), JSON.parse(readFileSync(new URL('snapshots/tag-lengths.json', import.meta.url), 'utf8')));
-  assert.ok(seconds < 12, `took ${seconds.toFixed(1)}s (29s before the length domain was cached)`);
+  // A GitHub runner is about 3.5x slower than the machine the 12s was set on (15s there; the uncached version would take
+  // about 100s), so CI gets the same margin over the cached time, still far below the uncached one.
+  const limit = process.env.CI ? 30 : 12;
+  assert.ok(seconds < limit, `took ${seconds.toFixed(1)}s (29s before the length domain was cached)`);
 });
