@@ -72,6 +72,8 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends fonts-inter fonts-crosextra-caladea fonts-crosextra-carlito \
             fonts-jetbrains-mono fonts-dejavu-core fonts-liberation fonts-freefont-ttf fonts-ipafont-gothic \
             fonts-tlwg-loma-otf fonts-unifont fonts-opensymbol
+          sudo cp tools/ci/fonts.conf /etc/fonts/local.conf
+          fc-match sans-serif; fc-match system-ui; fc-match serif; fc-match monospace
       - name: Install the browser
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Fuzz
