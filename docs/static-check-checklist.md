@@ -734,6 +734,40 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   変わらないもの: ファイルの大きさが分かる img(`E_LAYOUT_IMAGE_RATIO` などもそのまま)、両方の軸が px の img(属性だけでも、CSS で
   決めても)、block の軸を検査しないときの `height: auto`。css-lint は `--images <file.json>` と `--trust-image-attributes`。
   残り: `video` の属性の比(動画の自然な比で同じことが起きる)と、作者の CSS の `aspect-ratio: auto w / h` は今までどおり。
+- [x] **I27. 安全なサブセットの差分 fuzzing**(`e2e/layout-fuzz-safe-subset.spec.mjs`、生成器 `e2e/support/layout-fuzz.mjs`、照合
+  `e2e/support/layout-fuzz-check.mjs`): [安全なサブセット](safe-subset.md) §1〜§3 の文法(入れ子 1〜4 段の grid(px・`minmax(0,Nfr)`・
+  `Nfr` の列、px の行、gap、span と明示の線、`justify-self` / `align-self`)、flex(row / column、row の wrap、px・%・0 の basis、
+  grow / shrink、`min-width: 0`、揃えのキーワード)、block flow(px・%・vw・rem・calc の幅、max-width、px・負・auto の margin)、
+  両軸に inset を持つ absolute、まれに fixed、padding・border・box-sizing、px の高さの空の箱と、折り返さない 1 語のテキストの葉)から、
+  (seed, index) だけで決まるページを作る。8 件に 1 件は、サブセットが Unknown にする形(% の basis、置いた item のある素の fr、
+  `min-width` のない flex の容器、`justify-items`)も混ぜる。各ページをその viewport で解析し、ブラウザーでは
+  (1) 矩形を出した箱がすべてその位置と大きさにある(誤差は LayoutUnit の丸め: Chromium・WebKit は 1/64px、Firefox は 1/60px を、
+  祖先と前の兄弟の数 + 2 回まで)、(2) 幾何の違反(`E_LAYOUT_ITEM_SIZE`・`TRACKS`・`BOX_EDGES`・`CONTENT`・`ABSOLUTE_*`・
+  `PLACEMENT`・`PAGE_OVERFLOW`)の箱で、ブラウザーにもはみ出しがある(親の内容の箱、grid の領域(stretch して大きさ 0 にした
+  探りの item で線の番号を読む)、包含ブロックの padding の箱、兄弟との重なり、子のはみ出し、track の長さ、padding と border だけの箱、
+  テキストの行)、(3) verified のページでは、負の margin のない箱が親の内容の箱と grid の領域からはみ出さない、を確かめる。Unknown は
+  数えるだけ。テキストの幅は各ブラウザーで測って、信頼する契約(`boxes` の min / max の幅と line-height の高さ)として渡す。
+  食い違いは、部分木・宣言を落とし値を簡単にして最小のページに縮め、spec の `regressions` に置く。
+  CI の既定は 1 ブラウザーにつき 400 件(`FUZZ_CASES` / `FUZZ_SEED` / `FUZZ_FIRST` で変える)。直したあとの長い実行では、seed 3 と 4 の
+  2000 件ずつを 3 ブラウザーで回し、食い違いは 0(seed 3: 決まった件 78.8%(verified 666・violated 910・Unknown 424)、矩形を出した箱
+  57.7%(24297 個中 14026)、seed 4: 74.7%、54.5%)。この割合を下回らないよう、spec は決まった件が 60% を超えることも確かめる。
+  見つけて直したもの(単体テスト `packages/veriss/test/safe-subset-fuzz.test.mjs`、ブラウザーの値は 3 つで一致):
+  - **健全性**: `justify-self: center | end` の grid の item が領域より広くても verified にしていた(`grid-template-columns: 10px` の
+    20px の item は end で -10px にあり、領域から出る)。寄せる item は自分の幅で解くので、収まるかを領域の幅と比べていなかった。
+    今は start と同じく `E_LAYOUT_ITEM_SIZE`。center と end では、終点の margin が入らないことも違反にする(100px の列で
+    `width: 100px; margin-right: 20px; justify-self: end` は -20px から始まる。start なら終点の margin がはみ出すだけで、何も隠さない)。
+  - **健全性**: 寄せる item の位置を、`max-width` / `min-width` で抑える前の幅で決めていた(width 20px・max-width 10px の end が 380、
+    正しくは 390)。px の上下限で抑え、px でない上下限は Unknown にした。
+  - **健全性**: auto の margin で寄せる border-box の箱の padding と border が幅より大きいとき、指定の幅で寄せていた(2px の幅と 2px の
+    border を 100px の中央に置くと 48、veriss は 49)。幅を padding + border まで引き上げてから寄せる。px でない padding / border は Unknown。
+  - **内部の誤り**: column の flex で、中身で高さの決まる `min-height: 0` の item が縮むと `Cannot read properties of undefined` で
+    Unknown になっていた(縮みの重みの内側の大きさを持っていなかった)。§9.7 どおりに解く(20px と中身 30px の item を 10px に縮めて
+    2.4px と 7.6px)。
+  - **被覆**: `flex: N; min-width: 0` の flex の容器の item を、使わない中身の幅を測ろうとして Unknown にしていた(サブセットが勧める形)。
+  - **ブラウザーで違う(Unknown にした)**: row の flex が border の箱 0 に伸ばす flex の容器の中の absolute の箱を、WebKit だけは伸ばす前の
+    中身の高さに対して置く(`top: 0%; bottom: 50%` で 40px の子があると 20px、Chromium と Firefox は 0。`top: 0; bottom: 0` なら 40px)。
+    0.5px・1px に伸ばす場合、padding のある容器、grid の親、`display: block` の容器、`top` と px の `height` で置く箱は 3 つで一致する。
+    `bottom` か % の `top` / 高さで置く箱を、伸ばされた高さが 0 になりうる所で Unknown にした。
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
