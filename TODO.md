@@ -16,6 +16,7 @@ CSS × DOM の静的検査パターンを、**カテゴリごとに洗う**。�
 
 1. **パターンの追加を続ける**(新しい観点を足すときはカテゴリの表と一覧の両方に足す。[検査ルール一覧](docs/rule-catalog.md) の該当する役割の表にも行を足す)。まだ調べていない候補:
    - `:focus-visible` とキーボード / マウスでの見え方の差、`:has()` の重さと無効な引数
+   - (済)親子の構造(HTML の内容モデルと ARIA の所有): チェックリスト J1〜J7、[content-model.md](docs/content-model.md)。残り: customizable select の中身(parse5 8.0.1 は捨て、3 ブラウザーは保つ)、`aria-owns` の所有、caption・figcaption の順番
    - (済)`@container` の単位(`cqw` / `cqh`)を container のない要素で使う(F133)。`container-type: size` で高さが 0 になるのは既存の配置の検査(`E_LAYOUT_TRACKS`)で捕まる
    - `writing-mode: vertical-*` と物理プロパティ(`width` / `margin-top`)の取り違え
    - `inert` / `popover` と CSS の `display` の組み合わせ

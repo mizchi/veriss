@@ -328,3 +328,56 @@ test('scope (styled-components): generated classes are owned; a nested selector 
   assert.deepEqual(scopeCodes(global), [['E_SCOPE_ESCAPE', '<G>']]);
   assert.match(global.findings.find(f => f.code === 'E_SCOPE_ESCAPE').message, /createGlobalStyle/);
 });
+
+// Checklist J: parent-child structure (docs/content-model.md).
+test('lint: a component root whose required parent is the caller\'s is not claimed', () => {
+  const root = `<template>\n  <li class="x">a</li>\n</template>\n<style scoped>.x{display:block}</style>`;
+  const messages = lint(analyzeVue(root, {pageCSS, viewport, accessibility: true, assumeText: true, sourceLines: true}), {file: 'Item.vue', source: root});
+  assert.ok(!messages.some(m => m.code === 'E_A11Y_LIST' && m.severity !== 'info'), JSON.stringify(messages));
+  assert.ok(messages.some(m => m.code === 'E_A11Y_LIST' && m.severity === 'info' && /caller/.test(m.message)));
+  // Inside the component the parent is known: still reported.
+  const inner = `<template>\n  <div class="w"><li class="x">a</li></div>\n</template>\n<style scoped>.w{display:grid;grid-template-columns:minmax(0,1fr)}.x{display:block}</style>`;
+  assert.ok(lint(analyzeVue(inner, {pageCSS, viewport, accessibility: true, assumeText: true, sourceLines: true}), {file: 'Bad.vue', source: inner}).some(m => m.code === 'E_A11Y_LIST' && m.severity === 'warning'));
+  // With page: true the body is the page's own: reported.
+  assert.ok(lint(analyzeVue(root, {pageCSS, viewport, accessibility: true, assumeText: true, sourceLines: true}), {file: 'Item.vue', source: root, page: true}).some(m => m.code === 'E_A11Y_LIST' && m.severity === 'warning'));
+});
+
+test('lint: the parser restructuring a component\'s template is reported at its line, with the structure to write', () => {
+  const nested = `<template>\n  <ul class="u">\n    <li>a\n      <li class="n">b</li>\n    </li>\n  </ul>\n</template>\n<style scoped>.u{display:grid}</style>`;
+  const [w] = lint(analyzeVue(nested, {pageCSS, viewport, assumeText: true, sourceLines: true}), {file: 'List.vue', source: nested}).filter(m => m.code === 'W_HTML_RESTRUCTURED');
+  assert.ok(w, 'li in li is reported');
+  assert.equal(w.severity, 'warning');
+  assert.equal(w.line, 4);
+  assert.match(w.fix, /<ul><li>/);
+  const cell = `<template>\n  <div class="d">\n    <td>x</td>\n  </div>\n</template>\n<style scoped>.d{display:grid}</style>`;
+  const [d] = lint(analyzeVue(cell, {pageCSS, viewport, assumeText: true, sourceLines: true}), {file: 'Cell.vue', source: cell}).filter(m => m.code === 'W_HTML_RESTRUCTURED');
+  assert.equal(d?.line, 2);
+  assert.match(d.fix, /<table>/);
+  // p > div in JSX (React keeps it nested in the DOM it builds; the server-rendered HTML does not).
+  const jsx = `export default () => (\n  <main className="m">\n    <p className="q">b<div className="d">x</div></p>\n  </main>\n);`;
+  const para = lint(analyzeReact(jsx, {pageCSS, css: '.m{display:grid}', viewport, assumeText: true, sourceLines: true}), {file: 'P.jsx', source: jsx});
+  const [p] = para.filter(m => m.code === 'E_HTML_PARAGRAPH_CONTENT');
+  assert.equal(p?.severity, 'warning'); assert.equal(p.tier, 'spec'); assert.equal(p.line, 3);
+  assert.equal(p.fix, 'use a <div> as the container, or <span> inside the paragraph');
+  assert.ok(!para.some(m => m.code === 'W_HTML_RESTRUCTURED'), 'one cause, one finding');
+  // A row component's root: the caller's table decides.
+  const row = `<template>\n  <tr class="r"><td>x</td></tr>\n</template>\n<style scoped>.r{color:red}</style>`;
+  assert.ok(!lint(analyzeVue(row, {pageCSS, viewport, assumeText: true, sourceLines: true}), {file: 'Row.vue', source: row}).some(m => m.code === 'W_HTML_RESTRUCTURED' && m.severity !== 'info'));
+});
+
+test('lint: profile strict adds the content-model rules as warnings and changes no error', () => {
+  const jsx = `export default () => (\n  <main className="m">\n    <button className="b" type="button"><div className="d">Save</div></button>\n  </main>\n);`;
+  const result = analyzeReact(jsx, {pageCSS, css: '.m{display:grid}', viewport, assumeText: true, sourceLines: true, accessibility: true});
+  const recommendedRun = lint(result, {file: 'B.jsx', source: jsx});
+  assert.ok(recommendedRun.some(m => m.code === 'W_HTML_CONTENT_MODEL' && m.severity === 'info'), 'recommended lists it as outside its rules');
+  const strict = lint(result, {file: 'B.jsx', source: jsx, profile: 'strict'});
+  const [w] = strict.filter(m => m.code === 'W_HTML_CONTENT_MODEL');
+  assert.equal(w?.severity, 'warning');
+  assert.equal(w.line, 3);
+  assert.match(w.fix, /<span>/);
+  // The same errors under both profiles.
+  for (const r of [result, analyzeVue(vue, {pageCSS, viewport, selectors: true, assumeText: true, sourceLines: true})]) {
+    const errors = profile => lint(r, {file: 'X', source: '', profile}).filter(m => m.severity === 'error').map(m => `${m.code} ${m.message}`);
+    assert.deepEqual(errors('strict'), errors('recommended'));
+  }
+});

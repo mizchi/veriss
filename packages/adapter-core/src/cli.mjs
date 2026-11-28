@@ -5,7 +5,7 @@
 //   --viewport 320-1280      viewport widths (and --height 480-900 heights) the component is checked over
 //   --page-css <file>        CSS of the page around the component (html, body, resets)
 //   --css <file>             a stylesheet for plain className (React without StyleX/Linaria)
-//   --profile recommended|all   the rule set (recommended: rules checked against Chromium)
+//   --profile recommended|strict|all   the rule set (recommended: rules checked against Chromium; strict adds the content-model warnings)
 //   --no-assume-text         keep text without size contracts Unknown instead of one assumed line
 //   --format text|json
 //   --default-colors light|none   assume the UA's black-on-white canvas (light preference, no dark color-scheme); none: Unknown
@@ -58,7 +58,7 @@ export async function runLint({argv, adapters, name = 'css-lint'}) {
     else if (option === 'font') { const [family, ...file] = String(args[++i]).split('='); (opt.fonts ??= {})[family] = {file: file.join('=')}; }
     else opt[option.replace(/-(\w)/g, (m, c) => c.toUpperCase())] = args[++i];
   }
-  if (!files.length && !opt.suggestReset) { console.error(`usage: ${name} [--viewport 320-1280] [--font Family=file.ttf] [--page-css file] [--css file] [--profile recommended|all] [--format text|json] <files>`); return 2; }
+  if (!files.length && !opt.suggestReset) { console.error(`usage: ${name} [--viewport 320-1280] [--font Family=file.ttf] [--page-css file] [--css file] [--profile recommended|strict|all] [--format text|json] <files>`); return 2; }
   if (opt.suggestReset) {
     const {suggestReset} = await import('veriss/src/layout/ua-reset.mjs');
     const r = suggestReset({browsers: String(opt.suggestReset).split(','), target: opt.ua ?? 'chromium'});
