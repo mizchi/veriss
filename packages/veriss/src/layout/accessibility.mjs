@@ -663,6 +663,7 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   // visual-order: siblings in flow, b after a in the DOM but entirely above a, or beside it on its left.
   const parent = path => path.slice(0, path.lastIndexOf('/'));
   const flow = placed.filter(row => row.position === 'static' && row.path.includes('/'));
+  const unread = path => [...treeBoxes.values()].some(box => box.boundaries?.length && (box.path === path || box.path.startsWith(`${path}/`)));
   for (const a of flow) for (const b of flow) {
     if (parent(a.path) !== parent(b.path) || treeOrder(a.path, b.path) >= 0) continue;
     const both = intersect(a.region, b.region);
@@ -670,7 +671,16 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     const above = atMost(both, bottom(b), a.origin.block);
     let beside = below(below(both, b.origin.block, bottom(a)), a.origin.block, bottom(b));
     beside = atMost(beside, right(b), a.origin.inline);
-    for (const region of [above, beside].filter(Boolean)) report(warnings, 'W_A11Y_ORDER', 'warning', `${b.box.label} comes after ${a.box.label} in the DOM but is placed before it`, b, region, { rule: 'visual-order', before: a.path });
+    // Two boxes with no extent on that axis (empty siblings at one place) are not placed one before the other: only
+    // where either has some is it an order. When either holds content another component renders (a boundary the
+    // analysis did not read), its real extent is not known there: not checked.
+    for (const [region, extent] of [[above, row => row.block], [beside, row => row.inline]]) {
+      if (!region) continue;
+      const placed = below(region, scalar(0), sum(extent(a), extent(b)));
+      if (placed) report(warnings, 'W_A11Y_ORDER', 'warning', `${b.box.label} comes after ${a.box.label} in the DOM but is placed before it`, b, placed, { rule: 'visual-order', before: a.path });
+      const empty = atMost(region, sum(extent(a), extent(b)), scalar(0));
+      if (empty && (unread(a.path) || unread(b.path))) report(unknowns, 'U_A11Y_ORDER', 'unknown', `${b.box.label} and ${a.box.label}: their visual order depends on content another component renders (not read here), which gives them their size`, b, empty, { rule: 'visual-order' });
+    }
   }
 
   // hidden-focusable: rendered, visible focusable elements under aria-hidden.

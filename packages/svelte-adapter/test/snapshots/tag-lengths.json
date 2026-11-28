@@ -53,22 +53,6 @@
   },
   {
     "file": "fixtures/TagLengths.svelte",
-    "line": 12,
-    "severity": "info",
-    "code": "W_A11Y_ORDER",
-    "message": "outside the recommended rules: .owner comes after .tags in the DOM but is placed before it",
-    "states": "items ×0, owner given=false"
-  },
-  {
-    "file": "fixtures/TagLengths.svelte",
-    "line": 13,
-    "severity": "info",
-    "code": "W_A11Y_ORDER",
-    "message": "outside the recommended rules: .code comes after .tags in the DOM but is placed before it",
-    "states": "owner given=false, code given=false"
-  },
-  {
-    "file": "fixtures/TagLengths.svelte",
     "severity": "info",
     "code": "U_TEXT_NOT_MEASURED",
     "message": "not checked: .code: Font Roboto lacks U+3042; fallback fonts are not modeled; its text is only assumed to fit, so its overflow is not checked"
