@@ -1,0 +1,15 @@
+{
+  "name": "veriss-example-svelte",
+  "private": true,
+  "type": "module",
+  "description": "Svelte 5 components checked with veriss-svelte: each mistake in src/broken/ and its fix in src/fixed/.",
+  "scripts": {
+    "check": "veriss-svelte --font Roboto=../../packages/veriss/text-metrics/fixtures/roboto-variable.ttf --images images.json src/fixed/*.svelte",
+    "check:broken": "veriss-svelte --font Roboto=../../packages/veriss/text-metrics/fixtures/roboto-variable.ttf --images images.json src/broken/*.svelte"
+  },
+  "devDependencies": {
+    "veriss": "workspace:*",
+    "veriss-adapter-core": "workspace:*",
+    "veriss-svelte": "workspace:*"
+  }
+}

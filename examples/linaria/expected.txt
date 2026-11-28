@@ -1,0 +1,42 @@
+src/broken/Menu.tsx  error    E_SCOPE_REACHES  .lx-List a can style elements of <MenuLink>, which another component renders: styles for those elements belong to the component that renders them (give it a class or a variant prop), and this selector should name a class of this component  [items ×2]
+    fix: style the child component's elements in that component (a class or variant prop it exposes); name this component's own class here
+src/broken/Menu.tsx  warning  W_CSS_SELECTOR_UNMATCHED  .lx-List a matches no element of the template
+    fix: remove the selector or fix its class name
+src/broken/Menu.tsx:23  info     W_A11Y_ORDER  outside the recommended rules: li@Component/0/0/0/1 comes after li@Component/0/0/0/0 in the DOM but is placed before it  [items ×2]
+src/broken/Menu.tsx  info     U_REACT_COMPONENT  not checked: child component <MenuLink>: MenuLink is imported from './MenuLink', which was not read (pass options.resolveModule)
+src/broken/Menu.tsx  info     ASSUMPTION  .map() is checked at 0, 2 items, all items taking the same branch choices
+src/broken/Menu.tsx  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/Menu.tsx  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/MenuLink.tsx  info     U_A11Y_CONTRAST  not checked: : color ua-link is not a modeled color
+src/broken/MenuLink.tsx  info     ASSUMPTION  dynamic attribute href on <a> is rendered with a non-empty placeholder value
+src/broken/MenuLink.tsx  info     ASSUMPTION  {expression} text is placeholder text; its size comes from the box contracts
+src/broken/MenuLink.tsx  info     ASSUMPTION  1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/MenuLink.tsx  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/MenuLink.tsx  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/Notice.tsx:10  error    E_SCOPE_OUTSIDE  .theme-dark .lx-notice relies on .theme-dark, which no element of this component matches: the rule depends on where the component is placed (an ancestor or sibling outside it). Keep the relation inside the component (a class or prop on its own root), or pass the context in as a custom property
+    fix: keep the relation inside the component (a class or prop on its own root), or pass the context in as a custom property
+src/broken/Notice.tsx:10  warning  W_CSS_SELECTOR_RELATION  .theme-dark .lx-notice: 1 element(s) match .lx-notice, but none is inside an element matching .theme-dark; their ancestors are body@Component/0, html@Component. The selector and the template's structure disagree
+    fix: make the selector match the template structure
+src/broken/Notice.tsx  info     ASSUMPTION  1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/Notice.tsx  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/Notice.tsx  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/PricingGrid.tsx:17  error    E_LAYOUT_TRACKS  .lx-grid requires 632px but receives 476px on inline axis at viewport 476px × 690px (also: 1 box inside it reaches past the viewport)
+    fix: use flexible tracks (minmax(0, 1fr)) or fewer columns at this width
+src/broken/PricingGrid.tsx:17  warning  W_LAYOUT_FIXED_TRACKS  .lx-grid has grid-template-columns: repeat(3, 200px), only fixed px tracks, so it cannot shrink below their sum and overflows narrower containers. Use flexible tracks: repeat(N, minmax(0, 1fr)), or fewer columns under a media or container query
+    fix: use repeat(N, minmax(0, 1fr)) or fewer columns under a query
+src/broken/PricingGrid.tsx:19  info     E_LAYOUT_PROTRUSION  outside the recommended rules: .lx-plan sticks out of its parent .lx-grid on the inline axis
+src/broken/PricingGrid.tsx:19  info     E_A11Y_REFLOW  outside the recommended rules: .lx-plan makes the page scroll horizontally at 320 CSS px
+src/broken/PricingGrid.tsx  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/PricingGrid.tsx  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/SearchForm.tsx:25  error    E_A11Y_LABEL  .lx-field has no label here: add a visible <label>, aria-label, aria-labelledby or title
+    fix: label the field
+src/broken/SearchForm.tsx  error    E_SCOPE_ESCAPE  .lx-form :global(body) uses :global, which reaches outside the component's own elements (the page, a parent or a child component): style those elements in the component that renders them, and pass context in as a custom property or a prop
+    fix: drop :global/:deep/:slotted: style each element in the component that renders it
+src/broken/SearchForm.tsx  warning  W_CSS_SELECTOR_RELATION  .lx-form body: 1 element(s) match body, but none is inside an element matching .lx-form; their ancestors are html@Component. The selector and the template's structure disagree
+    fix: make the selector match the template structure
+src/broken/SearchForm.tsx:23  info     W_A11Y_FORM_SUBMIT  outside the recommended rules: .lx-form has fields but no submit button
+src/broken/SearchForm.tsx  info     ASSUMPTION  1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/SearchForm.tsx  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/SearchForm.tsx  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+
+5 error(s), 4 warning(s), 22 not checked or assumed

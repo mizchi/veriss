@@ -629,6 +629,23 @@ test('role-parent and role-children: required ARIA context', () => {
   assert.deepEqual(find(wrong, 'E_A11Y_ROLE_CHILDREN').map(d => d.box), ['.y']);
 });
 
+test('role-children: treegrid, rowgroup and feed own rows and articles (WAI-ARIA 1.2 required owned elements)', () => {
+  const grid = pageCSS('.page, .y { display: grid; grid-template-columns: 100px; grid-auto-rows: 30px; background: #fff; color: #000; }\n.x { display: block; }\n');
+  for (const role of ['treegrid', 'rowgroup', 'feed'])
+    assert.deepEqual(find(run(divs({tag: 'div', classes: ['y'], role, children: [x({role: 'button', tabIndex: 0, focusable: true, named: true})]}), grid), 'E_A11Y_ROLE_CHILDREN').map(d => d.box), ['.y'], role);
+  assert.equal(find(run(divs({tag: 'div', classes: ['y'], role: 'feed', children: [x({role: 'article'})]}), grid), 'E_A11Y_ROLE_CHILDREN').length, 0);
+  assert.equal(find(run(divs({tag: 'div', classes: ['y'], role: 'treegrid', children: [x({role: 'row', children: [{tag: 'div', classes: ['z'], role: 'gridcell'}]})]}), grid), 'E_A11Y_ROLE_CHILDREN').length, 0);
+});
+
+test('role-parent and list-structure: a context decided only at the root of the analyzed tree is marked atRoot', () => {
+  const css = pageCSS('.page { background: #fff; color: #000; }\n.x, .y, .z { display: block; }\n');
+  // Inside the page's main the context is known: not marked.
+  assert.equal(find(run(divs(x({role: 'tab', tabIndex: 0, focusable: true, named: true})), css), 'E_A11Y_ROLE_PARENT')[0].atRoot, undefined);
+  // With no role-bearing ancestor at all, only the (unknown) embedding context could supply it.
+  const bare = run({tag: 'div', classes: ['page'], children: [x({role: 'tab', tabIndex: 0, focusable: true, named: true})]}, '.page { display: grid; grid-template-columns: 100px; grid-auto-rows: 30px; background: #fff; color: #000; }\n.x { display: block; }\n');
+  assert.equal(find(bare, 'E_A11Y_ROLE_PARENT')[0]?.atRoot, true);
+});
+
 test('ARIA attributes: required for the role, known names, valid boolean values, presentation conflicts', () => {
   assert.deepEqual(find(run(divs(x({role: 'checkbox', tabIndex: 0, focusable: true, named: true})), plainCSS), 'E_A11Y_ROLE_ATTR').map(d => d.attribute), ['aria-checked']);
   assert.equal(find(run(divs(x({role: 'checkbox', tabIndex: 0, focusable: true, named: true, aria: {'aria-checked': 'false'}})), plainCSS), 'E_A11Y_ROLE_ATTR').length, 0);

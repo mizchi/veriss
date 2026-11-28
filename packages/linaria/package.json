@@ -1,0 +1,42 @@
+{
+  "name": "veriss-linaria",
+  "version": "0.1.1",
+  "type": "module",
+  "description": "Linaria (css`` and styled.tag``) component checker for veriss: a CLI and an API over veriss-react.",
+  "license": "MIT",
+  "bin": {
+    "veriss-linaria": "./bin/veriss-linaria.mjs"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/index.mjs"
+    }
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "veriss": "^0.1.1",
+    "veriss-adapter-core": "^0.1.1",
+    "veriss-react": "^0.1.1"
+  },
+  "devDependencies": {
+    "veriss": "workspace:*",
+    "veriss-adapter-core": "workspace:*",
+    "veriss-react": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mizchi/veriss.git",
+    "directory": "packages/linaria"
+  }
+}

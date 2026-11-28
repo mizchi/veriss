@@ -1,0 +1,54 @@
+src/broken/ProfileCard.svelte:6  error    E_LAYOUT_ITEM_SIZE  .card requires 480px but receives 400px on inline axis at viewport 400px × 690px (also: 1 box inside it reaches past the viewport)
+    fix: give the box room (a flexible track, max-width: 100%, min-width: 0) or let it shrink
+src/broken/ProfileCard.svelte:6  error    E_LAYOUT_PAGE_OVERFLOW  .card reaches past the viewport, so the page scrolls horizontally
+    fix: keep the box inside the viewport width
+src/broken/ProfileCard.svelte:7  error    E_LAYOUT_IMAGE_UNRESERVED  .avatar has no reserved height: it shifts the layout when /avatar.png loads; add width="128" height="128" (the file's size) or an aspect-ratio
+    fix: add width and height attributes (or aspect-ratio) so the image reserves its box
+src/broken/ProfileCard.svelte:6  info     E_LAYOUT_PROTRUSION  outside the recommended rules: .card sticks out of its parent body@Component/0 on the inline axis
+src/broken/ProfileCard.svelte:6  info     E_A11Y_REFLOW  outside the recommended rules: .card makes the page scroll horizontally at 320 CSS px
+src/broken/ProfileCard.svelte:8  info     E_A11Y_REFLOW  outside the recommended rules: .name makes the page scroll horizontally at 320 CSS px
+src/broken/ProfileCard.svelte  info     ASSUMPTION  props with a literal default (name) are checked with that default and with placeholder text for any other value
+src/broken/ProfileCard.svelte  info     ASSUMPTION  1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/ProfileCard.svelte  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/ProfileCard.svelte  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/ProfileCard.svelte  info     ASSUMPTION  text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)
+src/broken/PublishButton.svelte:3  error    E_LAYOUT_CONTENT  .save requires 86.72px but receives 62px on inline axis at viewport 800px × 690px
+    fix: let the content wrap (overflow-wrap: anywhere) or give the box more room
+src/broken/PublishButton.svelte:3  warning  W_LAYOUT_LONG_WORD  .save wraps only between words (overflow-wrap: normal), and its longest word is wider than the box: it sticks out. Use overflow-wrap: anywhere (or break-word) for URLs and long words
+    fix: use overflow-wrap: anywhere for URLs and long words
+src/broken/PublishButton.svelte  info     ASSUMPTION  1 text box(es) measured with the given font files (Roboto): their widths and line breaks are derived, not assumed
+src/broken/PublishButton.svelte  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/PublishButton.svelte  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/PublishButton.svelte  info     ASSUMPTION  text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)
+src/broken/SaveStatus.svelte:9  error    E_LAYOUT_NOSHIFT  [data-noshift="canvas"] moves between {saved: true} and {saved: false}: at 800px wide its top is 40px, then 0px (a layout shift its data-noshift contract rules out)
+    fix: reserve the space the changing content needs (a fixed track or min-height), overlay it (position: absolute), or limit the contract to the states it should hold in (data-noshift-on)
+src/broken/SaveStatus.svelte  info     ASSUMPTION  1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/SaveStatus.svelte  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/SaveStatus.svelte  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/SaveStatus.svelte  info     ASSUMPTION  text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)
+src/broken/SignupForm.svelte:4  error    E_A11Y_LABEL  .field has no label here: add a visible <label>, aria-label, aria-labelledby or title
+    fix: label the field
+src/broken/SignupForm.svelte  info     ASSUMPTION  2 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/SignupForm.svelte  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/SignupForm.svelte  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/SignupForm.svelte  info     ASSUMPTION  text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)
+src/broken/TagList.svelte:10  error    E_A11Y_NAME  .remove has no accessible name here: no rendered text and no aria-label, aria-labelledby or title  [tags ×2]
+    fix: give the control a name (text, aria-label or aria-labelledby)
+src/broken/TagList.svelte:8  warning  E_A11Y_LIST  spec: .tag is a list item outside ul/ol (a markup conformance error; the rendering does not show it)  [tags ×2]
+    fix: put only li (and script/template) directly inside ul/ol
+src/broken/TagList.svelte  info     ASSUMPTION  {#each} is checked at 0, 2 items, all items taking the same branch choices
+src/broken/TagList.svelte  info     ASSUMPTION  {expression} text is rendered as placeholder text; its size comes from the box contracts
+src/broken/TagList.svelte  info     ASSUMPTION  2 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/TagList.svelte  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/TagList.svelte  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/TagList.svelte  info     ASSUMPTION  text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)
+src/broken/ThemedPanel.svelte:9  error    E_SCOPE_ESCAPE  :global(.theme-dark) .panel uses :global, which reaches outside the component's own elements (the page, a parent or a child component): style those elements in the component that renders them, and pass context in as a custom property or a prop
+    fix: drop :global/:deep/:slotted: style each element in the component that renders it
+src/broken/ThemedPanel.svelte:9  warning  W_CSS_SELECTOR_RELATION  .theme-dark .panel: 1 element(s) match .panel, but none is inside an element matching .theme-dark; their ancestors are body@Component/0, html@Component. The selector and the template's structure disagree
+    fix: make the selector match the template structure
+src/broken/ThemedPanel.svelte  info     ASSUMPTION  1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked
+src/broken/ThemedPanel.svelte  info     ASSUMPTION  the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked
+src/broken/ThemedPanel.svelte  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
+src/broken/ThemedPanel.svelte  info     ASSUMPTION  text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)
+
+8 error(s), 3 warning(s), 30 not checked or assumed

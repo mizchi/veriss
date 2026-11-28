@@ -1,13 +1,37 @@
-import {accessibilityFacts} from './tree.mjs';
+import {accessibilityFacts,normalizeTree} from './tree.mjs';
+import {restructuredDetail,paragraphContent,flowOnly} from './rules/html-structure.mjs';
 // The tags whose elements inside a text-bearing element are its inline content (no boxes of their own).
 export {phrasingTags} from './tree.mjs';
-import {parse,parseFragment} from 'parse5';
+import {Parser} from 'parse5';
 import {analyzeInput} from './analyze.mjs';
 
 /** A deliberately small static-HTML adapter, with no DOM or browser dependency. */
 export function analyzeHTML(html,options) {
   const {tree,diagnostics}=htmlBoxTree(html);
   return analyzeInput(tree,options,diagnostics);
+}
+
+/**
+ * The HTML parser's restructurings of a document or single-root fragment (checklist F27, J1, J2) as W_HTML_RESTRUCTURED
+ * warnings, without analyzing anything else. An adapter whose markup is re-serialized before the analysis (which loses
+ * the source's structure) reads them from the markup as written; `line` is the element's data-src-line.
+ */
+export function htmlRestructurings(html,name='Page',{dom=false}={}) {
+  const {root}=normalizeTree(htmlBoxTree(html).tree,name), out=[];
+  // (An element the parser made — the empty <p> of a stray </p> — has no line: the last line before it in tree order,
+  // the element whose block closed the paragraph.)
+  let last;
+  (function walk(box) {
+    const own=Number(box.attributes?.['data-src-line']); if(Number.isSafeInteger(own)) last=own;
+    // dom: the markup is built through the DOM API (an adapter's React or Vue template), where no parser restructures it:
+    // a paragraph holding flow content is E_HTML_PARAGRAPH_CONTENT on that paragraph, and the empty <p> the parser
+    // makes of its end tag is not reported.
+    if(dom && box.paragraphFlow) out.push({...paragraphContent(box,box.paragraphFlow),...(Number.isSafeInteger(own) ? {line:own} : {})});
+    if(box.restructured && !(dom && box.restructured==='implied' && box.tag==='p')) { const line=Number.isSafeInteger(own) ? own : last;
+      out.push({code:'W_HTML_RESTRUCTURED',severity:'warning',box:box.label,path:box.path,tag:box.tag,rule:'html-structure',...restructuredDetail(box),...(box.restructured==='dropped' && ['body','html'].includes(box.tag) ? {atRoot:true} : {}),...(Number.isSafeInteger(line) ? {line} : {})}); }
+    for(const child of box.children ?? []) walk(child);
+  })(root);
+  return out;
 }
 
 /** The box tree of a single-root HTML fragment (or a body root), and its adapter diagnostics. */
@@ -28,16 +52,31 @@ const presentationalTargets={
 const renderingAttributes=new Set([...Object.keys(presentationalTargets),'background','text','link','vlink','alink','cellpadding','cellspacing','frame','rules','valign','char','charoff','nowrap','hspace','vspace','noshade','clear','face','compact','frameborder','scrolling','marginwidth','marginheight','topmargin','leftmargin','rightmargin','bottommargin','cols','rows','wrap','span','start','reversed','multiple','min','max','low','high','optimum','step','open','contenteditable','is','slot','shadowrootmode','spellcheck','dirname']);
 const presentationalInert=(tag,name)=>Object.hasOwn(presentationalTargets,name) && !presentationalTargets[name].has(tag);
 const voidTags=new Set(['area','base','br','col','embed','hr','img','input','link','meta','source','track','wbr']);
+// The start and end tags in the order the tree builder received them. The tree builder drives the tokenizer's states,
+// so raw text (script, style, textarea) and foreign content are tokenized as a browser tokenizes them: a tag in the list
+// is a tag the author wrote. Each start tag's offset matches its element's sourceCodeLocation.
+class RecordingParser extends Parser {
+  onStartTag(token) { this.tags?.push({start:true,name:token.tagName,at:token.location?.startOffset,self:token.selfClosing}); super.onStartTag(token); }
+  onEndTag(token) { this.tags?.push({start:false,name:token.tagName}); super.onEndTag(token); }
+}
+const parse=(html,options,tags)=>{ const parser=new RecordingParser(options); parser.tags=tags; parser.tokenizer.write(html,true); return parser.document; };
+const parseFragment=(html,options,tags)=>{ const parser=RecordingParser.getFragmentParser(null,options); parser.tags=tags; parser.tokenizer.write(html,true); return parser.getFragment(); };
+// Table parts: outside a table (and a template) the parser ignores their start tags (HTML §13.2.6.4.7 "in body").
+const tableParts=new Set(['caption','col','colgroup','tbody','td','tfoot','th','thead','tr']);
+// Elements whose end tag may be omitted because a following start tag closes them: written around such a start tag
+// (an li inside an li), they are closed by it and what was written inside becomes their next sibling. (p is reported
+// through the empty p its stray end tag leaves.)
+const autoClosing=new Set(['li','dt','dd','option','optgroup','td','th','tr','tbody','thead','tfoot','caption','colgroup','rb','rt','rtc','rp']);
 export function htmlBoxTree(html) {
   if(typeof html!=='string' || html.length>1_000_000) throw new TypeError('Invalid HTML input');
-  const diagnostics=[];
+  const diagnostics=[], tags=[];
   const unknown=message=>diagnostics.push({code:'U_LAYOUT_HTML',severity:'unknown',message});
   // A body element as the root: parse as a document and check from body (its attributes, such as aria-hidden, count).
   // An html element as the root (a whole document): its font-size is what rem resolves against. The head
   // (with no boxes) is dropped.
   const asHtml=/^\s*(?:<!doctype html>\s*)?<html[\s>]/i.test(html);
   const asBody=asHtml || /^\s*<body[\s>]/i.test(html);
-  const documentNode=asBody ? parse(asHtml ? (/^\s*<!doctype/i.test(html) ? html.trim() : `<!doctype html>${html.trim()}`) : `<!doctype html><html><head></head>${html.trim()}</html>`,{sourceCodeLocationInfo:true,onParseError:error=>unknown(`HTML parse recovery: ${error.code}`)}).childNodes.find(n=>n.tagName==='html') : null;
+  const documentNode=asBody ? parse(asHtml ? (/^\s*<!doctype/i.test(html) ? html.trim() : `<!doctype html>${html.trim()}`) : `<!doctype html><html><head></head>${html.trim()}</html>`,{sourceCodeLocationInfo:true,onParseError:error=>unknown(`HTML parse recovery: ${error.code}`)},tags).childNodes.find(n=>n.tagName==='html') : null;
   if(asHtml) {
     if(documentNode.childNodes.some(n=>n.tagName==='head' && n.childNodes.some(c=>c.tagName && !['meta','title'].includes(c.tagName)))) unknown('A head with elements other than meta and title is not modeled (pass styles as the css option)');
     // The viewport meta tag (zoom restrictions: the meta-viewport rule) is kept as a fact of the html root.
@@ -45,7 +84,7 @@ export function htmlBoxTree(html) {
     var metaViewport=meta?.attrs.find(a=>a.name==='content')?.value;
     documentNode.childNodes=documentNode.childNodes.filter(n=>n.tagName!=='head');
   }
-  const fragment=asHtml ? documentNode : asBody ? documentNode.childNodes.find(n=>n.tagName==='body') : parseFragment(html,{sourceCodeLocationInfo:true,onParseError:error=>unknown(`HTML parse recovery: ${error.code}`)});
+  const fragment=asHtml ? documentNode : asBody ? documentNode.childNodes.find(n=>n.tagName==='body') : parseFragment(html,{sourceCodeLocationInfo:true,onParseError:error=>unknown(`HTML parse recovery: ${error.code}`)},tags);
   const roots=asBody ? [fragment] : fragment.childNodes.filter(node=>node.tagName);
   // Checklist F27 (moves the parser makes): an element written inside a <table> outside its cells is moved before the
   // table (foster parenting), and a <form> start tag inside a form is dropped. Found from the source offsets.
@@ -61,6 +100,32 @@ export function htmlBoxTree(html) {
       if(t) x.n.fostered=true; }
     const formStarts=new Set(all.filter(x=>x.n.tagName==='form' && x.n.sourceCodeLocation).map(x=>x.n.sourceCodeLocation.startOffset));
     for(const m of source.matchAll(/<form[\s>]/gi)) if(!formStarts.has(m.index)) { const outer=all.filter(x=>x.n.tagName==='form' && x.n.sourceCodeLocation && x.n.sourceCodeLocation.startOffset<m.index && m.index<(x.n.sourceCodeLocation.endOffset ?? Infinity)).at(-1); if(outer) outer.n.nestedForm=true; }
+    // Checklist J1, J2: the tree the source writes (each start tag inside the last one not yet closed by an end tag the
+    // author wrote) against the tree the parser built. A table part with no element was dropped; an element outside the
+    // optional-end-tag element it was written in (whose own end tag comes after it in the source) was closed out of it.
+    // Inside a template or foreign content (svg, math) the parser's rules differ: not compared.
+    const byOffset=new Map(all.filter(x=>x.n.sourceCodeLocation).map(x=>[x.n.sourceCodeLocation.startOffset,x]));
+    const written=[], open=[];
+    for(const t of tags) {
+      if(t.start) { const e={...t,parent:open.at(-1),closed:false}; written.push(e); if(!voidTags.has(t.name) && !t.self) open.push(e); }
+      else { const i=open.findLastIndex(e=>e.name===t.name); if(i>=0) { open[i].closed=true; open.length=i; } }
+    }
+    const foreign=e=>{ for(let p=e.parent; p; p=p.parent) if(['template','svg','math'].includes(p.name)) return true; return false; };
+    for(const e of written) {
+      if(e.at===undefined || foreign(e)) continue;
+      const x=byOffset.get(e.at);
+      if(!x) {
+        if(!tableParts.has(e.name)) continue;
+        let p=e.parent; while(p && !byOffset.has(p.at)) p=p.parent;
+        const host=p && byOffset.get(p.at)?.n;
+        if(host && !(host.droppedTags ??= []).includes(e.name)) host.droppedTags.push(e.name);
+        continue;
+      }
+      const p=e.parent, host=p && byOffset.get(p.at)?.n;
+      // J7: flow content written in a <p> (the parser closes the paragraph; a DOM-built tree keeps it inside).
+      if(host && p.name==='p' && flowOnly.has(e.name)) host.paragraphFlow ??= e.name;
+      if(host && p.closed && autoClosing.has(p.name) && !x.n.fostered && !x.ancestors.includes(host)) x.n.writtenIn=p.name;
+    }
   }
   if(roots.length!==1 || !asBody && fragment.childNodes.some(n=>n.nodeName==='#text' && n.value.trim())) throw new TypeError('Static HTML adapter requires a single root element');
   let count=0;
@@ -141,8 +206,8 @@ export function htmlBoxTree(html) {
     // foreign (SVG, MathML) elements are left alone.
     const html5=node.namespaceURI==='http://www.w3.org/1999/xhtml';
     const optionalEnd=new Set(['html','head','body','p','li','dt','dd','option','optgroup','rt','rp','tr','td','th','thead','tbody','tfoot','colgroup','caption']);
-    const restructured=node.fostered ? 'fostered' : node.nestedForm ? 'nested-form' : !html5 || !node.sourceCodeLocation && ['tbody','tr','colgroup','html','head','body'].includes(node.tagName) ? undefined : !node.sourceCodeLocation ? 'implied' : node.sourceCodeLocation.startTag && !node.sourceCodeLocation.endTag && !optionalEnd.has(node.tagName) && !voidTags.has(node.tagName) ? 'unclosed' : undefined;
-    return {...(node.adapterUnknowns ? {adapterUnknowns:node.adapterUnknowns.map(u=>({...u}))} : {}),...(node.notAttributes ? {notAttributes:[...node.notAttributes]} : {}),...(node.inertAttributes ? {inertAttributes:[...node.inertAttributes]} : {}),...(['tbody','tr','colgroup'].includes(node.tagName) && !node.sourceCodeLocation ? {implied:true} : {}),...(restructured ? {restructured} : {}),tag:node.tagName,attributes:attrs,...(attrs.id!==undefined ? {id:attrs.id} : {}),...(attrs.lang!==undefined ? {lang:attrs.lang.trim()} : {}),...accessibilityFacts(node.tagName,attrs),classes:(attrs.class ?? '').split(/\s+/).filter(Boolean),
+    const restructured=node.fostered ? 'fostered' : node.nestedForm ? 'nested-form' : node.writtenIn ? 'auto-closed' : node.droppedTags ? 'dropped' : !html5 || !node.sourceCodeLocation && ['tbody','tr','colgroup','html','head','body'].includes(node.tagName) ? undefined : !node.sourceCodeLocation ? 'implied' : node.sourceCodeLocation.startTag && !node.sourceCodeLocation.endTag && !optionalEnd.has(node.tagName) && !voidTags.has(node.tagName) ? 'unclosed' : undefined;
+    return {...(node.adapterUnknowns ? {adapterUnknowns:node.adapterUnknowns.map(u=>({...u}))} : {}),...(node.notAttributes ? {notAttributes:[...node.notAttributes]} : {}),...(node.inertAttributes ? {inertAttributes:[...node.inertAttributes]} : {}),...(node.droppedTags ? {droppedTags:[...node.droppedTags]} : {}),...(node.writtenIn ? {writtenIn:node.writtenIn} : {}),...(node.paragraphFlow ? {paragraphFlow:node.paragraphFlow} : {}),...(['tbody','tr','colgroup'].includes(node.tagName) && !node.sourceCodeLocation ? {implied:true} : {}),...(restructured ? {restructured} : {}),tag:node.tagName,attributes:attrs,...(attrs.id!==undefined ? {id:attrs.id} : {}),...(attrs.lang!==undefined ? {lang:attrs.lang.trim()} : {}),...accessibilityFacts(node.tagName,attrs),classes:(attrs.class ?? '').split(/\s+/).filter(Boolean),
       text:node.childNodes.some(n=>n.nodeName==='#text' && /[^\t\n\r ]/.test(n.value)),
       ...(node.childNodes.some(n=>n.nodeName==='#text' && /[^\t\n\r ]/.test(n.value)) ? {textContent:node.childNodes.filter(n=>n.nodeName==='#text').map(n=>n.value).join(' ').replace(/[\t\n\r ]+/g,' ').trim()} : {}),
       ...(node.childNodes.some(n=>n.nodeName==='#text' && n.value && !/[^\t\n\r ]/.test(n.value)) ? {whitespace:true} : {}),

@@ -1,7 +1,7 @@
 // The shared part of the component adapters (Svelte, Vue, React with StyleX or Linaria). An adapter turns one
 // component into its template states — { html, choices } with the conditions each takes — plus its CSS; this module
 // analyses every state with the generic core and reports what holds per state. The core knows nothing of components.
-import { analyzeHTML, phrasingTags } from 'veriss/html';
+import { analyzeHTML, htmlRestructurings, phrasingTags } from 'veriss/html';
 import { parseFragment, serialize } from 'parse5';
 import { noShift } from './noshift.mjs';
 
@@ -308,11 +308,24 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   const grouped = new Map();
   for (const r of results) for (const d of [...r.report.diagnostics.filter(d => d.severity !== 'unknown'), ...(r.report.layoutWarnings ?? []), ...(r.report.accessibility?.warnings ?? []), ...(r.report.integrity?.warnings ?? [])]) {
     const key = `${d.code}\u0000${d.box ?? ''}`;
-    if (!grouped.has(key)) grouped.set(key, { code: d.code, box: d.box, path: d.path, severity: d.severity, message: d.message, rule: d.rule, css: d.css, ...(d.related ? { related: d.related } : {}), ...(d.layout ? { layout: d.layout } : {}), states: [], html: r.html });
+    if (!grouped.has(key)) grouped.set(key, { code: d.code, box: d.box, path: d.path, severity: d.severity, message: d.message, rule: d.rule, css: d.css, ...(d.related ? { related: d.related } : {}), ...(d.layout ? { layout: d.layout } : {}), ...(d.fix ? { fix: d.fix } : {}), ...(d.atRoot ? { atRoot: true } : {}), states: [], html: r.html });
     const entry = grouped.get(key);
     if (!entry.states.includes(r.choices)) entry.states.push(r.choices);
   }
   for (const u of unbounded.values()) if (!grouped.has(`${u.code}\u0000${u.box}`)) grouped.set(`${u.code}\u0000${u.box}`, u);
+  // The HTML parser's restructurings of each state's markup as written (checklist F27, J1, J2): the analysis reads the
+  // markup after it was parsed and serialized again (the text markers), which no longer shows them. A DOM built by
+  // script (React, Vue) keeps the written structure, so the server-rendered page and the hydrated one differ.
+  for (const r of results) {
+    // The adapters' templates render through the DOM API (React, Vue; Svelte's compiler rejects these nestings), so a
+    // paragraph holding flow content is the content-model error, not the parser's restructuring.
+    let found; try { found = htmlRestructurings(wrap(r.html), name, { dom: true }); } catch { continue; }
+    for (const w of found) {
+      const key = `${w.code}\u0000${w.box}`;
+      if (!grouped.has(key)) grouped.set(key, { ...w, states: [], html: r.html });
+      if (!grouped.get(key).states.includes(r.choices)) grouped.get(key).states.push(r.choices);
+    }
+  }
   // Component scope findings. E_SCOPE_OUTSIDE holds when no state closes the relation (a class a state toggles may);
   // E_SCOPE_REACHES when any state renders another component's content where the selector reaches. The escapes
   // (:global, :deep, :slotted) the adapter found are E_SCOPE_ESCAPE.
@@ -380,5 +393,12 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   }
   return out;
 }
-export { lint, formatText, recommended } from './lint.mjs';
+/**
+ * The result for a component its framework's compiler rejects: it does not build, so there are no states to analyse.
+ * Each compile error is {code?, message, line, column (both 1-based), file? (an imported module's, when the error is
+ * there)}; lint reports it as E_ADAPTER_COMPILE. An adapter returns this instead of throwing the parser's error.
+ */
+export const notCompiled = compileErrors => ({ status: 'violated', states: [], unknowns: [], coverage: { states: 0, assumptions: [] }, findings: [], compileErrors });
+
+export { lint, formatText, recommended, strict } from './lint.mjs';
 export { lowerNested, relocateSelectorWarnings, relocateFindings } from './nested.mjs';

@@ -179,6 +179,33 @@ importers:
         specifier: 7.0.0
         version: 7.0.0
 
+  examples/linaria:
+    devDependencies:
+      veriss:
+        specifier: workspace:*
+        version: link:../../packages/veriss
+      veriss-adapter-core:
+        specifier: workspace:*
+        version: link:../../packages/adapter-core
+      veriss-linaria:
+        specifier: workspace:*
+        version: link:../../packages/linaria
+      veriss-react:
+        specifier: workspace:*
+        version: link:../../packages/react-adapter
+
+  examples/svelte:
+    devDependencies:
+      veriss:
+        specifier: workspace:*
+        version: link:../../packages/veriss
+      veriss-adapter-core:
+        specifier: workspace:*
+        version: link:../../packages/adapter-core
+      veriss-svelte:
+        specifier: workspace:*
+        version: link:../../packages/svelte-adapter
+
   packages/adapter-core:
     dependencies:
       parse5:
@@ -191,6 +218,18 @@ importers:
       veriss:
         specifier: workspace:*
         version: link:../veriss
+
+  packages/linaria:
+    devDependencies:
+      veriss:
+        specifier: workspace:*
+        version: link:../veriss
+      veriss-adapter-core:
+        specifier: workspace:*
+        version: link:../adapter-core
+      veriss-react:
+        specifier: workspace:*
+        version: link:../react-adapter
 
   packages/react-adapter:
     dependencies:
@@ -213,9 +252,6 @@ importers:
       '@linaria/react':
         specifier: 8.2.0
         version: 8.2.0(react@19.1.10)
-      '@mizchi/veriss-adapter-core':
-        specifier: workspace:*
-        version: link:../adapter-core
       '@stylexjs/babel-plugin':
         specifier: 0.19.1
         version: 0.19.1
@@ -237,6 +273,12 @@ importers:
       styled-components:
         specifier: 6.1.19
         version: 6.1.19(react-dom@19.1.10(react@19.1.10))(react@19.1.10)
+      veriss:
+        specifier: workspace:*
+        version: link:../veriss
+      veriss-adapter-core:
+        specifier: workspace:*
+        version: link:../adapter-core
 
   packages/svelte-adapter:
     dependencies:
@@ -244,12 +286,12 @@ importers:
         specifier: 5.57.2
         version: 5.57.2
     devDependencies:
-      '@mizchi/veriss-adapter-core':
-        specifier: workspace:*
-        version: link:../adapter-core
       veriss:
         specifier: workspace:*
         version: link:../veriss
+      veriss-adapter-core:
+        specifier: workspace:*
+        version: link:../adapter-core
 
   packages/veriss:
     dependencies:
@@ -275,7 +317,7 @@ importers:
         specifier: 3.5.44
         version: 3.5.44(typescript@6.0.3)
     devDependencies:
-      '@mizchi/veriss-adapter-core':
+      veriss-adapter-core:
         specifier: workspace:*
         version: link:../adapter-core
 

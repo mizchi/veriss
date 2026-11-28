@@ -1,26 +1,43 @@
 {
-  "name": "@mizchi/veriss-svelte",
-  "version": "0.0.1",
-  "private": true,
+  "name": "veriss-svelte",
+  "version": "0.1.1",
   "type": "module",
   "description": "Svelte 5 component adapter for veriss: template branches as states, scoped styles, selector usage.",
+  "license": "MIT",
+  "bin": {
+    "veriss-svelte": "./bin/veriss-svelte.mjs"
+  },
   "exports": {
     ".": {
       "import": "./src/index.mjs"
     }
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "svelte": "5.57.2"
+  },
+  "peerDependencies": {
+    "veriss": "^0.1.1",
+    "veriss-adapter-core": "^0.1.1"
+  },
+  "devDependencies": {
+    "veriss": "workspace:*",
+    "veriss-adapter-core": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },
-  "peerDependencies": {
-    "veriss": "*",
-    "@mizchi/veriss-adapter-core": "*"
-  },
-  "devDependencies": {
-    "veriss": "workspace:*",
-    "@mizchi/veriss-adapter-core": "workspace:*"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mizchi/veriss.git",
+    "directory": "packages/svelte-adapter"
   }
 }

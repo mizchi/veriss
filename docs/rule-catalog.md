@@ -19,7 +19,7 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 | 2 | [at-rule とカスケード](#2-at-rule-とカスケード) | 決して当たらない `@media`・`@supports`、層や順番で負ける規則 | CSS だけ | `W_CSS_MEDIA_*` など 16 | 範囲が空の query、不正な query・`@property`・`@font-face`、層の順 | 別ファイルの `@import`、query の並びで当たりうるもの |
 | 3 | [効かない宣言](#3-文脈で効かない宣言) | 受け入れられるが何もしない宣言 | CSS + box の祖先 | `W_LAYOUT_DECLARATION_INERT` ほか 31 | 親の display・position・表の境界モデルなどで決まる 80 以上の組み合わせ | ブラウザーで効き方が違う組み合わせ(除外して記録) |
 | 4 | [セレクタ × DOM](#4-セレクタ--dom) | DOM の形や状態のせいで当たらないセレクタ | CSS + DOM | `W_CSS_STATE_UNREACHABLE` ほか 7 | フォーカス・リンク・フォームの状態、HTML の解析が補う要素 | 動的な属性(tabindex・lang・dir・value)、外から渡される子 |
-| 5 | [HTML の構造と属性](#5-html-の構造と属性) | 解析で組み替わる構造、効かない属性 | HTML | `W_HTML_*` 3 | `<p>` の中の `<div>`、入れ子の `<a>`、効かない `width`・`disabled` など | DOM API で組み立てた木(React など)では構造の検査をしない |
+| 5 | [HTML の構造と属性](#5-html-の構造と属性) | 解析で組み替わる構造、効かない属性 | HTML | `W_HTML_*` 7 | `<p>` の中の `<div>`、入れ子の `<a>`、効かない `width`・`disabled` など | DOM API で組み立てた木(React など)では構造の検査をしない |
 | 6 | [配置(収まり・はみ出し)](#6-配置収まりはみ出し重なり) | すべての viewport 幅で箱が収まるか | CSS + box tree | `E_LAYOUT_*` 25、`W_LAYOUT_*` 28 | grid・flex・block・絶対配置の幅と高さ、トラック、文字の改行 | float、表の自動配置、bidi の混ざった rtl、行を高くする inline |
 | 7 | [画像・メディア](#7-画像とメディア) | 場所を取らない画像、歪み、srcset | HTML + CSS | `E_LAYOUT_IMAGE_*` ほか 12 | 幅・高さ属性、縦横比、`sizes` と実際の幅 | 動的な `srcset`・`media` |
 | 8 | [レイアウトシフトと動き](#8-レイアウトシフトとアニメーション) | 状態の切り替え・ホバー・アニメーションで動く箱 | CSS + 状態 | `E_LAYOUT_*_SHIFT`、`E_NOSHIFT_*` ほか 17 | `:hover`・状態の間の位置の差、easing の行き過ぎ、CLS の上限 | 配置が Unknown の状態、色が読めないアニメーション |
@@ -136,7 +136,11 @@ verified で指摘なしになる。Web 版: https://mizchi.github.io/veriss/
 
 | コード | 検出すること | 判定 |
 |---|---|---|
-| `W_HTML_RESTRUCTURED` | `<p>` の中の `<div>`、入れ子の `<a>`、表の外へ移される要素、`<form>` の中の `<form>`(F27) | 検査可(ソースの位置から。React など DOM API の木は対象外) |
+| `W_HTML_RESTRUCTURED` | `<p>` の中の `<div>`、入れ子の `<a>`、表の外へ移される要素、`<form>` の中の `<form>`(F27)、表の外の `<td>`・`<tr>`(J1)、`li` の中の `li` など同じ種類の中の終了タグを省ける要素(J2) | 検査可(ソースの位置から。adapter のテンプレートは書いたままのマークアップから) |
+| `W_HTML_SUMMARY_OUTSIDE` / `W_HTML_LEGEND_OUTSIDE` | details の子でない summary、fieldset の子でない legend(J3、J4) | 検査可 |
+| `W_HTML_LABEL_EXTRA_CONTROL` | 複数のコントロールを含む label の、label されないコントロール(J5) | 検査可 |
+| `W_HTML_CONTENT_MODEL` | button・span などの中の div、header の中の header、select の外の option ほか(J6、lint の `strict` だけ) | 仕様のみ(ブラウザーは書いたとおり描く) |
+| `E_HTML_PARAGRAPH_CONTENT` | DOM で組み立てた木の、`<p>` の中の div・ul・table・見出し(J7) | 仕様のみ(DOM の木では描画は変わらず、解析した HTML と食い違う) |
 | `W_HTML_ATTRIBUTE_INERT` | div の `width`・`bgcolor` など当てはまらない見た目の属性(F28) | 検査可 |
 | `W_HTML_ATTRIBUTE_NOT_HTML` | HTML に書いた `indeterminate`、a の `disabled`、checkbox の `readonly`、number の `maxlength` など(F64〜F67) | 検査可 |
 
@@ -262,6 +266,7 @@ React・Vue・Svelte の adapter がコンポーネントを状態ごとの箱�
 | コード | 検出すること | 判定 |
 |---|---|---|
 | `E_SCOPE_OUTSIDE` / `E_SCOPE_REACHES` / `E_SCOPE_GLOBAL` / `E_SCOPE_ESCAPE` / `E_SCOPE_CONTRACT` | 外の文脈に頼るセレクタ、子コンポーネントの中を塗るセレクタ、ページ全体に当たるセレクタ、`:global`・`:deep`・`createGlobalStyle`、子の中の noshift | 検査可 |
+| `E_ADAPTER_COMPILE` | コンパイラーが受け付けないコンポーネント(Svelte の `CompileError`、たとえば `<p><div></div></p>` の `element_invalid_closing_tag_autoclosed`、JSX・TSX の構文エラー、Vue SFC の解析エラー)。ビルドできないので error。位置はコンパイラーの行と列 | 検査可(パーサーが立ち直れないときは、そのファイルの他は検査しない) |
 | `U_REACT_*` / `U_VUE_*` / `U_SVELTE_*` / `U_STYLEX_*` / `U_LINARIA_*` | 動的な class・style、spread、map の中身、読めないテンプレート | Unknown(その部分は検査しない) |
 
 ## 13. 検査しないもの(Unknown)

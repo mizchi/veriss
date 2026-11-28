@@ -17,9 +17,9 @@
     "test": "node --test test/*.test.mjs"
   },
   "peerDependencies": {
-    "@mizchi/veriss-adapter-core": "*"
+    "veriss-adapter-core": "*"
   },
   "devDependencies": {
-    "@mizchi/veriss-adapter-core": "workspace:*"
+    "veriss-adapter-core": "workspace:*"
   }
 }

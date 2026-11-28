@@ -17,6 +17,18 @@ Card.vue  info     ASSUMPTION  v-for is checked at 0, 2 items, all items taking 
 
 error が 1 件でもあれば終了コードは 1 です。
 
+npm では、Svelte と Linaria の検査を CLI 付きの package として配っています。オプションと出力は `css-lint` と同じです(実装は
+`veriss-adapter-core/cli` の `runLint` 一つ)。
+
+```bash
+npm install -D veriss-svelte veriss-linaria
+npx veriss-svelte --viewport 320-1280 src/**/*.svelte
+npx veriss-linaria --viewport 320-1280 src/**/*.tsx   # .js / .jsx / .ts / .tsx。Linaria の css`` と styled.tag``(veriss-react)
+```
+
+導入の手順(インストール、出力の読み方、package.json と CI、指摘から構造を直す方法)は [導入ガイド](guide/README.md) に、壊れた例と直した例の組は
+[`examples/svelte/`](../examples/svelte/) と [`examples/linaria/`](../examples/linaria/) にあります。
+
 ## オプション
 
 | オプション | 既定 | 意味 |
@@ -24,7 +36,7 @@ error が 1 件でもあれば終了コードは 1 です。
 | `--viewport 320-1280` | `320-1280` | 検査する幅の範囲（`--height 480-900` で高さの範囲） |
 | `--page-css <file>` | box-sizing と margin のリセット(html と body は block flow) | コンポーネントを置くページの CSS |
 | `--css <file>` | なし | plain className の React コンポーネントに当てる stylesheet |
-| `--profile recommended\|all` | `recommended` | ルールセット |
+| `--profile recommended\|strict\|all` | `recommended` | ルールセット(下の「ルールセット」) |
 | `--each-counts 0,2` | `0,2` | `{#each}` / `v-for` / `.map()` の要素数 |
 | `--no-assume-text` | 仮定あり | テキストを 1 行 24px と仮定せず、Unknown のままにする |
 | `--font Family=file.ttf` | なし | 繰り返し指定できる。CSS の計算後のフォントがこの family になるテキストは、仮定の大きさの代わりに、フォントファイルから幅と改行を測る(`auto` の列や、中身で大きさの決まる flex の item を判定できるようになる)。測れないもの(px でない font-size、`line-height: normal`、letter-spacing、斜体)は仮定のまま。測った数は info に出す |
@@ -49,6 +61,7 @@ error が 1 件でもあれば終了コードは 1 です。
 - **error**：ブラウザーで実際に壊れるもの。はみ出し（`E_LAYOUT_ITEM_SIZE`、`E_LAYOUT_PAGE_OVERFLOW`、`E_LAYOUT_TRACKS`、`E_LAYOUT_CONTENT`）、画像の領域未確保、名前のないコントロール、コントラスト不足、覆われたコントロール、小さすぎるターゲット、フォーカス表示の消失。
 - **warning**：バグの可能性が高いもの。効かない宣言、inset のない sticky、`100vw` とスクロールバー、固定 line-height、固定高さのテキスト、RTL での物理方向、セレクタとテンプレートの不一致など。
 - **info**：検査しなかったもの（Unknown）と、置いた仮定。Unknown を合格として扱うことはありません。
+- 親子の構造の検査は下の「親子の構造と `strict`」と [content-model.md](content-model.md)。
 - spec 層: WAI-ARIA / HTML の仕様違反のうち、マークアップだけで決まり描画には現れないもの(role の必須属性の欠落、不正な ARIA 属性・値、存在しない id への参照、id の重複、role の親子関係、入れ子の操作要素、ul/dl の子、th の scope など。一覧は `specRules`)。描画からは確かめられないので、recommended の error とは分けて warning にし、`tier: 'spec'` を付ける。メッセージは「spec:」で始まる。
 - 同じルールの略記と longhand の衝突は、コンポーネントの CSS では warning(`W_CSS_SHORTHAND_CONFLICT`)にし、レイアウトも解析する(同じルールの中では後の宣言が勝ち、結果は決まる)。`shorthandConflicts: 'error'` を渡すと error(`E_CSS_SHORTHAND_CONFLICT`)になり、その状態のレイアウトは解析しないので「not checked」(`U_LAYOUT_NOT_ANALYZED`)として示す。
 - recommended に含まれないルールの検出も、info として残す(「outside the recommended rules」)。解析が中に入らなかった箱(grid でも flex でもない container の `E_LAYOUT_CONTAINER`)は、「not checked」として、その箱と中身が検査されていないことを示す。検出が黙って消えることはない。
@@ -57,6 +70,23 @@ error が 1 件でもあれば終了コードは 1 です。
 一つの原因は一件にまとめる。tracks や大きさのはみ出しの中で、ページの外へ出る箱は、いちばん外の検出に「(also: N boxes inside it reach past the viewport)」として足す。固定バーがテキストの一部を隠す `E_A11Y_FIXED_HIDES_PART` があるときは、同じテキストの `E_A11Y_TEXT_START_OBSCURED` は出さない。寸法は小数の px で出す。
 
 `--profile all` にすると、エンジンの全診断を出します。
+
+### 親子の構造と `strict`
+
+親子の構造(HTML の内容モデルと ARIA の所有)の検査の一覧と実測は [content-model.md](content-model.md) にあります。
+
+- `recommended` に入るもの: HTML の解析が書いた構造を組み替えるもの(`W_HTML_RESTRUCTURED`。表の外の `<td>`、`li` の中の `li` など。
+  Vue・React のテンプレートでも、書いたままのマークアップから探して行を出す)と、置き場所でブラウザーの扱いが変わるもの
+  (`W_HTML_SUMMARY_OUTSIDE`、`W_HTML_LEGEND_OUTSIDE`、`W_HTML_LABEL_EXTRA_CONTROL`)。どれも 3 つのブラウザーで照合した警告で、
+  直し方(`fix`)に書くべき構造を出す。
+- `--profile strict`(API では `lint(result, {profile: 'strict'})`)は、`recommended` に、内容モデルだけが禁じるもの
+  (`W_HTML_CONTENT_MODEL`: `<button>` や `<span>` の中の `<div>`、`header` の中の `header`、`select` の外の `option` など)を警告として足す。
+  ブラウザーは書いたとおりに保って描くので、描画で確かめた `recommended` には入れず(`recommended` では「outside the recommended rules」の
+  info として残る)、ベストプラクティスとして直したいときに選ぶ。`recommended` の error と warning は変えない(`strict` は
+  `recommended` の上位集合で、同じコードの重さも直し方も同じ)。新しい profile にしたのは、`recommended` の約束(ブラウザーで照合した
+  ルールだけ)を崩さずに、照合できない規則を選べるようにするため。
+- コンポーネントの根の要素の親は呼び出し側の要素なので、根の `<li>`、行のコンポーネントの根の `<tr>` などは警告にせず、
+  「not checked」の info にする(`page: true` では報告する)。
 
 ## テキストの期待を書く属性(`--font` と組み合わせる)
 
@@ -172,7 +202,7 @@ flex や grid の容器で、テキストが button や div、文字のない sp
 
 ```js
 import {analyzeVue} from '@mizchi/veriss-vue';
-import {lint, formatText} from '@mizchi/veriss-adapter-core';
+import {lint, formatText} from 'veriss-adapter-core';
 const result = analyzeVue(source, {pageCSS, viewport, accessibility: true, selectors: true, assumeText: true, sourceLines: true});
 console.log(formatText(lint(result, {file: 'Card.vue', source})));
 ```

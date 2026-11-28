@@ -727,6 +727,31 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
 
+## J. 親子の構造(HTML の内容モデルと ARIA の所有)
+
+一覧と、検査しないものは [content-model.md](content-model.md)。e2e は `e2e/layout-content-model.spec.mjs`(3 ブラウザー)、単体テストは
+`packages/veriss/test/content-model.test.mjs`。
+
+- [x] **J1. 表の外の表の部品**(`W_HTML_RESTRUCTURED`、kind `dropped`): `<div>` の中の `<td>`・`<tr>`・`<thead>`・`<caption>` などは、
+  解析が開始タグを捨て、要素がなくなる(中の文字は残る)。書いた木(作者が閉じた開始タグの入れ子)と解析した木を、開始タグの位置で
+  比べて見つける。表の中、tbody を省いた表、template と svg の中は対照で報告しない。3 ブラウザーの DOM と一致。
+- [x] **J2. 同じ種類の中の、終了タグを省ける要素**(`W_HTML_RESTRUCTURED`、kind `auto-closed`): `li` の中の `li`、`dd`/`dt`、`option`、
+  `optgroup`、セルの中のセル・行・行グループは、内側の開始タグが外を閉じて兄弟になる。外の要素の終了タグを作者が書いたとき
+  だけ報告する(`<li>a<li>b</ul>` のように省いた書き方は正しい HTML)。本当に入れ子のリスト・表は対照。3 ブラウザーの DOM と一致。
+- [x] **J3. details の子でない summary**(`W_HTML_SUMMARY_OUTSIDE`): `summary.click()` が details を開くのは子のときだけ(他の内容の
+  後ろでも開く)。3 ブラウザーで一致。
+- [x] **J4. fieldset の子でない legend**(`W_HTML_LEGEND_OUTSIDE`): 枠の上(fieldset の上端)に描かれるのは子のときだけ。3 ブラウザーで一致。
+- [x] **J5. 複数のコントロールを含む label**(`W_HTML_LABEL_EXTRA_CONTROL`): `control.labels` に入るのは最初のラベル付けできる要素
+  (hidden の input は除く)か for の指す要素だけ。7 通りで 3 ブラウザーと一致。
+- [x] **J6. 内容モデルだけが禁じるもの**(`W_HTML_CONTENT_MODEL`、lint の `strict` だけ): phrasing だけを受ける要素の中の flow の要素、
+  header/footer の入れ子、select の外の option、figure の外の figcaption、label の中の label。3 ブラウザーとも書いたとおり保って描く
+  (測れる違いがないので recommended に入れない)。仮説「button の中の見出しは見出しでなくなる」は Chromium の a11y tree で外れた。
+- [x] **J7. DOM で組み立てた木の、p の中の flow の要素**(`E_HTML_PARAGRAPH_CONTENT`、spec 層): `createElement` で作ると 3 ブラウザーとも
+  中に保って描き、同じマークアップを解析し直すと `<p>` の外に出る(hydration で食い違う)。adapter のテンプレートと box tree の入力で報告する。
+- [x] **健全さの修正**: コンポーネントの根で親だけが決める指摘(`E_A11Y_LIST`・`E_A11Y_DL`・`E_A11Y_ROLE_PARENT`、根の表の部品・summary・
+  legend・option・figcaption)に `atRoot` を付け、component lint は info にする。構造の a11y 規則は配置が Unknown でも木だけで判定する。
+  ARIA の必要な所有に `treegrid`・`rowgroup`・`feed` を足した。
+
 ## 済み(このチェックリストを作る前に済んだもの)
 
 - [x] easing の行き過ぎ(cubic-bezier、`linear()`)の極値でのシフト検査と CLS の上限、終わりの戻り、relative のオフセット、
