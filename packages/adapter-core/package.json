@@ -1,25 +1,41 @@
 {
-  "name": "@mizchi/veriss-adapter-core",
-  "version": "0.0.1",
-  "private": true,
+  "name": "veriss-adapter-core",
+  "version": "0.1.1",
   "type": "module",
   "description": "Shared part of the component adapters: template states as choices, analysing every state, and the findings per state.",
+  "license": "MIT",
   "exports": {
     ".": {
       "import": "./src/index.mjs"
+    },
+    "./cli": {
+      "import": "./src/cli.mjs"
     }
   },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "parse5": "8.0.1",
     "postcss": "8.5.32"
   },
-  "scripts": {
-    "test": "node --test test/*.test.mjs"
-  },
   "peerDependencies": {
-    "veriss": "*"
+    "veriss": "^0.1.1"
   },
   "devDependencies": {
     "veriss": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mizchi/veriss.git",
+    "directory": "packages/adapter-core"
   }
 }

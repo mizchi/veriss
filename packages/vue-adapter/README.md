@@ -1,6 +1,6 @@
 # @mizchi/veriss-vue
 
-A Vue 3 SFC adapter for `veriss` (through `@mizchi/veriss-adapter-core`).
+A Vue 3 SFC adapter for `veriss` (through `veriss-adapter-core`).
 
 ```js
 import {analyzeVue} from '@mizchi/veriss-vue';

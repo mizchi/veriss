@@ -195,10 +195,10 @@ export default function C({ size, dot, icon }: { size: 'small' | 'medium'; dot: 
 
 test('package exports: the resolve-node entry the README imports resolves through the package name', async () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  const specifiers = [...readme.matchAll(/from '(@mizchi\/veriss-react[^']*)'/g)].map(m => m[1]);
-  assert.ok(specifiers.includes('@mizchi/veriss-react/resolve-node'), JSON.stringify(specifiers));
+  const specifiers = [...readme.matchAll(/from '(veriss-react[^']*)'/g)].map(m => m[1]);
+  assert.ok(specifiers.includes('veriss-react/resolve-node'), JSON.stringify(specifiers));
   for (const specifier of specifiers) await import(specifier);
-  const {nodeModuleResolver} = await import('@mizchi/veriss-react/resolve-node');
+  const {nodeModuleResolver} = await import('veriss-react/resolve-node');
   assert.equal(typeof nodeModuleResolver(), 'function');
 });
 

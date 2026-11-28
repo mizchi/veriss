@@ -11,20 +11,27 @@ Unknown is never turned into success: what the model does not cover is reported 
 | Package | Directory | |
 | --- | --- | --- |
 | `veriss` | `packages/veriss` | the core: HTML/box tree + CSS → layout, accessibility and CSS-mistake findings; Z3 verification; text metrics from font files |
-| `@mizchi/veriss-adapter-core` | `packages/adapter-core` | shared component adapter: state expansion, analysis per state, lint findings |
-| `@mizchi/veriss-react` | `packages/react-adapter` | React (JSX) with StyleX and Linaria |
+| `veriss-adapter-core` | `packages/adapter-core` | shared component adapter: state expansion, analysis per state, lint findings |
+| `veriss-react` | `packages/react-adapter` | React (JSX) with StyleX and Linaria |
 | `@mizchi/veriss-vue` | `packages/vue-adapter` | Vue 3 SFC |
-| `@mizchi/veriss-svelte` | `packages/svelte-adapter` | Svelte 5 |
+| `veriss-svelte` | `packages/svelte-adapter` | Svelte 5, with the `veriss-svelte` CLI |
+| `veriss-linaria` | `packages/linaria` | Linaria (`css`` ` and `styled.tag`` `) through `veriss-react`, with the `veriss-linaria` CLI |
 
 Users: [mizchi/isle](https://github.com/mizchi/isle) checks its components' layout contracts with `veriss`.
 
 ## Install
 
-`veriss` (the core) is on npm; the adapters (`@mizchi/veriss-*`) are not published yet.
+`veriss` (the core) is on npm. `veriss-adapter-core`, `veriss-react`, `veriss-svelte` and `veriss-linaria` are published
+from the same tag at the same version; the Vue adapter (`@mizchi/veriss-vue`) is not published yet.
 
 ```sh
 npm install veriss
+npm install -D veriss-svelte    # npx veriss-svelte --viewport 320-1280 src/**/*.svelte
+npm install -D veriss-linaria   # npx veriss-linaria --viewport 320-1280 src/**/*.tsx
 ```
+
+The checkers' options and output are [docs/component-lint.md](docs/component-lint.md)'s; the exit status is 1 when any
+error is reported.
 
 [vlmkit](https://github.com/mizchi/vlmkit) runs it on rendered pages: `vlmkit check css <page>` hands veriss the DOM after the page's scripts ran and every stylesheet the page loaded.
 

@@ -1,9 +1,9 @@
 {
-  "name": "@mizchi/veriss-react",
-  "version": "0.0.1",
-  "private": true,
+  "name": "veriss-react",
+  "version": "0.1.1",
   "type": "module",
   "description": "React (JSX) adapter for veriss with StyleX and Linaria style resolution: JSX branches as states.",
+  "license": "MIT",
   "exports": {
     ".": {
       "import": "./src/index.mjs"
@@ -12,28 +12,43 @@
       "import": "./src/resolve-node.mjs"
     }
   },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@babel/parser": "7.29.12",
     "postcss": "8.5.32"
+  },
+  "peerDependencies": {
+    "veriss": "^0.1.1",
+    "veriss-adapter-core": "^0.1.1"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
     "@babel/plugin-syntax-jsx": "7.29.7",
     "@linaria/core": "8.2.0",
     "@linaria/react": "8.2.0",
-    "@mizchi/veriss-adapter-core": "workspace:*",
+    "veriss-adapter-core": "workspace:*",
     "@stylexjs/babel-plugin": "0.19.1",
     "@stylexjs/stylex": "0.19.1",
     "@wyw-in-js/transform": "2.4.0",
     "esbuild": "0.28.2",
     "react": "19.1.10",
     "react-dom": "19.1.10",
-    "styled-components": "6.1.19"
+    "styled-components": "6.1.19",
+    "veriss": "workspace:*"
+  },
+  "engines": {
+    "node": ">=24"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },
-  "peerDependencies": {
-    "@mizchi/veriss-adapter-core": "*"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mizchi/veriss.git",
+    "directory": "packages/react-adapter"
   }
 }
