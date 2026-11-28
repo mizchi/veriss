@@ -1,0 +1,119 @@
+# The checks a pull request must pass (docs/handoff.md「どこで何が走るか」). tools/gate.sh runs only the unit tests by
+# default; this workflow runs the rest on Linux:
+#   unit  root tests and every package's tests
+#   e2e   the layout e2e (playwright.layout.config.mjs), one job per browser x shard
+#   eval  the component-lint eval (before + 3 attempts) compared with evals/results/component-lint/
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Root tests
+        run: node --test tests/*.test.mjs
+      - name: Package tests
+        if: success() || failure()
+        run: pnpm -r test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        shard: [1, 2, 3, 4]
+    env:
+      SHARDS: 4
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
+      # Some specs launch Chromium whatever the project is (page scroll with classic scrollbars, CLS facts, vlmkit's
+      # integrity and contrast gates), so Chromium is installed in every job.
+      - name: Install the browsers
+        run: npx playwright install --with-deps chromium ${{ matrix.browser }}
+      # The spec files share no state (each writes its own results directory), so they run two at a time; the tests
+      # inside one file stay in order in one worker (no fullyParallel).
+      - name: Layout e2e
+        run: >-
+          npx playwright test -c playwright.layout.config.mjs --project ${{ matrix.browser }}
+          --shard ${{ matrix.shard }}/${{ env.SHARDS }} --workers 2 --trace retain-on-failure --reporter list,html
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-${{ matrix.browser }}-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Not blocking yet: the committed results were recorded on macOS (docs/handoff.md). Make it blocking once Linux
+    # reproduces them.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Component-lint eval (before, run-1, run-2, run-3)
+        run: |
+          for a in '' run-1 run-2 run-3; do node tools/eval-component-lint.mjs ${a:+--attempt $a}; done
+      - name: Compare with the committed results
+        if: success() || failure()
+        run: |
+          git diff --no-ext-diff --stat evals/results/component-lint/ > eval.diffstat
+          git diff --no-ext-diff evals/results/component-lint/ > eval.diff
+          {
+            echo "## component-lint eval on Linux"
+            if [ -s eval.diff ]; then
+              echo "The results differ from the committed ones:"
+              echo '```'; cat eval.diffstat; echo '```'
+              echo "<details><summary>diff (first 300 lines)</summary>"; echo; echo '```diff'; head -300 eval.diff; echo '```'; echo "</details>"
+            else
+              echo "The results match the committed ones."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ ! -s eval.diff ]
+      - uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: component-lint-eval
+          path: |
+            evals/results/component-lint/
+            eval.diff
+          retention-days: 14

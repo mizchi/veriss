@@ -62,13 +62,35 @@ isle から切り出した CSS 検証器(veriss)を、別のマシンで続け�
 git clone https://github.com/mizchi/veriss && cd veriss
 pnpm install
 npx playwright install chromium firefox webkit   # e2e は 3 ブラウザで測る
-tools/gate.sh                                     # push の前に毎回。20〜30 分かかる(eval が長い)
+tools/gate.sh                                     # push の前に毎回。単体テストだけ(1 分ほど)。e2e と eval は PR の CI
 ```
 
 - ブラウザーが既定の場所にないときは `PLAYWRIGHT_BROWSERS_PATH` を指定する
 - 1 つのパターンだけの e2e: `npx playwright test -c playwright.layout.config.mjs --trace off e2e/layout-css-mistakes.spec.mjs -g F106 --project=chromium --project=firefox --project=webkit`
 - 解析器の読み方を見る: `node tools/probe.mjs '<css>' ['<html>']`
 - 宣言が効くかを 3 ブラウザで比べる: `node tools/browser-diff.cjs '<css>' '<css + 宣言>' '<html>'`
+
+## どこで何が走るか
+
+重い検査は GitHub Actions で回す。手元の Mac でしか落ちない失敗(下の「環境でだけ落ちるもの」)は、もう push を止めない。
+
+| どこ | いつ | 何を | 起動 |
+|---|---|---|---|
+| 手元 `tools/gate.sh` | push の前 | root と全 package の単体テスト(並列、1 分ほど) | `tools/gate.sh` |
+| 手元 `tools/gate.sh --full` | 必要なときだけ | 以前の gate(単体テスト、eval、css-mistakes の e2e を 3 ブラウザー。20〜30 分) | `tools/gate.sh --full` |
+| `ci.yml`(Linux) | PR と main への push | `unit`(単体テスト)、`e2e`(layout の e2e 全部を 3 ブラウザー × 4 shard)、`eval`(component-lint の eval 4 回分を記録と比べる。いまは止めない) | PR を開く、または `tools/gate.sh --remote` |
+| `fuzz.yml`(Linux) | 毎晩 | 安全なサブセットの fuzz(既定 5000 ケース × seed 1,2,3 × 3 ブラウザー) | `gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit` |
+| `macos.yml`(macOS) | 毎週 | platform で UA プロファイルを選ぶ spec(ua-profiles、reset-matrix)を 3 ブラウザー。`webkit-macos` / `firefox-macos` の照合 | `gh workflow run macos.yml` |
+| `coverage.yml` | 手動だけ | 安全なサブセットの被覆(`tools/subset-coverage.mjs`、mizchi/vlmkit を `.corpus/vlmkit` に checkout して渡す) | `gh workflow run coverage.yml` |
+| `text-widths.yml` | 手動だけ | Windows / macOS の文字幅の記録と照合 | `gh workflow run text-widths.yml -f os=both` |
+
+- branch で回すときは `--ref <branch>` を付ける(`gh workflow run fuzz.yml --ref claude/x -f cases=500`)
+- 結果の見方: `gh run list --workflow ci.yml --branch <branch>`、`gh run watch <id> --exit-status`、落ちた job のログは `gh run view <id> --log-failed`、
+  Playwright の report と trace・fuzz の縮めたケース・eval の結果は `gh run download <id>`(artifact は失敗したときに上がる。fuzz と eval は毎回)
+- 各 job の summary(run のページ)に、eval の差分と fuzz の決まった割合の表が出る
+- `tools/gate.sh --remote` は branch を push し、その commit の ci.yml を `gh run watch` で待つ(PR がないと ci.yml は走らない)。`--print` でコマンドだけ出す
+- e2e の spec はファイルごとに結果の置き場所が別で、状態を共有しないので、CI では `--workers 2`(1 つのファイルの中は順に 1 worker)
+- 新しい spec が `process.platform` で UA プロファイルを選ぶなら、`macos.yml` の `SPECS` に足す
 
 ## パターンを足す手順
 
@@ -81,7 +103,7 @@ tools/gate.sh                                     # push の前に毎回。20〜
    - box と祖先の style から判る → `src/rules/css-mistakes.mjs`(必要な事実は `createCssMistakes` の引数で受ける)
    - 判定できない値は **Unknown のまま**(成功に変えない)
 5. e2e(`e2e/layout-css-mistakes.spec.mjs`)、新しいコードなら `packages/adapter-core/src/lint.mjs` の説明、チェックリストの行、TODO.md の観点を更新
-6. `tools/gate.sh` が通ったら commit して push
+6. `tools/gate.sh` が通ったら commit して push し、PR の CI(ci.yml)が通るのを待つ
 
 ## 次にやること
 
