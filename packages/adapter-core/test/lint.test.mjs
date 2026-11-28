@@ -281,11 +281,12 @@ test('uas: a finding that holds in some browsers only says which (a button label
   const file = fileURLToPath(new URL('../../veriss/text-metrics/fixtures/roboto-variable.ttf', import.meta.url));
   const textMetrics = await loadTextMetrics({fonts: {Roboto: {file}}});
   const source = `<div class="bar"><button class="b" type="button">Publish now</button></div>\n<style>.bar { display: grid; grid-template-columns: 100px; } .b { display: block; white-space: nowrap; font-family: Roboto; font-size: 16px; line-height: 24px; }</style>`;
-  const result = analyzeSvelte(source, {...scopeOptions, textMetrics, fonts: {Roboto: {}}, uas: ['chromium', 'firefox', 'webkit']});
+  // (WebKit's button padding-top differs by platform, so the platform profiles: plain webkit leaves the button Unknown.)
+  const result = analyzeSvelte(source, {...scopeOptions, textMetrics, fonts: {Roboto: {}}, uas: ['chromium', 'firefox', 'webkit-linux', 'webkit-macos']});
   const f = result.findings.find(f => f.code === 'E_LAYOUT_CONTENT');
-  assert.deepEqual(f?.browsers, ['chromium', 'webkit'], JSON.stringify(result.findings.map(f => [f.code, f.browsers])));
+  assert.deepEqual(f?.browsers, ['chromium', 'webkit-linux', 'webkit-macos'], JSON.stringify(result.findings.map(f => [f.code, f.browsers])));
   const m = lint(result, {file: 'B.svelte'}).find(m => m.code === 'E_LAYOUT_CONTENT');
-  assert.match(m.message, /\(in chromium, webkit; not in firefox\)$/);
+  assert.match(m.message, /\(in chromium, webkit-linux, webkit-macos; not in firefox\)$/);
 });
 
 test('lint: a click-catcher is an invisible blocker, and an overlay with no way out a click trap, each with a fix', () => {

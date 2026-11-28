@@ -15,7 +15,9 @@
 //                            (stated as an assumption); without it an img whose size depends on their ratio is not checked
 //   --ua chromium|firefox|webkit   the browser whose form-control UA styles the controls start from; several
 //                            (--ua chromium,firefox,webkit) checks each and says which browsers a finding holds in (default: the
-//                            historical Chromium defaults, with fields' UA padding and border unknown)
+//                            historical Chromium defaults, with fields' UA padding and border unknown). These three are
+//                            platform-agnostic (a value Linux and macOS disagree on is unknown); webkit-linux, webkit-macos,
+//                            firefox-linux and firefox-macos are one platform's measured values
 //   --suggest-reset chromium,firefox,webkit   print the smallest CSS reset that makes those browsers' form controls agree
 //                            (values kept from --ua, or chromium) and exit
 //   --resets none,modern-normalize,...|all   check the component under every UA × reset branch (veriss/reset-matrix):
@@ -66,7 +68,8 @@ export async function runLint({argv, adapters, name = 'css-lint'}) {
   if (!files.length && !opt.suggestReset) { console.error(`usage: ${name} [--viewport 320-1280] [--font Family=file.ttf] [--page-css file] [--css file] [--profile recommended|strict|all] [--ua chromium,firefox,webkit] [--resets none,modern-normalize,...|all [--sample N --seed S]] [--format text|json] <files>`); return 2; }
   if (opt.suggestReset) {
     const {suggestReset} = await import('veriss/src/layout/ua-reset.mjs');
-    const r = suggestReset({browsers: String(opt.suggestReset).split(','), target: opt.ua ?? 'chromium'});
+    let r;
+    try { r = suggestReset({browsers: String(opt.suggestReset).split(','), target: opt.ua ?? 'chromium'}); } catch (error) { return usage(error.message); }
     console.log(r.css + (r.notes.length ? `\n/* Not in the reset (decide them in your design):\n${r.notes.map(n => ` * - ${n}`).join('\n')}\n */\n` : ''));
     return 0;
   }
@@ -79,8 +82,8 @@ export async function runLint({argv, adapters, name = 'css-lint'}) {
     const badReset = ids.find(id => !m.resets.some(r => r.id === id));
     if (badReset) return usage(`unknown reset ${badReset} (one of ${m.resets.map(r => r.id).join(', ')}, or all)`);
     const uas = opt.ua ? String(opt.ua).split(',').map(x => x.trim()) : [...m.uas];
-    const badUA = uas.find(ua => !m.uas.includes(ua));
-    if (badUA) return usage(`unknown ua ${badUA} (one of ${m.uas.join(', ')})`);
+    const badUA = uas.find(ua => !m.allUAs.includes(ua));
+    if (badUA) return usage(`unknown ua ${badUA} (one of ${m.allUAs.join(', ')})`);
     const sample = opt.sample === undefined ? undefined : Number(opt.sample), seed = opt.seed === undefined ? 1 : Number(opt.seed);
     if (sample !== undefined && !(Number.isInteger(sample) && sample > 0)) return usage('--sample needs a positive integer');
     if (!Number.isInteger(seed)) return usage('--seed needs an integer');

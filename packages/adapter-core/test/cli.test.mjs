@@ -69,7 +69,8 @@ test('css-lint: an unknown or misspelled option is a usage error naming the near
 
 // --resets: the component under every UA × reset branch (veriss/reset-matrix). A textarea's UA border is 1px in Chromium
 // and WebKit and 2px in Firefox, so a 100px content-box textarea overflows a 107px column in Firefox only, and only where
-// the reset leaves its box alone.
+// the reset leaves its box alone. (WebKit's UA padding differs by platform — 2px on Linux, 2px 5px on macOS — so plain
+// webkit leaves it undecided, and webkit-macos overflows.)
 const note = () => files({'Note.svelte': '<div class="col"><textarea class="s" aria-label="Note"></textarea></div>\n\n<style>\n  .col { width: 107px; }\n  .s { display: block; inline-size: 100px; block-size: 40px; resize: none; }\n</style>\n'})['Note.svelte'];
 const small = ['--viewport', '400', '--height', '300'];
 
@@ -86,7 +87,8 @@ test('css-lint --resets: findings are grouped into every branch / only in the sm
   assert.ok(overflow.in.length && overflow.in.every(id => id.startsWith('firefox:')), overflow.in.join());
   assert.ok(overflow.in.includes('firefox:none'));
   assert.match(overflow.summary, /^firefox × /);
-  assert.ok(overflow.absent.includes('chromium:none') && overflow.absent.includes('webkit:none'));
+  assert.ok(overflow.absent.includes('chromium:none'));
+  assert.ok(result.unknownBranches.some(b => b.id === 'webkit:none' && /differs between platforms in webkit/.test(b.reason)), JSON.stringify(result.unknownBranches));
   assert.equal(overflow.severity, 'error');
   assert.equal(overflow.line, 1);
   // a branch the analysis does not decide is named, never counted as one where the finding is absent
@@ -108,6 +110,15 @@ test('css-lint --resets: --ua narrows the UA axis, a list of resets the reset ax
   const [result] = JSON.parse(r.stdout).files;
   assert.deepEqual(result.branches.map(b => b.id), ['chromium:none', 'chromium:modern-normalize', 'webkit:none', 'webkit:modern-normalize']);
   assert.ok(!result.onlyIn.some(f => f.code === 'E_LAYOUT_ITEM_SIZE'));
+});
+
+test('css-lint --resets: --ua takes a platform\'s profile (webkit-linux, webkit-macos) as a branch of its own', () => {
+  const file = note();
+  const r = run([...small, '--resets', 'none', '--ua', 'webkit-linux,webkit-macos', '--format', 'json', file]);
+  assert.equal(r.status, 1, r.stderr);
+  const [result] = JSON.parse(r.stdout).files;
+  assert.deepEqual(result.branches.map(b => [b.id, b.status]), [['webkit-linux:none', 'verified'], ['webkit-macos:none', 'violated']]);
+  assert.deepEqual(result.onlyIn.find(f => f.code === 'E_LAYOUT_ITEM_SIZE').in, ['webkit-macos:none']);
 });
 
 test('css-lint --resets: --sample and --seed draw a reproducible subset of the branches', () => {
@@ -138,4 +149,13 @@ test('css-lint --resets: a reset\'s selectors are not the component\'s global CS
   const [result] = JSON.parse(r.stdout).files;
   assert.ok(!result.branches.some(b => b.messages.some(m => m.code === 'E_SCOPE_GLOBAL')), JSON.stringify(result.onlyIn.map(f => f.message)));
   assert.equal(result.onlyIn.find(f => f.code === 'E_LAYOUT_ITEM_SIZE').summary, 'firefox (any reset)');
+});
+
+test('css-lint --suggest-reset takes platform profiles, and a target that does not know a value it would keep is a usage error', () => {
+  const r = run(['--suggest-reset', 'webkit-linux,webkit-macos', '--ua', 'webkit-macos']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /:where\(textarea\) \{\n  padding-block: 2px;\n  padding-inline: 5px;/);
+  const u = run(['--suggest-reset', 'chromium,webkit', '--ua', 'webkit']);
+  assert.equal(u.status, 2);
+  assert.match(u.stderr, /webkit-linux or webkit-macos/);
 });

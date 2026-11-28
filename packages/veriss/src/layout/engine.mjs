@@ -5,7 +5,7 @@ const lengthText = v => { const text = decimal(v); if (text === null) throw Obje
 import { scalar, width, height, sum, diff, times, evaluate, affine, sample, rectangle, clip, partition, projection, serialize } from './region.mjs';
 import { validateOptions } from './input.mjs';
 import { parseLayoutCSS, computeStyle, matches, px, setRootFontSize, setSafeArea, containsFixed, fixedContainer, setUAProfile, setRegisteredProperties, animationsOf, transitionsOf, dependentProperty } from './css.mjs';
-import { resolveUAProfile } from './ua-profile.mjs';
+import { resolveUAProfile, uaProfiles } from './ua-profile.mjs';
 import { parseCondition } from './conditions.mjs';
 import { tracks, tracks as gridTracks, place, parseAreas, expandTracks } from './grid.mjs';
 import { compileSelector, PARENT, dynamicAttributeTests, ignoringSiblings, placeholderField, requiredCapable, optionalDivergent, optionalDivergence, asFormField, readWriteKnown, asEditable, langMatches, directionality } from './selectors.mjs';
@@ -46,6 +46,7 @@ const compare = (value, relation) => relation === '>=' ? value >= 0 : relation =
 // vmin/vmax and min()/max() split the region where their arguments cross; each piece is {region, value}.
 const unitContext = { rootFontSize: null, heightKnown: false };
 let uaEngine; // the engine of the ua option's profile (set per analysis, like the UA profile in css.mjs)
+let uaResolved; // the ua option's profile itself
 function lengthPieces(value, parent, region, style) {
   const text = String(value).trim().toLowerCase();
   let i = 0;
@@ -973,6 +974,19 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const buttonLike = box.tag === 'button' || (box.tag === 'input' && ['button', 'submit', 'reset'].includes(box.inputType));
     // A range slider keeps the same box with its default appearance (no padding or border; measured).
     const rangeLike = box.tag === 'input' && box.inputType === 'range';
+    // A platform-agnostic profile (ua: 'webkit') does not know a value its platforms disagree on (WebKit's field,
+    // textarea and button padding: Linux and macOS differ): a control that keeps it is Unknown, naming both values.
+    if (uaResolved && !box.pseudo && (textField || buttonLike || box.tag === 'select')) {
+      const part = box.tag === 'textarea' ? 'textarea' : box.tag === 'select' ? 'select' : buttonLike ? 'button' : box.inputType === 'number' ? 'numberField' : 'textField';
+      const kept = ['padding', 'border'].find(edge => ['top', 'right', 'bottom', 'left'].some((side, i) => uaResolved[part]?.[edge]?.[i] === 'ua' && style[`${edge}-${side}`] === 'ua'));
+      if (kept) {
+        const at = id => uaProfiles[id]?.[part]?.[kept]?.join(' ');
+        throw Object.assign(new Error(`${box.label}: its UA ${kept} differs between platforms in ${uaEngine} (Linux ${at(`${uaEngine}-linux`)}, macOS ${at(`${uaEngine}-macos`)}); set its ${kept}, or pass ua: '${uaEngine}-linux' or '${uaEngine}-macos'`), { code: 'U_LAYOUT_BROWSER' });
+      }
+      // (macOS WebKit's native padding, made unknown in css.mjs by an author font-size or appearance.)
+      if (uaResolved.nativePadding === true && ['top', 'right', 'bottom', 'left'].some(side => style[`padding-${side}`] === 'ua'))
+        throw Object.assign(new Error(`${box.label}: its UA padding in ${uaResolved.name} follows its ${buttonLike ? 'appearance' : 'font-size and appearance'} (it is known at the UA control font and an appearance other than none only); set its padding`), { code: 'U_LAYOUT_BROWSER' });
+    }
     if(!box.pseudo && ['button', 'input', 'select', 'textarea'].includes(box.tag) && ((style.appearance!=='none' && !(textField && authoredEdges) && !buttonLike && !rangeLike) || (style.display!=='block' && !(box.tag === 'button' && ['grid', 'flex'].includes(style.display) && (box.children ?? []).length)))) throw new Error(`Checked ${box.tag === 'button' ? 'buttons' : 'form controls'} require appearance:none, display:block and explicit box-sizing/min-size/padding/border resets`);
     // A fieldset's rendered legend sits in its border: modeled only when the fieldset generates no box.
     // Replaced elements and text fields have intrinsic sizes the model does not compute.
@@ -3065,7 +3079,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // Safe-area insets: the declared ones under viewport-fit=cover (Unknown when not declared), else 0.
   const cover = /viewport-fit\s*=\s*cover/i.test(String(root.metaViewport ?? ''));
   setSafeArea(cover ? (options.safeArea ? { top: 0, right: 0, bottom: 0, left: 0, ...options.safeArea } : 'unknown') : null);
-  unitContext.rootFontSize = null; setRootFontSize(null); setUAProfile(resolveUAProfile(options.ua)); uaEngine = resolveUAProfile(options.ua)?.engine; unitContext.heightKnown = Boolean(block && options.viewport.height);
+  unitContext.rootFontSize = null; setRootFontSize(null); uaResolved = resolveUAProfile(options.ua); setUAProfile(uaResolved); uaEngine = uaResolved?.engine; unitContext.heightKnown = Boolean(block && options.viewport.height);
   // A flex item's main size that a non-auto flex-basis replaces, when no automatic minimum reads it (flex.mjs keeps
   // that case Unknown): the property, or null. The layout treats it as auto; finish() reports it as inert.
   function inertMainSize(style, box, main) {

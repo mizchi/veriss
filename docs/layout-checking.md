@@ -550,7 +550,7 @@ normal の font-style/stretch/variant、`text-transform: none`、normal の lett
 mediaで font-size を変えると、その領域だけunknownになる。`font`shorthand、`line-height: normal`、UA既定のfamily・size、
 未収録グリフ(フォールバック)、RTL、結合文字、`white-space`がnowrap以外の折り返しは対象外。
 
-`ua` の profile が Chromium 以外のときは、表、折り返すテキスト、inline 要素の位置、字間・語間のあるテキスト、右から左のテキスト、全角の約物を含むテキストを`U_LAYOUT_BROWSER`のunknownにする(測った値と根拠は [css-baseline.md](css-baseline.md))。
+`ua` の profile が Chromium 以外のときは、表、折り返すテキスト、inline 要素の位置、字間・語間のあるテキスト、右から左のテキスト、全角の約物を含むテキストを`U_LAYOUT_BROWSER`のunknownにする(測った値と根拠は [css-baseline.md](css-baseline.md))。プラットフォームに依らない profile(`webkit`、`firefox`)で Linux と macOS の値が違うフォームの部品の padding に依る配置も`U_LAYOUT_BROWSER`のunknownにする(`webkit-linux` / `webkit-macos` で決まる)。
 
 ## mizchi/cssとのcascade差分検査
 

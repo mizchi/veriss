@@ -117,7 +117,19 @@ test('a finding one UA\'s profile causes, under one reset: only firefox × none'
   assert.equal(m.onlyIn.length, 1);
   assert.equal(f.summary, 'firefox × none');
   assert.deepEqual(f.in, ['firefox:none']);
-  // normalize.css and destyle give the textarea overflow: auto, whose scrollbars are not modeled: undecided, not absent
-  assert.deepEqual(f.undecided, ['chromium:normalize', 'chromium:destyle', 'firefox:normalize', 'firefox:destyle', 'webkit:normalize', 'webkit:destyle']);
+  // normalize.css and destyle give the textarea overflow: auto, whose scrollbars are not modeled: undecided, not absent.
+  // WebKit's textarea padding differs by platform (2px on Linux, 2px 5px on macOS): undecided under every reset that
+  // keeps it (Preflight zeroes it).
+  assert.deepEqual(f.undecided, ['chromium:normalize', 'chromium:destyle', 'firefox:normalize', 'firefox:destyle', 'webkit:none', 'webkit:modern-normalize', 'webkit:normalize', 'webkit:sanitize', 'webkit:josh-comeau', 'webkit:destyle']);
   assert.ok(f.absent.includes('chromium:none') && f.absent.includes('firefox:modern-normalize'));
+});
+
+test('platform UA profiles are branches when asked for; the default space keeps the three platform-agnostic UAs', async () => {
+  const {uas, allUAs} = await import('../src/reset-matrix.mjs');
+  assert.deepEqual(uas, ['chromium', 'firefox', 'webkit']);
+  assert.ok(allUAs.includes('webkit-macos') && allUAs.includes('webkit-linux'));
+  assert.deepEqual(enumerateBranches({uas: ['webkit-macos', 'webkit-linux'], resets: ['none']}).map(b => b.id), ['webkit-macos:none', 'webkit-linux:none']);
+  const html = '<html lang="en"><body><main class="c"><div class="col"><textarea class="s" aria-label="Note"></textarea></div></main></body></html>';
+  const m = analyzeResetMatrix({html, css: 'body{margin:0}.c{width:300px}.col{width:107px}.s{display:block;inline-size:100px;block-size:40px;resize:none}'}, {viewport, uas: ['webkit', 'webkit-linux', 'webkit-macos'], resets: ['none']});
+  assert.deepEqual(m.branches.map(b => [b.id, b.status]), [['webkit:none', 'unknown'], ['webkit-linux:none', 'verified'], ['webkit-macos:none', 'violated']]);
 });

@@ -47,6 +47,17 @@
   p(1em)の margin。`analyzeResetMatrix` で 21 の枝を解析し、`e2e/layout-reset-matrix.spec.mjs` で 9 つの部品 × 7 つの reset を
   3 ブラウザーで描いて、決まった枝の箱がすべて一致することを確かめた。残り(Unknown): 見出し・リスト・dl の UA の margin、
   spin button、`overflow: auto` の textarea のスクロールバー、reset のないチェックボックスの大きさ。
+- [x] **C6. UA profile のプラットフォーム**([CSS ベースライン](css-baseline.md)の「プラットフォームの違い」): `webkit` の profile は Linux
+  (WebKitGTK)で測った値で、macOS の WebKit は違う(入力欄 2px 5px、textarea 2px 5px、数値 2px 2px 2px 5px、ボタン 0 6px 1px、
+  system-ui 11px)。107px の列の textarea を `webkit` で「収まる」と決めたが、macOS では 5px はみ出した(vlmkit の `check reset`)。
+  `webkit-linux`(これまでの値)と `webkit-macos`(macOS 26、WebKit 27.2、Playwright 1.64.1 で測った)を足し、`webkit` は両方が同じ値だけを
+  持つ(違う値は `'ua'`、配置は `U_LAYOUT_BROWSER` で両方の値を名指す)。macOS の入力欄と textarea の padding はフォントの大きさで変わり
+  (11-30px で `floor(大きさ / 4)` `floor(大きさ / 2)`)、`appearance: none` で Linux の値になる(ボタンも)ので、`webkit-macos` は作者が
+  フォントの大きさか `appearance: none` を書いた欄の、書いていない側の padding を不明にする(ほかの `appearance` では変わらないことも測った)。
+  Firefox はコントロールのフォントだけが違う(`firefox-linux` / `firefox-macos`)。Chromium は macOS でも profile の値がすべて同じ
+  (11-30px、`appearance: none` でも padding は変わらない)。`e2e/layout-ua-profiles.spec.mjs` と `e2e/layout-reset-matrix.spec.mjs` は
+  `process.platform` の profile で照合し、プラットフォームに依らない profile がどちらかの profile と食い違う配置を決めないことを確かめる
+  (macOS で 3 ブラウザー 84 件。Linux の値は CI で照合する)。
 
 ## D. 配置のモデル
 

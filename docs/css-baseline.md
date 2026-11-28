@@ -2,10 +2,10 @@
 
 静的な検査は、ブラウザーの既定の振る舞い(UA のスタイル、既定値、レイアウトのアルゴリズム)を前提にしています。今の前提は Chromium で測ったものです。Firefox と WebKit も検査の対象にするには、どの前提をブラウザーごとに持つ必要があるかを、2 つの方法で測りました。
 
-- **ベースラインの測定**(`tools/css-baseline.mjs`): 前提にしている UA の値と挙動を 42 項目、3 つのブラウザーで同じページを開いて測ります。結果は `evals/results/css-baseline/baseline.md` と `baseline.json`。
+- **ベースラインの測定**(`tools/css-baseline.mjs`): 前提にしている UA の値と挙動を 42 項目、3 つのブラウザーで同じページを開いて測ります。結果は `evals/results/css-baseline/baseline.md` と `baseline.json`(Linux)、`evals/results/css-baseline-macos/`(macOS、53 項目)。
 - **e2e の 3 ブラウザー化**(`playwright.layout.config.mjs` の `chromium` / `firefox` / `webkit` の project): Chromium と照合するために書いたレイアウトの e2e を、Firefox と WebKit でも流します。合わないテストは `e2e/support/browser-baseline.mjs` に、理由と分類を付けて載せています。
 
-測ったブラウザーは Chromium 153、Firefox 157、WebKit 27.2(いずれも Playwright 1.64.1、Linux、headless)です。
+測ったブラウザーは Chromium 153、Firefox 157、WebKit 27.2(いずれも Playwright 1.64.1、Linux、headless)です。フォームの部品の値は、macOS 26 でも測りました(Chromium 156、Firefox 157、WebKit 27.2、Playwright 1.64.1、headless。下の「プラットフォームの違い」)。
 
 ```bash
 node tools/css-baseline.mjs
@@ -66,18 +66,40 @@ e2e(Chromium で 390 件)のうち、Firefox で 34 件、WebKit で 43 件が C
 
 フォームの部品の UA スタイルは、レイアウトのオプション `ua` で選びます(`packages/veriss/src/layout/ua-profile.mjs`)。
 
-- `ua: 'chromium' | 'firefox' | 'webkit'`: 測った値の profile。ボタン・文字入力欄・textarea・select の padding と border、チェックボックスと radio の margin、range の margin、ボタンの色、コントロールのフォント。
-- `ua: { base: 'webkit', button: { padding: ['0px', '10px', '0px', '10px'] } }`: profile の一部を置き換えた初期条件(社内の基準のブラウザー、独自の UA の想定など)。
+- `ua: 'chromium' | 'firefox' | 'webkit'`: プラットフォームに依らない profile。ボタン・文字入力欄・数値の入力欄・textarea・select の padding と border、チェックボックスと radio の margin、range の margin、ボタンの色、コントロールのフォント。Linux と macOS で値が違うものは持たない(`'ua'`、不明)ので、それに依る配置は Unknown になる(下の「プラットフォームの違い」)。
+- `ua: 'webkit-linux' | 'webkit-macos' | 'firefox-linux' | 'firefox-macos'`: 1 つのプラットフォームで測った値の profile。Chromium は両方で同じ値だったので `chromium` だけ。
+- `ua: { base: 'webkit-macos', button: { padding: ['0px', '10px', '0px', '10px'] } }`: profile の一部を置き換えた初期条件(社内の基準のブラウザー、独自の UA の想定など)。
 - 省略したとき: これまでどおり。ボタンと range は Chromium の値、ほかの部品の UA の padding・border・margin は Unknown。
 
-`ua` を指定すると、作者が padding と border を書いていない入力欄も、その profile の値で解析できます。各ブラウザーで、何も指定していない部品(content-box の入力欄と textarea、ボタン、チェックボックスと radio の margin)の位置と大きさが、そのブラウザーの profile のモデルと一致することを確かめました(`e2e/layout-ua-profiles.spec.mjs`)。CLI では `css-lint --ua webkit`。
+`ua` を指定すると、作者が padding と border を書いていない入力欄も、その profile の値で解析できます。各ブラウザーで、何も指定していない部品(content-box の入力欄と textarea、ボタン、チェックボックスと radio の margin)の位置と大きさが、そのブラウザーとプラットフォームの profile のモデルと一致すること、プラットフォームに依らない profile がどちらかのプラットフォームの profile と食い違う配置を決めない(Unknown にする)ことを確かめました(`e2e/layout-ua-profiles.spec.mjs`。`process.platform` で macOS なら `*-macos`、Linux なら `*-linux` を使う)。CLI では `css-lint --ua webkit-macos`。
+
+### プラットフォームの違い
+
+macOS で `tools/css-baseline.mjs` を流し、Linux の値と比べました(`computed style` の値)。
+
+| 項目 | WebKit・Linux(`webkit-linux`) | WebKit・macOS(`webkit-macos`) | `webkit` |
+|---|---|---|---|
+| 文字の入力欄の padding | 1px | 2px 5px | 不明 |
+| 数値の入力欄の padding | 1px | 2px 2px 2px 5px(spin button の側が 2px) | 不明 |
+| textarea の padding | 2px | 2px 5px | 上下 2px、左右は不明 |
+| ボタンの padding | 2px 6px 3px | 0 6px 1px | 左右 6px、上下は不明 |
+| ボタンの文字の色 | rgba(0, 0, 0, 0.8) | rgba(0, 0, 0, 0.847) | 不明 |
+| コントロールのフォント | -webkit-standard 16px | system-ui 11px | 不明 |
+| 入力欄・textarea・select・ボタンの border、select の padding、チェックボックスと radio の margin と大きさ、range の margin、placeholder の色、フォーカスの枠 | 同じ | 同じ | 同じ値 |
+
+macOS の WebKit の文字の入力欄・数値・textarea の padding は、コントロールのフォントの大きさで変わります(`floor(大きさ / 4)` `floor(大きさ / 2)`: 11px で 2px 5px、12px で 3px 6px、14px で 3px 7px、16px で 4px 8px、20px で 5px 10px、30px で 7px 15px。数値の欄の spin button の側は `floor(大きさ / 4)`)。`appearance: none` では 1px(textarea 2px)、ボタンは 2px 6px 3px になり、ほかの `appearance`(`textfield`、`button`、`textarea`、`menulist-button`)では変わりません。Linux の WebKit と、macOS の Chromium・Firefox では、フォントの大きさでも `appearance` でも変わりません(macOS で 11-30px と `appearance: none` を測った)。そこで `webkit-macos` は、作者がフォントの大きさか `appearance: none` を書いた欄とボタンの、作者が書いていない側の padding を不明にします(式は 8 つの大きさで合ったが、解析の段階でフォントの大きさが px に決まっていないので、使っていない)。
+
+Firefox は、コントロールのフォントだけが違いました(Linux sans-serif、macOS -apple-system。textarea の大きさ 12px と 13px)。解析はコントロールのフォントを使わない(`font: inherit` などを書くまで測らない)ので、配置は変わりません。Chromium は profile のすべての値が同じでした(既定のフォント名は Linux "Times New Roman"、macOS Times)。
+
+この違いが見つかったきっかけ: vlmkit の `check reset` が macOS で、`webkit × none` の 107px の列の textarea を「収まる」と読んだ veriss の判定が、macOS の WebKit で 5px はみ出すことを示した(Linux の値 2px では 106px、macOS の 5px では 112px)。いまは `webkit` では Unknown(`U_LAYOUT_BROWSER`、両方の値を名指す)、`webkit-linux` では verified、`webkit-macos` では violated です。
 
 ## 最小の CSS Reset の提案
 
 `suggestReset({ browsers, target })`(`css-lint --suggest-reset chromium,firefox,webkit`)は、選んだブラウザーの profile のうち、値が違うものだけを打ち消す reset を返します。
 
 - 最近の reset の書き方に合わせる: `font: inherit`(Josh Comeau、Andy Bell の reset と同じ)、チェックボックスと radio の `margin: 0`、論理プロパティ(`padding-block` / `padding-inline`)、`:where()` で詳細度を足さない。
-- 値が同じものには規則を出さない。Chromium と Firefox だけなら、チェックボックスの margin と入力欄の padding の規則は出ない。
+- 値が同じものには規則を出さない。Chromium と Firefox だけなら、チェックボックスの margin と入力欄の padding の規則は出ない。プラットフォームで違う値(`webkit` の入力欄の padding など)は、違うものとして規則を出す(`webkit` 1 つでも)。
+- `target` に、規則に要る値を知らない profile(`webkit`)は使えない(`webkit-linux` か `webkit-macos` を選ぶ)。
 - どれか 1 つの値に決めなければならないもの(padding、チェックボックスの大きさ)は、`target` の値に合わせる。既定は検査の基準の Chromium なので、reset を当てれば `ua: 'chromium'` の解析がどのブラウザーにも当てはまる。
 - デザインで決めるもの(ボタンの色、フォーカスの枠、ページのフォント、入力欄と range の既定の大きさ)は reset に入れず、注記として返す。
 
@@ -86,7 +108,7 @@ e2e(Chromium で 390 件)のうち、Firefox で 34 件、WebKit で 43 件が C
 ```css
 /* The smallest reset for chromium, firefox, webkit (values kept from chromium where one has to be picked). */
 
-/* the control font differs (chromium Arial 13.3333px, firefox sans-serif 13.3281px, webkit -webkit-standard 16px; textarea chromium monospace 13.3333px, firefox monospace 12px, webkit -webkit-standard 16px); inheriting the page font also lets its text be measured */
+/* the control font differs (chromium Arial 13.3333px, firefox differs by platform, webkit differs by platform; textarea chromium monospace 13.3333px, firefox differs by platform, webkit differs by platform); inheriting the page font also lets its text be measured */
 :where(button, input, select, textarea) {
   font: inherit;
   letter-spacing: inherit;
@@ -101,20 +123,23 @@ e2e(Chromium で 390 件)のうち、Firefox で 34 件、WebKit で 43 件が C
   block-size: 13px;
 }
 
-/* the button padding differs (chromium 1px 6px, firefox 1px 4px, webkit 2px 6px 3px 6px) */
+/* the button padding differs (chromium 1px 6px, firefox 1px 4px, webkit differs by platform) */
 :where(button, input[type="button"], input[type="submit"], input[type="reset"]) {
   padding-block: 1px;
   padding-inline: 6px;
 }
 
-/* the text field padding differs (chromium 1px 2px, firefox 1px 2px, webkit 1px) */
+/* the text field padding differs (chromium 1px 2px, firefox 1px 2px, webkit differs by platform) */
 :where(input:not([type]), input[type="text"], input[type="email"], input[type="search"], input[type="password"], input[type="tel"], input[type="url"], input[type="number"]) {
   padding-block: 1px;
   padding-inline: 2px;
 }
 
+/* the textarea padding differs (chromium 2px, firefox 2px, webkit differs by platform) */
 /* the textarea border differs (chromium 1px, firefox 2px, webkit 1px) */
 :where(textarea) {
+  padding-block: 2px;
+  padding-inline: 2px;
   border-width: 1px;
 }
 
@@ -133,14 +158,14 @@ e2e(Chromium で 390 件)のうち、Firefox で 34 件、WebKit で 43 件が C
 }
 
 /* Not in the reset (decide them in your design):
- * - button colors differ (chromium #000000 on #efefef, firefox #000000 on rgb(233, 233, 237), webkit rgba(0, 0, 0, 0.8) on rgb(192, 192, 192)): set background-color and color on your buttons
- * - the default font differs (Chromium "Times New Roman", Firefox serif, WebKit -webkit-standard): set font-family on html (the controls inherit it with this reset)
+ * - button colors differ (chromium #000000 on #efefef, firefox #000000 on rgb(233, 233, 237), webkit differs by platform): set background-color and color on your buttons
+ * - the default font differs (Chromium "Times New Roman" on Linux and Times on macOS, Firefox serif, WebKit -webkit-standard): set font-family on html (the controls inherit it with this reset)
  * - a field's default width (its size attribute) and a range's default size come from the font and the browser: give them an inline-size (and block-size)
  * - the focus ring width differs (chromium 1px, firefox 1px, webkit 3px): give :focus-visible an outline of your own
  */
 ```
 
-確かめ方: この reset を当てて 3 つのブラウザーでベースラインを測り直すと(`node tools/css-baseline.mjs --reset reset.css`)、違う項目は 25 から 13 に減り、profile の値はボタンの色を除いてすべて揃いました。残った 13 項目は、ページの既定のフォント(名前の違いと、それによるボタンの幅)、見出しの大きさの丸め、入力欄と range の既定の大きさ、ボタンの色、フォーカスの枠で、どれも注記に挙げたものです。また、reset を当てた何も指定していない部品は、3 つのブラウザーとも `ua: 'chromium'` のモデルどおりの位置と大きさになりました(`e2e/layout-ua-profiles.spec.mjs`、33 件)。
+確かめ方(Linux で、textarea の padding の規則を足す前の reset で測った。この規則は macOS の WebKit の 2px 5px のために加わった): この reset を当てて 3 つのブラウザーでベースラインを測り直すと(`node tools/css-baseline.mjs --reset reset.css`)、違う項目は 25 から 13 に減り、profile の値はボタンの色を除いてすべて揃いました。残った 13 項目は、ページの既定のフォント(名前の違いと、それによるボタンの幅)、見出しの大きさの丸め、入力欄と range の既定の大きさ、ボタンの色、フォーカスの枠で、どれも注記に挙げたものです。また、reset を当てた何も指定していない部品は、3 つのブラウザーとも `ua: 'chromium'` のモデルどおりの位置と大きさになりました(`e2e/layout-ua-profiles.spec.mjs`、33 件)。
 
 ## reset のスタイルシートごとの初期条件
 
