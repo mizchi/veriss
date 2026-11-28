@@ -137,5 +137,9 @@ src/broken/SearchForm.tsx  warning  W_CSS_SELECTOR_RELATION  .lx-form body: 1 el
 
 - `E_SCOPE_ESCAPE` と `E_SCOPE_REACHES` は行番号なしで出ます。セレクタの文字列で検索してください。
 - `<p>` の中の `<div>` は何も出ません(React は DOM API で木を作るので、`W_HTML_RESTRUCTURED` の対象外)。
+- JSX / TSX の構文エラーは `E_ADAPTER_COMPILE`(error)として、Babel の行と列に出ます(`ファイル:行:列`)。import した module の中の
+  構文エラーは、その module のファイルで出ます。そのファイルのほかの検査はしません。
+- `css` のテンプレートの CSS が読めないとき(閉じていないブロックなど)は、`U_LINARIA_CSS`(not checked)になり、そのクラスの規則なしで
+  検査を続けます。
 - `info` の `W_A11Y_ORDER`(「li@Component/0/0/0/1 comes after … but is placed before it」)が `Menu.tsx` に出ますが、子の中身を
   見ていない(中身が空の)`<li>` どうしを比べた結果と推定しています(inferred)。recommended のルールではなく、直した版にも出ます。
