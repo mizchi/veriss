@@ -14,6 +14,7 @@ import { syntaxWarnings, syntaxNoteOrder } from '../rules/syntax-notes.mjs';
 import { droppedOf, droppedPairs, droppedValue } from './dropped.mjs';
 import { createCssMistakes } from '../rules/css-mistakes.mjs';
 import { createInertDeclarations } from '../rules/inert-declarations.mjs';
+import { restructuredDetail, structureWarnings } from '../rules/html-structure.mjs';
 // User-action and other dynamic pseudo-classes: removed from a selector to ask whether it could match in some state (F83).
 const dynamicStates = /:(?:hover|focus-visible|focus-within|focus|active|target-within|target|checked|indeterminate|visited|link|any-link|open|closed|popover-open|modal|playing|paused|user-invalid|user-valid|invalid|valid|placeholder-shown|autofill|-webkit-autofill|enabled|disabled|read-only|read-write|required|optional|default|in-range|out-of-range|empty|state\([^)]*\))(?![\w-])/gi;
 import { selectorScope } from './selector-scope.mjs';
@@ -342,8 +343,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // F27: the HTML parser changed the structure written in the source (the analysis, like the browser, lays out the
   // parsed tree; the CSS was likely written for the source's).
   for (const b of boxes) if (b.restructured && !layoutWarnings.some(w => w.code === 'W_HTML_RESTRUCTURED' && w.path === b.path))
-    layoutWarnings.push({ code: 'W_HTML_RESTRUCTURED', severity: 'warning', box: b.label, path: b.path, tag: b.tag,
-      message: b.restructured === 'fostered' ? `${b.label} is written inside a <table> but outside its cells, so the HTML parser moves it before the table (foster parenting): it is not in the table in the page. Put it in a cell (<td>) or a <caption>, or outside the table` : b.restructured === 'nested-form' ? `${b.label} has a <form> written inside it: the HTML parser drops the inner <form> start tag, so its fields belong to the outer form and its attributes (action, method) are lost. Forms cannot be nested: close the outer one first, or use the form attribute on the fields` : b.restructured === 'implied' ? `${b.label} is not in the source: the HTML parser made it (a stray </${b.tag}> after an element that cannot be inside a <${b.tag}> — a block in a paragraph — closed the open one, and the end tag became an empty <${b.tag}>). The elements written inside it are siblings in the page: nest only phrasing content in <${b.tag}>` : `${b.label} is closed early by the HTML parser (its </${b.tag}> does not end it: an element it cannot contain — a nested <a>, a block in a <button> or a heading in a heading — was written inside), so the elements after that point are not inside it in the page. Fix the nesting` });
+    layoutWarnings.push({ code: 'W_HTML_RESTRUCTURED', severity: 'warning', box: b.label, path: b.path, tag: b.tag, rule: 'html-structure', ...restructuredDetail(b), ...(b.restructured === 'dropped' && ['body', 'html'].includes(b.tag) ? { atRoot: true } : {}) });
+  // Checklist J3-J6: summary, legend and label placement, and what only the content model forbids.
+  for (const w of structureWarnings(boxes, b => b[PARENT])) (w.severity === 'error' ? diagnostics : layoutWarnings).push(w);
   // F26: a child combinator through an element the HTML parser inserted (the tbody of a table written with its rows
   // directly inside): table > tr never matches — the selector matches only with the implied element skipped. The
   // subject may be the row (table > tr) or anything below it (table > tr > td, table > tr .x): every box with an implied
@@ -4260,6 +4262,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     const keep = accessibilityProfiles[options.accessibility.profile ?? 'all'];
     if (keep?.('text-contrast')) accessibilityWarnings.push(...judgeContrastUnplaced({ rows: styleRows }, { contrast: options.accessibility.contrast ?? 'AA', defaultColors: uaDefaultColors, ranges, block }).warnings
       .filter(w => !w.rule || keep(w.rule)).map(w => w.rule ? { ...w, tier: ruleTier(w.rule) } : w));
+  }
+  // The markup-only structure rules (the DOM's parent-child relations: lists, definition lists, ARIA context and
+  // ownership) do not depend on the layout: where it is Unknown they still run, on the tree alone (no box is placed).
+  if (accessibilityRuns && !placedAccessibility) {
+    const keep = accessibilityProfiles[options.accessibility.profile ?? 'all'];
+    const markupOnly = new Set(['list-structure', 'definition-list', 'role-parent', 'role-children']);
+    try {
+      const judged = judgeAccessibility({ geometry: [], waived, root, domain: initial }, { defaultColors: uaDefaultColors, hostInset: 0, hostBlockInset: 0, viewportBlock: null, viewportMin: options.viewport.min, safeArea: null, hinge: null, contrast: 'AA', targetLevel: 'AA', targetSize: 24, ranges, block });
+      diagnostics.push(...judged.findings.filter(f => markupOnly.has(f.rule) && (!keep || keep(f.rule))));
+    } catch { /* the tree-only pass is best effort: what it cannot judge stays under the layout's Unknown */ }
   }
   if (placedAccessibility) {
     const judged = judgeAccessibility({ geometry, waived, root, domain: initial }, { scrollZero: preferences.includes('scroll-zero'), defaultColors: uaDefaultColors, forcedColorsHandled: rules.some(rule => rule.preferences?.some(p => p.feature === 'forced-colors')), smoothReduced: rules.some(rule => rule.declarations.some(d => d.property === 'scroll-behavior') && (rule.preferences?.some(p => p.feature === 'prefers-reduced-motion'))), keyframeFrames, hostInset: options.hostInset ?? 0, hostBlockInset: options.hostBlockInset ?? 0, viewportBlock: block && options.viewport.height ? height : null, scrollPaddingDeclared: rules.some(rule => rule.declarations.some(d => /^scroll-padding-(?:top|bottom)$/.test(d.property))), viewportMin: options.viewport.min, safeArea: cover && options.safeArea ? { top: 0, right: 0, bottom: 0, left: 0, ...options.safeArea } : null, hinge: options.hinge ?? null, contrast: options.accessibility.contrast ?? 'AA', targetLevel: options.accessibility.targetLevel ?? 'AA', targetSize: options.accessibility.targetSize ?? (options.accessibility.targetLevel === 'AAA' ? 44 : 24), ranges, block });

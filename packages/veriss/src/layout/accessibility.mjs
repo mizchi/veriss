@@ -1537,10 +1537,18 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
     if (!labelable(byId.get(label.labelFor))) report(findings, 'E_A11Y_LABEL_FOR', 'error', `${label.label} is for ${JSON.stringify(label.labelFor)}, which is not a labelable element`, whole(label), domain, { rule: 'label-for', reference: label.labelFor });
   }
 
+  // A parent that is the page's body (or html): what was analyzed starts there, so for a component it is the caller's
+  // element. Findings decided only by it are marked atRoot (a component lint leaves them to the caller).
+  const atRoot = parent => !parent || ['body', 'html'].includes(parent.tag);
+  // Markup-only rules read the DOM: each laid-out row where it is visible, and every box the layout did not place (its
+  // geometry Unknown, a flex or block flow the analysis does not model) over the whole viewport domain — the
+  // conformance error holds whatever the layout is.
+  const laidOut = new Set(geometry.map(row => row.path));
+  const markupRows = () => [...geometry.filter(row => visible(row) && !hiddenFrom(row.path)), ...all.filter(box => !laidOut.has(box.path) && !box.pseudo && !hiddenFrom(box.path)).map(box => ({ ...whole(box), region: domain }))];
   // list-structure: list semantics follow the DOM (CSS display does not change it here).
-  for (const row of geometry.filter(row => visible(row) && !hiddenFrom(row.path))) {
+  for (const row of markupRows()) {
     const parentBox = boxOf.get(row.path.slice(0, row.path.lastIndexOf('/')));
-    if (row.box.tag === 'li' && !['ul', 'ol'].includes(parentBox?.tag)) report(findings, 'E_A11Y_LIST', 'error', `${row.box.label} is a list item outside ul/ol`, row, row.region, { rule: 'list-structure' });
+    if (row.box.tag === 'li' && !['ul', 'ol'].includes(parentBox?.tag)) report(findings, 'E_A11Y_LIST', 'error', `${row.box.label} is a list item outside ul/ol`, row, row.region, { rule: 'list-structure', ...(atRoot(parentBox) ? { atRoot: true } : {}) });
     if (['ul', 'ol'].includes(row.box.tag) && (row.box.children ?? []).some(child => child.tag !== 'li')) report(findings, 'E_A11Y_LIST', 'error', `${row.box.label} has a child that is not li`, row, row.region, { rule: 'list-structure' });
   }
 
@@ -1664,13 +1672,13 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   };
   const transparent = role => ['generic', 'none', 'presentation'].includes(role);
   const requiredParent = { listitem: ['list', 'directory'], option: ['listbox', 'group'], tab: ['tablist'], menuitem: ['menu', 'menubar', 'group'], menuitemcheckbox: ['menu', 'menubar', 'group'], menuitemradio: ['menu', 'menubar', 'group'], treeitem: ['tree', 'group'], row: ['table', 'grid', 'treegrid', 'rowgroup'], cell: ['row'], gridcell: ['row'], columnheader: ['row'], rowheader: ['row'], rowgroup: ['table', 'grid', 'treegrid'] };
-  const requiredChildren = { list: ['listitem'], listbox: ['option', 'group'], tablist: ['tab'], menu: ['menuitem', 'menuitemcheckbox', 'menuitemradio', 'group', 'separator'], menubar: ['menuitem', 'menuitemcheckbox', 'menuitemradio', 'group', 'separator'], tree: ['treeitem', 'group'], grid: ['row', 'rowgroup'], table: ['row', 'rowgroup', 'caption'], row: ['cell', 'gridcell', 'columnheader', 'rowheader'] };
+  const requiredChildren = { list: ['listitem'], listbox: ['option', 'group'], tablist: ['tab'], menu: ['menuitem', 'menuitemcheckbox', 'menuitemradio', 'group', 'separator'], menubar: ['menuitem', 'menuitemcheckbox', 'menuitemradio', 'group', 'separator'], tree: ['treeitem', 'group'], grid: ['row', 'rowgroup'], treegrid: ['row', 'rowgroup'], rowgroup: ['row'], feed: ['article'], table: ['row', 'rowgroup', 'caption'], row: ['cell', 'gridcell', 'columnheader', 'rowheader'] };
   const parentRole = box => { for (const a of ancestorsOf(box.path)) { const r = implicitRole(a); if (!transparent(r)) return r; } return null; };
   const ownedChildren = box => (box.children ?? []).flatMap(child => transparent(implicitRole(child)) && child.tag !== 'caption' ? ownedChildren(child) : [child]);
   for (const box of all.filter(b => !hiddenFrom(b.path))) {
     const role = roleOf(box);
     if (!role || !ariaRoles.has(role)) continue;
-    if (requiredParent[role] && !requiredParent[role].includes(parentRole(box))) report(findings, 'E_A11Y_ROLE_PARENT', 'error', `${box.label} has role ${role} outside ${requiredParent[role].join('/')}`, whole(box), domain, { rule: 'role-parent', role });
+    if (requiredParent[role] && !requiredParent[role].includes(parentRole(box))) report(findings, 'E_A11Y_ROLE_PARENT', 'error', `${box.label} has role ${role} outside ${requiredParent[role].join('/')}`, whole(box), domain, { rule: 'role-parent', role, ...(parentRole(box) === null ? { atRoot: true } : {}) });
     if (requiredChildren[role]) for (const child of ownedChildren(box)) if (!requiredChildren[role].includes(implicitRole(child)) && child.tag !== 'caption')
       report(findings, 'E_A11Y_ROLE_CHILDREN', 'error', `${box.label} (role ${role}) owns ${child.label}, which is not ${requiredChildren[role].join('/')}`, whole(box), domain, { rule: 'role-children', child: child.path });
   }
@@ -2193,13 +2201,13 @@ export function judgeAccessibility({ geometry, waived = [], root, domain }, { ke
   for (const row of geometry.filter(row => ['marquee', 'blink'].includes(row.box.tag) && visible(row)))
     report(findings, 'E_A11Y_BLINK', 'error', `${row.box.label} is a <${row.box.tag}>, which moves or blinks without a way to pause it`, row, row.region, { rule: 'blink' });
   // definition-list: dl contains dt/dd groups (optionally wrapped in div); dt/dd live in dl.
-  for (const row of geometry.filter(row => visible(row) && !hiddenFrom(row.path))) {
+  for (const row of markupRows()) {
     const box = row.box, parentBox = boxOf.get(row.path.slice(0, row.path.lastIndexOf('/')));
     const grouped = child => ['dt', 'dd'].includes(child.tag);
     if (box.tag === 'dl' && box.role === undefined && (box.children ?? []).some(child => !grouped(child) && !['script', 'template'].includes(child.tag) && !(child.tag === 'div' && (child.children ?? []).every(grouped))))
       report(findings, 'E_A11Y_DL', 'error', `${box.label} has a child that is not dt, dd or a div of them`, row, row.region, { rule: 'definition-list' });
     if (['dt', 'dd'].includes(box.tag) && !(parentBox?.tag === 'dl' || (parentBox?.tag === 'div' && boxOf.get(parentBox.path.slice(0, parentBox.path.lastIndexOf('/')))?.tag === 'dl')))
-      report(findings, 'E_A11Y_DL', 'error', `${box.label} is outside a dl`, row, row.region, { rule: 'definition-list' });
+      report(findings, 'E_A11Y_DL', 'error', `${box.label} is outside a dl`, row, row.region, { rule: 'definition-list', ...(atRoot(parentBox) || (parentBox?.tag === 'div' && atRoot(boxOf.get(parentBox.path.slice(0, parentBox.path.lastIndexOf('/'))))) ? { atRoot: true } : {}) });
   }
   // accesskeys: one key, one element.
   const keyed = new Map();

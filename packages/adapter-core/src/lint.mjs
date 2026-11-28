@@ -62,7 +62,11 @@ export const recommended = {
   W_CSS_MARKER_IGNORED: ['warning', 'style the list item, or draw your own marker with ::before'],
   W_A11Y_SUMMARY_INDICATOR: ['warning', 'show the open state: a ::before that turns with details[open], or an icon'],
   W_CSS_SELECTOR_IMPLIED_PARENT: ['warning', 'write the implied element in the selector (table > tbody > tr), or use a descendant combinator'],
-  W_HTML_RESTRUCTURED: ['warning', 'fix the nesting: only phrasing content in <p>, no link in a link, no block in a button'],
+  W_HTML_RESTRUCTURED: ['warning', 'write the structure the HTML parser keeps (the fix of each finding names it)'],
+  // Checklist J3-J5: placement the browsers act on (measured in Chromium, Firefox and WebKit).
+  W_HTML_SUMMARY_OUTSIDE: ['warning', 'put the <summary> as the first child of its <details>'],
+  W_HTML_LEGEND_OUTSIDE: ['warning', 'put the <legend> as the first child of its <fieldset>'],
+  W_HTML_LABEL_EXTRA_CONTROL: ['warning', 'give each control its own <label> (wrap it, or use for= with its id)'],
   W_HTML_ATTRIBUTE_INERT: ['warning', 'set it in CSS (width, height, background-color, border)'],
   W_LAYOUT_CONTENTS_REMOVED: ['warning', 'use display: block or inline-block; display: contents removes a replaced element or form control'],
   W_CSS_PSEUDO_NOT_RENDERED: ['warning', 'put the ::before / ::after on a wrapper or label; images and text fields render no pseudo-elements'],
@@ -220,6 +224,14 @@ export const specRules = {
   E_A11Y_INPUT_BUTTON_NAME: 'give the input button a value (its visible text and name)',
   E_A11Y_INPUT_IMAGE_ALT: 'give the image input an alt',
   E_A11Y_HIDDEN_FOCUSABLE: 'make the focusable element inside aria-hidden unfocusable (tabindex="-1", inert) or unhide it',
+  E_HTML_PARAGRAPH_CONTENT: 'use a <div> as the container, or <span> inside the paragraph',
+};
+// The strict profile: recommended, plus the rules of best-practice markup the browsers do not act on (checklist J6: the
+// HTML content model, which the browsers keep as written and render). Warnings with the structure to write; what
+// recommended reports as an error stays the same error.
+export const strict = {
+  ...recommended,
+  W_HTML_CONTENT_MODEL: ['warning', 'write the structure the content model allows (the fix of each finding names it)'],
 };
 // A flex row's items are not tracks.
 const fixFor = (code, fix, html, path, layout) => code !== 'E_LAYOUT_TRACKS' ? fix
@@ -245,7 +257,7 @@ export function lint(result, { file = '<component>', source = '', profile = 'rec
   const total = result.states.length, out = [];
   // Checked with several UA profiles: a finding that holds in some browsers only says which.
   const inBrowsers = f => result.browsers && f.browsers && f.browsers.length < result.browsers.length ? ` (in ${f.browsers.join(', ')}; not in ${result.browsers.filter(b => !f.browsers.includes(b)).join(', ')})` : '';
-  const rules = profile === 'all' ? null : recommended;
+  const rules = profile === 'all' ? null : profile === 'strict' ? strict : recommended;
   // One element under different class combinations (cx(a, cond && b)) is one finding: merge by code and element.
   const merged = new Map();
   for (const f of result.findings) {
@@ -270,22 +282,29 @@ export function lint(result, { file = '<component>', source = '', profile = 'rec
   const refusals = new Set(['E_LAYOUT_CONTAINER']);
   for (const f of merged.values()) {
     if (f.severity === 'unknown' || (!page && pageRules.has(f.code))) continue;
+    // Decided only by the element's place at the component's root (its parent is the caller's): not claimed.
+    if (f.atRoot && !page) {
+      const box = cleanLabel(f.box), firstClass = /\.([\w-]+)/.exec(box)?.[1];
+      out.push({ file, line: f.line ?? lineAt(f.html, f.path) ?? lineOf(source, firstClass ? firstClass : box), severity: 'info', code: f.code,
+        message: `not checked: ${readable(f.message)} (at the component's root its parent is the caller's element, which decides this)`, states: describe(f.states, total) });
+      continue;
+    }
     if (rules && !rules[f.code] && specRules[f.code] && f.severity === 'error') {
       const box = cleanLabel(f.box), firstClass = /\.([\w-]+)/.exec(box)?.[1];
-      out.push({ file, line: lineAt(f.html, f.path) ?? lineOf(source, firstClass ? firstClass : box), severity: 'warning', tier: 'spec', code: f.code,
+      out.push({ file, line: f.line ?? lineAt(f.html, f.path) ?? lineOf(source, firstClass ? firstClass : box), severity: 'warning', tier: 'spec', code: f.code,
         message: `spec: ${readable(f.message)} (a markup conformance error; the rendering does not show it)`, fix: specRules[f.code], states: describe(f.states, total) });
       continue;
     }
     if (rules && !rules[f.code]) {
       // Outside the rule set: still listed (as info), so nothing found disappears from the output.
       const box = cleanLabel(f.box), firstClass = /\.([\w-]+)/.exec(box)?.[1];
-      out.push({ file, line: lineAt(f.html, f.path) ?? lineOf(source, firstClass ? firstClass : box), severity: 'info', code: f.code,
+      out.push({ file, line: f.line ?? lineAt(f.html, f.path) ?? lineOf(source, firstClass ? firstClass : box), severity: 'info', code: f.code,
         message: refusals.has(f.code) ? `not checked: ${box} and what is inside it (${readable(f.message)}; the analysis models grid and flex containers)` : `outside the ${profile} rules: ${readable(f.message)}`, states: describe(f.states, total) });
       continue;
     }
     const [severity, fix] = rules?.[f.code] ?? [f.severity === 'error' ? 'error' : 'warning'];
     const box = cleanLabel(f.box), firstClass = /\.([\w-]+)/.exec(box)?.[1];
-    out.push({ file, line: lineAt(f.html, f.path) ?? lineOf(source, firstClass ? firstClass : box), severity, code: f.code, message: readable(f.message) + inBrowsers(f), ...(f.browsers && result.browsers ? { browsers: f.browsers } : {}), ...(fix ? { fix: fixFor(f.code, fix, f.html, f.path, f.layout) } : {}), states: describe(f.states, total) });
+    out.push({ file, line: f.line ?? lineAt(f.html, f.path) ?? lineOf(source, firstClass ? firstClass : box), severity, code: f.code, message: readable(f.message) + inBrowsers(f), ...(f.browsers && result.browsers ? { browsers: f.browsers } : {}), ...(f.fix ?? fix ? { fix: f.fix ?? fixFor(f.code, fix, f.html, f.path, f.layout) } : {}), states: describe(f.states, total) });
   }
   for (const w of result.selectors?.warnings ?? []) {
     if (rules && !rules[w.code]) continue;
