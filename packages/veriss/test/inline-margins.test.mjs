@@ -54,3 +54,11 @@ test('what the analysis does not model stays Unknown', () => {
   unknown(run('<div class="a"></div>', '.a{margin-left:-24px}', 'rtl'), /unequal inline margins in rtl/);
   unknown(run('<div class="a"></div>', '.a{width:200px;margin-left:auto;margin-right:-24px}'), /inline margin/);
 });
+
+test('a fixed table, laid out as a grid, keeps a negative inline margin Unknown (not measured: a table does not fill)', () => {
+  const table = '<table class="a" style="table-layout:fixed"><tbody><tr><td></td></tr></tbody></table>';
+  const r = run(table, '.a{table-layout:fixed;border-collapse:separate;border-spacing:0;width:200px;margin-left:-24px}td{padding:0;height:10px}');
+  assert.equal(r.status, 'unknown', JSON.stringify(r.status));
+  // The same table with no negative margin is laid out (the control).
+  assert.notEqual(run(table, '.a{table-layout:fixed;border-collapse:separate;border-spacing:0;width:200px}td{padding:0;height:10px}').status, 'unknown');
+});
