@@ -1511,6 +1511,37 @@ test('F131: a :hover / :focus rule beaten by a later or more specific rule witho
     assert.equal(hit(css).length, 0, css);
 });
 
+test('F131: a var() shorthand is named as written, once, and compared as written', () => {
+  const hit = css => codes(run(css, '<a href="/x" class="b c">link text</a>'), 'W_CSS_STATE_SHADOWED');
+  // A shorthand with var() is expanded with 'initial' to find its longhands: the message names what was written.
+  const [w, ...rest] = hit(':root{--s:#eee}.b:hover{background:var(--s)}.b.c{background:#fff}');
+  // (The winner is named by the longhand it set: a plain shorthand is expanded where it is read.)
+  assert.match(w?.message ?? '', /\.b:hover \{ background: var\(--s\) \} never shows: \.b\.c \{ background-color: #fff \}/);
+  assert.match(hit(':root{--s:#eee}.b:hover{background:var(--s)}.b.c{background-color:#fff}')[0]?.message ?? '', /\.b\.c \{ background-color: #fff \}/);
+  assert.match(hit(':root{--s:#eee;--t:#fff}.b:hover{background:var(--s)}.b.c{background:var(--t)}')[0]?.message ?? '', /\.b\.c \{ background: var\(--t\) \}/);
+  assert.doesNotMatch(w?.message ?? '', /initial/);
+  // One declaration, one warning (not one per longhand it writes).
+  assert.equal(rest.length, 0, JSON.stringify(rest.map(x => x.message)));
+  // The same var() written on both sides shows the same value: nothing to report.
+  assert.equal(hit(':root{--s:#eee}.b:hover{background:var(--s)}.b.c{background:var(--s)}').length, 0);
+  // A longhand var() too.
+  assert.match(hit(':root{--t:#000}.b:hover{color:var(--t)}.b.c{color:#222}')[0]?.message ?? '', /\{ color: var\(--t\) \}/);
+  // The same var() through another shorthand maps to other longhands: padding-inline: 4px 8px is left 4px, padding
+  // puts 8px there. Equal text is equal only for the same property.
+  assert.equal(hit(':root{--p:4px 8px}.b:hover{padding-inline:var(--p)}.b.c{padding:var(--p)}').length, 1);
+  // Two rules each beating one longhand of the same declaration: one warning, naming both.
+  const both = codes(run(':root{--s:#eee}.b:hover{background:var(--s)}.b.c{background-color:#fff}.b.d{background-image:none}', '<a href="/x" class="b c d">link text</a>'), 'W_CSS_STATE_SHADOWED');
+  assert.equal(both.length, 1, JSON.stringify(both.map(x => x.message)));
+  assert.match(both[0].message, /\.b\.c \{ background-color: #fff \}/);
+  assert.match(both[0].message, /\.b\.d \{ background-image: none \}/);
+  // Custom-property names are case-sensitive: var(--S) and var(--s) are two values.
+  assert.equal(hit(':root{--S:#111;--s:#eee}.b:hover{background:var(--S)}.b.c{background:var(--s)}').length, 1);
+  // Two declarations of one selector that each win a longhand are two winners (here across layers).
+  const layered = hit('@layer base, top;:root{--s:#111;--base:#222;--top:#eee}@layer base{.b:hover{background:var(--s)}.b.c{background:var(--base)}}@layer top{.b.c{background:var(--top)}.b.c{background-image:revert-layer}}');
+  assert.equal(layered.length, 1, JSON.stringify(layered.map(x => x.message)));
+  assert.equal(layered[0].beatenBy.length, 2, JSON.stringify(layered[0].beatenBy));
+});
+
 test('F132: a -moz- or -ms- selector in a list drops the whole rule where it is invalid', () => {
   const hit = css => codes(run(css), 'W_CSS_SELECTOR_LIST_VENDOR');
   assert.deepEqual(hit('.a::-moz-selection,.a{color:red}')[0]?.browsers, { drops: ['chromium', 'webkit'] });
