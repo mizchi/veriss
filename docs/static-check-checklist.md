@@ -689,7 +689,7 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (e2e `px margins offset absolute and fixed boxes`。対照として margin を 0 にすると全組で矩形が変わる)。包含ブロックの外に出る負の margin は
   inset と同じく `E_LAYOUT_ABSOLUTE_START`。`auto` と % の margin、静的位置の軸(両側の inset が auto)の margin、shrink-to-fit の幅の箱の
   横の margin は Unknown のまま(文言は箱の名前と margin を出す)
-- [x] **I25. img の width / height 属性の比を、ファイルの比として信じていた**(健全性、#55): `images` にファイルの大きさがない img で、
+- [x] **I26. img の width / height 属性の比を、ファイルの比として信じていた**(健全性、#55): `images` にファイルの大きさがない img で、
   属性の比(`aspect-ratio: auto w / h`)から高さ(`height: auto`)や幅(I20 の、高さから幅を求める形)を決め、verified にしていた。
   この比は読み込み前だけのもので、読み込むとファイルの比が勝つ(#54 で 3 ブラウザー: `width="120" height="30"` で高さ 24px の img は、
   正方形のファイルで読み込み前 96px、読み込み後 24px)。今は既定で、その比で大きさが決まる img を `U_LAYOUT_IMAGE` にし、
