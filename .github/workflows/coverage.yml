@@ -35,6 +35,8 @@ jobs:
       - name: Safe-subset coverage
         env:
           ARGS: ${{ inputs.args }}
+        # bash (pipefail): a failing tool is a failing step even through tee.
+        shell: bash
         run: |
           if [ ! -f tools/subset-coverage.mjs ]; then
             echo "::notice::tools/subset-coverage.mjs is not on this branch yet (the safe-subset coverage PR); nothing to run"

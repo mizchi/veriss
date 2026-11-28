@@ -23,10 +23,12 @@ done
 if [ "$mode" = remote ]; then
   branch=$(git rev-parse --abbrev-ref HEAD)
   [ "$branch" != main ] || { echo "on main: push a branch and open a pull request" >&2; exit 2; }
+  # The run of the commit pushed (an earlier green run of the branch must not stand in for it): wait for it by SHA.
+  sha=$(git rev-parse HEAD)
   cmds=(
     "git push -u origin $branch"
-    "gh run list --workflow ci.yml --branch $branch --limit 1"
-    "gh run watch --exit-status \$(gh run list --workflow ci.yml --branch $branch --limit 1 --json databaseId -q '.[0].databaseId')"
+    "until id=\$(gh run list --workflow ci.yml --commit $sha --limit 1 --json databaseId -q '.[0].databaseId') && [ -n \"\$id\" ]; do sleep 10; done"
+    "gh run watch --exit-status \"\$id\""
   )
   if [ "$print" = 1 ]; then printf '%s\n' "${cmds[@]}"; exit 0; fi
   git push -u origin "$branch" || exit 1

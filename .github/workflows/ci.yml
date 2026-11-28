@@ -94,11 +94,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
       - name: Component-lint eval (before, run-1, run-2, run-3)
+        id: eval
         run: |
           for a in '' run-1 run-2 run-3; do node tools/eval-component-lint.mjs ${a:+--attempt $a}; done
       - name: Compare with the committed results
         if: success() || failure()
+        env:
+          EVAL_OUTCOME: ${{ steps.eval.outcome }}
         run: |
+          # A failed eval writes nothing: the checkout would then "match" — say it could not be compared instead.
+          if [ "$EVAL_OUTCOME" != success ]; then
+            { echo "## component-lint eval on Linux"; echo "The eval did not finish (outcome: $EVAL_OUTCOME), so the results were not compared."; } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           git diff --no-ext-diff --stat evals/results/component-lint/ > eval.diffstat
           git diff --no-ext-diff evals/results/component-lint/ > eval.diff
           {

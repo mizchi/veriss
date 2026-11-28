@@ -80,8 +80,8 @@ jobs:
         run: |
           node tools/ci/fuzz-summary.mjs parse fuzz-out/fuzz.log "$BROWSER" "$FUZZ_SEED" > fuzz-out/summary.json
           node tools/ci/fuzz-summary.mjs table fuzz-out/summary.json >> "$GITHUB_STEP_SUMMARY"
-          if grep -qE 'Error: seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log; then
-            { echo; echo '### Shrunk cases'; echo '```'; grep -A4 -E 'Error: seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log | head -100; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if grep -qE '(Error: )?seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log; then
+            { echo; echo '### Shrunk cases'; echo '```'; grep -A4 -E '(Error: )?seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log | head -100; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@v4
         if: success() || failure()
