@@ -94,7 +94,7 @@ jobs:
             if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
               echo "$name@$version is already published"; continue
             fi
-            npm publish "dist/$name-$version.tgz" --access public --ignore-scripts --tag "$tag"
+            npm publish "./dist/$name-$version.tgz" --access public --ignore-scripts --tag "$tag"
           done
 
   release:
