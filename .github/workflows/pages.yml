@@ -30,10 +30,16 @@ jobs:
       - run: node tools/rule-catalog/build-page.mjs _site
       - name: Fetch the fuzz history
         run: |
+          set -o pipefail
           mkdir -p fuzz-data
-          if git ls-remote --exit-code --heads origin fuzz-data > /dev/null; then
-            git fetch --depth 1 origin fuzz-data && git archive FETCH_HEAD | tar -x -C fuzz-data
-          fi
+          # ls-remote --exit-code: 0 found, 2 no such branch (the empty dashboard), anything else an error that fails the
+          # build, so an empty page is never deployed over the history.
+          status=0; git ls-remote --exit-code --heads origin fuzz-data > /dev/null || status=$?
+          case $status in
+            0) git fetch --depth 1 origin fuzz-data && git archive FETCH_HEAD | tar -x -C fuzz-data ;;
+            2) echo "no fuzz-data branch yet: the dashboard says no runs are recorded" ;;
+            *) echo "could not look up the fuzz-data branch (git ls-remote exited $status)" >&2; exit 1 ;;
+          esac
       - run: node tools/fuzz-dashboard/build.mjs fuzz-data _site/fuzz
       - uses: actions/upload-pages-artifact@v3
         with:

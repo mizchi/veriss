@@ -76,7 +76,7 @@ test('fuzz: per-job summaries become one day, recorded to history and rendered o
   ];
   const day1 = aggregateDay(jobs.map(j => j.browser === 'firefox' ? {...j, mismatches: []} : j), {date: '2026-11-27', commit: 'a'.repeat(40), runUrl: 'https://github.com/mizchi/veriss/actions/runs/1', plan});
   assert.equal(day1.ok, true);
-  assert.deepEqual(day1.totals.chromium, {cases: 1000, planned: 1000, verified: 500, violated: 300, unknown: 200, mismatches: 0, missingChunks: 0, decided: 0.8});
+  assert.deepEqual(day1.totals.chromium, {cases: 1000, planned: 1000, verified: 500, violated: 300, unknown: 200, mismatches: 0, missingChunks: 0, failedChunks: 0, problems: 0, decided: 0.8});
   recordDay(dir, day1);
 
   // The next day: the mismatch, and one chunk that wrote no report (a timeout).
@@ -104,4 +104,42 @@ test('fuzz: per-job summaries become one day, recorded to history and rendered o
   assert.match(html, /chromium 1: decided|chromium 2026-11-28: decided 80\.0% of 500 cases, 0 mismatches, 1 chunks not finished/);
   assert.match(html, /actions\/runs\/2/);
   assert.doesNotMatch(html, /<script/);
+});
+
+test('fuzz: a failed job, a partial chunk and a small population each make the day not ok', () => {
+  const plan = planMatrix({browsers: 'chromium', seeds: '1', cases: 1001, chunk: 500});
+  assert.deepEqual(plan.include.map(j => j.cases), [500, 500, 1]);
+  const at = (first, cases) => ({browser: 'chromium', seed: 1, first, cases});
+  const good = [jobSummary(fuzzReport('chromium', 1, 0, 500), {...at(0, 500), outcome: 'success'}), jobSummary(fuzzReport('chromium', 1, 500, 500), {...at(500, 500), outcome: 'success'})];
+  // A 1-case last chunk is judged with its browser and seed, not on its own.
+  const one = {...fuzzReport('chromium', 1, 1000, 1), tally: {cases: 1, verified: 0, violated: 0, unknown: 1, boxes: 3, decidedBoxes: 0}};
+  const day = aggregateDay([...good, jobSummary(one, {...at(1000, 1), outcome: 'success'})], {date: '2026-11-29', commit: 'c', runUrl: 'u', plan});
+  assert.equal(day.ok, true, JSON.stringify(day.runs[0].problems));
+  // The test failed although its report has no mismatch: the day is not ok.
+  const failed = aggregateDay([...good.slice(0, 1), jobSummary(fuzzReport('chromium', 1, 500, 500), {...at(500, 500), outcome: 'failure'}), jobSummary(one, {...at(1000, 1), outcome: 'success'})], {date: '2026-11-29', plan});
+  assert.equal(failed.ok, false);
+  assert.deepEqual(failed.runs[0].failedChunks, [{first: 500, cases: 500}]);
+  // A chunk whose report stops after 5 cases leaves 5..499 unfinished, its tally kept.
+  const partial = aggregateDay([jobSummary(fuzzReport('chromium', 1, 0, 5), {...at(0, 500), outcome: 'failure'}), ...good.slice(1), jobSummary(one, {...at(1000, 1), outcome: 'success'})], {date: '2026-11-29', plan});
+  assert.deepEqual(partial.runs[0].missingChunks, [{first: 5, cases: 495}]);
+  assert.equal(partial.runs[0].cases, 506);
+  assert.equal(partial.ok, false);
+  // The population of the combined browser × seed: mostly Unknown fails it.
+  const unknownOnly = r => ({...r, tally: {...r.tally, verified: 0, violated: 0, unknown: r.tally.cases}});
+  const flat = aggregateDay([0, 500].map(f => jobSummary(unknownOnly(fuzzReport('chromium', 1, f, 500)), {...at(f, 500), outcome: 'success'})).concat(jobSummary(one, {...at(1000, 1), outcome: 'success'})), {date: '2026-11-29', plan});
+  assert.equal(flat.ok, false);
+  assert.match(flat.runs[0].problems.join('; '), /decided 0\.0% .*no violated .*no verified/);
+});
+
+test('dashboard: a browser-day with no finished chunk is marked, and trend lines are not filled', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'fuzz-data-')); t.after(() => rmSync(dir, {recursive: true, force: true}));
+  const plan = planMatrix({browsers: 'chromium,webkit', seeds: '1', cases: 500, chunk: 500});
+  const ok = jobSummary(fuzzReport('chromium', 1, 0, 500), {browser: 'chromium', seed: 1, first: 0, cases: 500, outcome: 'success'});
+  recordDay(dir, aggregateDay([ok, jobSummary(fuzzReport('webkit', 1, 0, 500), {browser: 'webkit', seed: 1, first: 0, cases: 500, outcome: 'success'})], {date: '2026-11-27', commit: 'a', runUrl: 'u1', plan}));
+  recordDay(dir, aggregateDay([ok], {date: '2026-11-28', commit: 'b', runUrl: 'u2', plan}));
+  const html = renderDashboard(loadData(dir));
+  assert.match(html, /class="unavailable[^"]*"[^>]*><title>webkit 2026-11-28: no chunk finished/);
+  // Series colours fill the markers only: a polyline is never filled.
+  assert.doesNotMatch(html, /\.chart \.s[0-9]\{[^}]*fill:/);
+  assert.match(html, /\.chart polyline\{fill:none/);
 });

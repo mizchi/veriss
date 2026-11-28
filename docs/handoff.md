@@ -79,7 +79,7 @@ tools/gate.sh                                     # push の前に毎回。単�
 | 手元 `tools/gate.sh` | push の前 | root と全 package の単体テスト(並列、1 分ほど) | `tools/gate.sh` |
 | 手元 `tools/gate.sh --full` | 必要なときだけ | 以前の gate(単体テスト、eval、css-mistakes の e2e を 3 ブラウザー。20〜30 分) | `tools/gate.sh --full` |
 | `ci.yml`(Linux) | PR と main への push | `unit`(単体テスト)、`e2e`(layout の e2e 全部を 3 ブラウザー × 6 shard。shard はテストごとに実測時間で切る。安全なサブセットの fuzz は固定の `regressions` だけ、`FUZZ_CASES=0`)、`eval`(component-lint の eval を before / run-1 / run-2 / run-3 の 4 job で)と `eval-compare`(4 つそろったときだけ記録と比べる)。どの job も数分 | PR を開く、または `tools/gate.sh --remote` |
-| `fuzz.yml`(Linux) | 毎日 03:17 JST | 安全なサブセットの seed つき fuzz(既定 5000 ケース × seed 1,2,3 × 3 ブラウザーを 500 ケースずつ 90 job)。結果を `fuzz-data` branch に足し、[fuzz dashboard](https://mizchi.github.io/veriss/fuzz/) を出し直す | `gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit`(記録するときは `-f record=true`) |
+| `fuzz.yml`(Linux) | 毎日 03:17 JST(記録の日付は UTC。前日の日付で記録される) | 安全なサブセットの seed つき fuzz(既定 5000 ケース × seed 1,2,3 × 3 ブラウザーを 500 ケースずつ 90 job)。結果を `fuzz-data` branch に足し、[fuzz dashboard](https://mizchi.github.io/veriss/fuzz/) を出し直す | `gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit`(記録するときは `-f record=true`) |
 | `macos.yml`(macOS) | 毎週 | platform で UA プロファイルを選ぶ spec(ua-profiles、reset-matrix)を 3 ブラウザー。`webkit-macos` / `firefox-macos` の照合 | `gh workflow run macos.yml` |
 | `coverage.yml` | 手動だけ | 安全なサブセットの被覆(`tools/subset-coverage.mjs`、mizchi/vlmkit を `.corpus/vlmkit` に checkout して渡す) | `gh workflow run coverage.yml` |
 | `text-widths.yml` | 手動だけ | Windows / macOS の文字幅の記録と照合 | `gh workflow run text-widths.yml -f os=both` |
@@ -88,7 +88,7 @@ tools/gate.sh                                     # push の前に毎回。単�
   main にあるものしか起動できない(新しい workflow を branch で試すときは、一時的に `push: branches: [<branch>]` を足す)
 - Linux の job は `tools/ci/install-fonts.sh` で、文字幅の記録(`models/text/linux-widths.json`)を取ったマシンのフォントをそろえる
 - 結果の見方: `gh run list --workflow ci.yml --branch <branch>`、`gh run watch <id> --exit-status`、落ちた job のログは `gh run view <id> --log-failed`、
-  Playwright の report と trace・fuzz の縮めたケース・eval の結果は `gh run download <id>`(e2e の artifact は失敗したときに上がる。fuzz と eval は毎回)
+  Playwright の report と trace・fuzz の縮めたケース・eval の結果は `gh run download <id>`(e2e の artifact は失敗したときに上がる。fuzz と eval は失敗した job でも毎回。eval は attempt ごとの `component-lint-eval-<attempt>` と、4 つそろったとき比較が落ちても上がるまとめの `component-lint-eval`)
 - 各 job の summary(run のページ)に、eval の差分と fuzz の決まった割合の表が出る
 - `tools/gate.sh --remote` は branch を push し、その commit の ci.yml を `gh run watch` で待つ(PR がないと ci.yml は走らない)。`--print` でコマンドだけ出す
 - e2e の config は `fullyParallel`(テストごとに別の worker・別の shard に行ける)。テストどうしが状態を共有する spec は
@@ -104,7 +104,8 @@ tools/gate.sh                                     # push の前に毎回。単�
 https://mizchi.github.io/veriss/fuzz/ (`tools/fuzz-dashboard/build.mjs` が `fuzz-data` branch から作る。pages.yml の build で)
 
 - **Trend**: ブラウザーごとの「決まった割合」(verified か violated。残りは Unknown)の日ごとの線と、その下に日ごとの mismatch 数。
-  中が白い点は、終わらなかった chunk(時間切れなど)がある日
+  中が白い点は、終わらなかった chunk(時間切れ、5 件の mismatch で途中で止まった残り)か落ちた chunk がある日。軸の上の × は、そのブラウザーで
+  終わった chunk が 1 つもない日(割合はなし。0% ではない)
 - **Latest run**: 最新の run の browser × seed ごとのケース数(走った数 / 予定)、verified / violated / unknown、決まった割合、
   矩形が決まった箱の割合、mismatch 数、終わらなかった chunk の範囲
 - **Open mismatches**: 最新の run の mismatch。縮めたケース、css / body、ブラウザーとの違い、再現コマンド(手元で 1 ケース、
@@ -112,10 +113,12 @@ https://mizchi.github.io/veriss/fuzz/ (`tools/fuzz-dashboard/build.mjs` が `fuz
 - **Runs**: 日ごとの run へのリンク(各 chunk のログと `fuzz-*` artifact)
 - `fuzz-data` branch(コードを持たない orphan branch): `history/<YYYY-MM-DD>.json` がその日の結果(`date`、`commit`、`runUrl`、`ok`、
   ブラウザーごとの `totals`、browser × seed ごとの `runs`: `cases` / `planned` / `verified` / `violated` / `unknown` / `decided` /
-  `boxesDecided` / `missingChunks` / `mismatches`(`index`、`kind`、`shrunk`、`css`、`body`、`mismatches`、`repro.local`、`repro.ci`))、
-  `index.json` が日の一覧(`days[]`: `date`、`file`、`commit`、`runUrl`、`ok`、`totals`)。同じ日にもう一度記録すると置き換わる。
+  `boxesDecided` / `missingChunks` / `failedChunks` / `problems` / `mismatches`(`index`、`kind`、`shrunk`、`css`、`body`、`mismatches`、`repro.local`、`repro.ci`))、
+  `index.json` が日の一覧(`days[]`: `date`、`file`、`commit`、`runUrl`、`ok`、`totals`)。日付は `date -u` の UTC(03:17 JST の定期実行は前日の日付)。同じ UTC 日付でもう一度記録すると置き換わる。
   形は `tools/ci/fuzz-summary.mjs`、試験は `tests/ci-tools.test.mjs`
-- mismatch か終わらなかった chunk があると、記録したあとで run は赤くなる
+- 決まった割合(60% より上)と、verified・violated が 1 件以上あることは、chunk ごとではなく browser × seed の合計で aggregate が見る
+  (`problems`)。spec は FUZZ_REPORT なしで 100 ケース以上のときだけ自分で見る(1 ケースの再現は一致だけ)
+- mismatch、終わらなかった chunk、落ちた chunk(`failedChunks`: テストが落ちたが mismatch はない)、`problems` のどれかがあると、記録したあとで run は赤くなる
 - 新しい spec が `process.platform` で UA プロファイルを選ぶなら、`macos.yml` の `SPECS` に足す
 
 ## パターンを足す手順

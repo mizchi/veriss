@@ -1,12 +1,14 @@
 // The daily safe-subset fuzz's results (.github/workflows/fuzz.yml), from one job's report to the fuzz-data branch.
 //   node tools/ci/fuzz-summary.mjs plan --browsers a,b --seeds 1,2 --cases 5000 --first 0 --chunk 500
 //       the matrix: one job per browser × seed × chunk of cases, as JSON {include: [{browser, seed, first, cases}]}
-//   node tools/ci/fuzz-summary.mjs job --report <report.json> --browser b --seed s --first f --cases n
+//   node tools/ci/fuzz-summary.mjs job --report <report.json> --browser b --seed s --first f --cases n --outcome o
 //       one job's summary (stdout). The report is what the spec writes with FUZZ_REPORT; a job that wrote none (it
-//       timed out, or the browser did not start) is a summary with finished: false
+//       timed out, or the browser did not start) is a summary with finished: false. --outcome is the fuzz step's
+//       outcome (success / failure): a failed test is a failed chunk even when its report shows no mismatch
 //   node tools/ci/fuzz-summary.mjs day --date D --commit C --run-url U --plan <matrix.json> <summary.json>...
 //       the day's result (stdout): per browser and seed, the cases, the verdict counts, the decided share, the chunks
-//       that did not finish and every mismatch with its shrunk case and a repro command
+//       that did not finish or failed, every mismatch with its shrunk case and a repro command, and the population
+//       checks the spec leaves to the combined run (decided share above MIN_DECIDED, some verified, some violated)
 //   node tools/ci/fuzz-summary.mjs record --data <dir> <day.json>
 //       writes <dir>/history/<date>.json and adds the day to <dir>/index.json (a later run of the same date replaces it)
 //   node tools/ci/fuzz-summary.mjs table <day.json>
@@ -24,8 +26,11 @@ export function planMatrix({browsers, seeds, cases, first = 0, chunk = 500}) {
   return {include};
 }
 
-export function jobSummary(report, {browser, seed, first, cases}) {
-  const base = {browser, seed: Number(seed), first: Number(first), planned: Number(cases)};
+// The spec's own guard for an unchunked run (e2e/layout-fuzz-safe-subset.spec.mjs), applied here to each browser and seed.
+export const MIN_DECIDED = 0.6;
+
+export function jobSummary(report, {browser, seed, first, cases, outcome = 'success'}) {
+  const base = {browser, seed: Number(seed), first: Number(first), planned: Number(cases), passed: outcome === 'success'};
   if (!report) return {...base, finished: false, cases: 0, tally: null, mismatches: []};
   return {...base, finished: true, cases: report.tally.cases, tally: report.tally, stoppedEarly: !!report.stoppedEarly, mismatches: report.mismatches ?? []};
 }
@@ -36,13 +41,14 @@ export const reproCommands = ({browser, seed, index}) => ({
 });
 
 const share = (n, d) => d ? n / d : null;
+const pct = x => x === null || x === undefined ? '-' : `${(x * 100).toFixed(1)}%`;
 
 export function aggregateDay(jobs, {date, commit, runUrl, plan}) {
   const planned = plan?.include ?? jobs.map(j => ({browser: j.browser, seed: j.seed, first: j.first, cases: j.planned}));
   const groups = new Map();
   const groupOf = (browser, seed) => {
     const k = `${browser}\u0000${seed}`;
-    if (!groups.has(k)) groups.set(k, {browser, seed: Number(seed), planned: 0, cases: 0, verified: 0, violated: 0, unknown: 0, boxes: 0, decidedBoxes: 0, chunks: 0, missingChunks: [], mismatches: []});
+    if (!groups.has(k)) groups.set(k, {browser, seed: Number(seed), planned: 0, cases: 0, verified: 0, violated: 0, unknown: 0, boxes: 0, decidedBoxes: 0, chunks: 0, missingChunks: [], failedChunks: [], mismatches: []});
     return groups.get(k);
   };
   const byChunk = new Map(jobs.map(j => [`${j.browser}\u0000${j.seed}\u0000${j.first}`, j]));
@@ -50,21 +56,32 @@ export function aggregateDay(jobs, {date, commit, runUrl, plan}) {
     const g = groupOf(p.browser, p.seed), j = byChunk.get(`${p.browser}\u0000${p.seed}\u0000${p.first}`);
     g.planned += p.cases; g.chunks++;
     if (!j || !j.finished) { g.missingChunks.push({first: p.first, cases: p.cases}); continue; }
+    if (!j.passed) g.failedChunks.push({first: p.first, cases: p.cases});
     for (const k of ['cases', 'verified', 'violated', 'unknown', 'boxes', 'decidedBoxes']) g[k] += j.tally[k] ?? 0;
+    // A report that stops early (five mismatches) checked only the start of its chunk: the rest did not run.
+    const done = j.tally.cases ?? 0;
+    if (done < p.cases) g.missingChunks.push({first: p.first + done, cases: p.cases - done});
     for (const m of j.mismatches) g.mismatches.push({...m, repro: reproCommands({browser: p.browser, seed: p.seed, index: m.index})});
   }
   const runs = [...groups.values()].sort((a, b) => a.browser.localeCompare(b.browser) || a.seed - b.seed).map(g => {
     const {boxes, decidedBoxes, ...rest} = g;
-    return {...rest, decided: share(g.verified + g.violated, g.cases), boxesDecided: share(decidedBoxes, boxes)};
+    const decided = share(g.verified + g.violated, g.cases), problems = [];
+    // Judged only on a complete run: a missing chunk is already its own failure.
+    if (g.cases && !g.missingChunks.length) {
+      if (!(decided > MIN_DECIDED)) problems.push(`decided ${pct(decided)} is not above ${pct(MIN_DECIDED)}`);
+      if (!g.violated) problems.push('no violated case');
+      if (!g.verified) problems.push('no verified case');
+    }
+    return {...rest, decided, boxesDecided: share(decidedBoxes, boxes), problems};
   });
   const totals = {};
   for (const r of runs) {
-    const t = totals[r.browser] ??= {cases: 0, planned: 0, verified: 0, violated: 0, unknown: 0, mismatches: 0, missingChunks: 0};
+    const t = totals[r.browser] ??= {cases: 0, planned: 0, verified: 0, violated: 0, unknown: 0, mismatches: 0, missingChunks: 0, failedChunks: 0, problems: 0};
     t.cases += r.cases; t.planned += r.planned; t.verified += r.verified; t.violated += r.violated; t.unknown += r.unknown;
-    t.mismatches += r.mismatches.length; t.missingChunks += r.missingChunks.length;
+    t.mismatches += r.mismatches.length; t.missingChunks += r.missingChunks.length; t.failedChunks += r.failedChunks.length; t.problems += r.problems.length;
   }
   for (const t of Object.values(totals)) t.decided = share(t.verified + t.violated, t.cases);
-  const ok = runs.every(r => !r.mismatches.length && !r.missingChunks.length);
+  const ok = runs.every(r => !r.mismatches.length && !r.missingChunks.length && !r.failedChunks.length && !r.problems.length);
   return {version: 1, date, commit, runUrl, ok, totals, runs};
 }
 
@@ -82,11 +99,10 @@ export function recordDay(dir, day) {
   return index;
 }
 
-const pct = x => x === null || x === undefined ? '-' : `${(x * 100).toFixed(1)}%`;
-
 export function dayTable(day) {
-  const out = ['| browser | seed | cases | verified | violated | unknown | decided cases | boxes with a rectangle | mismatches | not finished |', '|---|---|---|---|---|---|---|---|---|---|'];
-  for (const r of day.runs) out.push(`| ${r.browser} | ${r.seed} | ${r.cases} / ${r.planned} | ${r.verified} | ${r.violated} | ${r.unknown} | ${pct(r.decided)} | ${pct(r.boxesDecided)} | ${r.mismatches.length} | ${r.missingChunks.map(c => `${c.first}..${c.first + c.cases - 1}`).join(', ') || '-'} |`);
+  const ranges = list => list.map(c => `${c.first}..${c.first + c.cases - 1}`).join(', ') || '-';
+  const out = ['| browser | seed | cases | verified | violated | unknown | decided cases | boxes with a rectangle | mismatches | not finished | failed | problems |', '|---|---|---|---|---|---|---|---|---|---|---|---|'];
+  for (const r of day.runs) out.push(`| ${r.browser} | ${r.seed} | ${r.cases} / ${r.planned} | ${r.verified} | ${r.violated} | ${r.unknown} | ${pct(r.decided)} | ${pct(r.boxesDecided)} | ${r.mismatches.length} | ${ranges(r.missingChunks)} | ${ranges(r.failedChunks ?? [])} | ${(r.problems ?? []).join('; ') || '-'} |`);
   for (const r of day.runs) for (const m of r.mismatches) out.push('', `**${r.browser}, seed ${r.seed}, index ${m.index}**: ${m.kind}`, '```', `shrunk: ${JSON.stringify(m.shrunk)}`, `css: ${m.css}`, `body: ${m.body}`, `repro: ${m.repro.local}`, '```');
   return out.join('\n');
 }

@@ -6,7 +6,8 @@
 // A mismatch is shrunk to a minimal page and printed as a regression case to paste into `regressions` below.
 //   FUZZ_CASES=5000 FUZZ_SEED=7 pnpm test:e2e -- layout-fuzz-safe-subset --project webkit
 // FUZZ_CASES=0 runs only the regression cases (ci.yml on every pull request); the seeded run is fuzz.yml's, daily.
-// FUZZ_REPORT=<file> also writes the run's tally and mismatches there as JSON (tools/ci/fuzz-summary.mjs reads it).
+// FUZZ_REPORT=<file> also writes the run's tally and mismatches there as JSON (tools/ci/fuzz-summary.mjs reads it); the
+// decided-share and population checks are then made on the combined day, not per chunk.
 import {test, expect} from '@playwright/test';
 import {writeFileSync} from 'node:fs';
 import {generateLayoutCase, renderCase, shrink} from './support/layout-fuzz.mjs';
@@ -83,6 +84,9 @@ test(`safe-subset fuzz: ${cases} seeded pages agree with the browser wherever ve
   console.log(`safe-subset fuzz (${test.info().project.name}, seed ${seed}, ${first}..${first + cases - 1}): ${JSON.stringify(tally)}; decided cases ${(decided * 100).toFixed(1)}%, boxes with a rectangle ${(boxShare * 100).toFixed(1)}%`);
   if (process.env.FUZZ_REPORT) writeFileSync(process.env.FUZZ_REPORT, JSON.stringify({browser: test.info().project.name, seed, first, cases, tally, decided, boxes: boxShare, stoppedEarly: failures.length >= 5, mismatches: found}, null, 1) + '\n');
   expect(failures, failures.join('\n\n')).toEqual([]);
+  // The population checks need a population: a chunk of the daily run (FUZZ_REPORT) is judged with the rest of its
+  // browser and seed (tools/ci/fuzz-summary.mjs, MIN_DECIDED), and a replay of a few cases checks agreement only.
+  if (process.env.FUZZ_REPORT || cases < 100) return;
   expect(decided).toBeGreaterThan(0.6);
   expect(tally.violated).toBeGreaterThan(0);
   expect(tally.verified).toBeGreaterThan(0);

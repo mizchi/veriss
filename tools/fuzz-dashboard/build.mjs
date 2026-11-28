@@ -36,12 +36,19 @@ function trendChart(days) {
   for (const i of dateTicks) out.push(`<text x="${x(i)}" y="${H - 6}" class="tick" text-anchor="middle">${esc(shown[i].date)}</text>`);
   const labels = [];
   for (const [n, b] of browsers.entries()) {
+    // A day the browser was planned for but no chunk finished has no share: an × on the axis, not a zero.
+    for (const [i, d] of shown.entries()) {
+      const t = d.totals?.[b];
+      if (!t || (t.decided !== null && t.decided !== undefined)) continue;
+      const cx = x(i), cy = H - B - 4;
+      out.push(`<path class="unavailable s${n}x" d="M${cx - 4},${cy - 4}L${cx + 4},${cy + 4}M${cx - 4},${cy + 4}L${cx + 4},${cy - 4}" stroke-width="2"><title>${esc(`${b} ${d.date}: no chunk finished (${t.missingChunks} not finished), share unavailable`)}</title></path>`);
+    }
     const pts = shown.map((d, i) => [i, d.totals?.[b]?.decided]).filter(([, v]) => v !== null && v !== undefined);
     if (!pts.length) continue;
     out.push(`<polyline class="s${n}" fill="none" stroke-width="2" points="${pts.map(([i, v]) => `${x(i)},${y(v)}`).join(' ')}"/>`);
     for (const [i, v] of pts) {
-      const t = shown[i].totals[b], incomplete = t.missingChunks > 0;
-      out.push(`<circle class="s${n}${incomplete ? ' hollow' : ''}" cx="${x(i)}" cy="${y(v)}" r="${shown.length > 40 ? 2.5 : 4}"><title>${esc(`${b} ${shown[i].date}: decided ${pct(v)} of ${t.cases} cases, ${t.mismatches} mismatches${incomplete ? `, ${t.missingChunks} chunks not finished` : ''}`)}</title></circle>`);
+      const t = shown[i].totals[b], incomplete = t.missingChunks > 0 || t.failedChunks > 0;
+      out.push(`<circle class="s${n}${incomplete ? ' hollow' : ''}" cx="${x(i)}" cy="${y(v)}" r="${shown.length > 40 ? 2.5 : 4}"><title>${esc(`${b} ${shown[i].date}: decided ${pct(v)} of ${t.cases} cases, ${t.mismatches} mismatches${t.missingChunks ? `, ${t.missingChunks} chunks not finished` : ''}${t.failedChunks ? `, ${t.failedChunks} chunks failed` : ''}`)}</title></circle>`);
     }
     const [li, lv] = pts.at(-1);
     labels.push({n, x: x(li) + 8, y: y(lv) + 4, text: `${b} ${pct(lv)}`});
@@ -61,9 +68,11 @@ function trendChart(days) {
   return out.join('');
 }
 
+const ranges = list => list.map(c => `${c.first}..${c.first + c.cases - 1}`).join(', ') || '–';
+
 function latestTable(day) {
-  const rows = day.runs.map(r => `<tr><td>${esc(r.browser)}</td><td class="n">${esc(r.seed)}</td><td class="n">${r.cases} / ${r.planned}</td><td class="n">${r.verified}</td><td class="n">${r.violated}</td><td class="n">${r.unknown}</td><td class="n">${pct(r.decided)}</td><td class="n">${pct(r.boxesDecided)}</td><td class="n ${r.mismatches.length ? 'badt' : ''}">${r.mismatches.length}</td><td>${r.missingChunks.map(c => `${c.first}..${c.first + c.cases - 1}`).join(', ') || '–'}</td></tr>`).join('');
-  return `<div class="tw"><table><thead><tr><th>browser</th><th>seed</th><th>cases</th><th>verified</th><th>violated</th><th>unknown</th><th>decided cases</th><th>boxes with a rectangle</th><th>mismatches</th><th>not finished</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const rows = day.runs.map(r => `<tr><td>${esc(r.browser)}</td><td class="n">${esc(r.seed)}</td><td class="n">${r.cases} / ${r.planned}</td><td class="n">${r.verified}</td><td class="n">${r.violated}</td><td class="n">${r.unknown}</td><td class="n">${pct(r.decided)}</td><td class="n">${pct(r.boxesDecided)}</td><td class="n ${r.mismatches.length ? 'badt' : ''}">${r.mismatches.length}</td><td>${ranges(r.missingChunks)}</td><td>${ranges(r.failedChunks ?? [])}</td><td>${esc((r.problems ?? []).join('; ')) || '–'}</td></tr>`).join('');
+  return `<div class="tw"><table><thead><tr><th>browser</th><th>seed</th><th>cases</th><th>verified</th><th>violated</th><th>unknown</th><th>decided cases</th><th>boxes with a rectangle</th><th>mismatches</th><th>not finished</th><th>failed</th><th>problems</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function mismatchList(day) {
@@ -81,7 +90,7 @@ export function renderDashboard({index, latest}) {
   const runs = days.slice(-30).reverse().map(d => `<li><a href="${esc(d.runUrl)}">${esc(d.date)}</a> <span class="${d.ok ? 'okt' : 'badt'}">${d.ok ? 'ok' : 'failed'}</span> <a class="sha" href="${repo}/commit/${esc(d.commit)}">${esc(String(d.commit ?? '').slice(0, 7))}</a> ${Object.entries(d.totals ?? {}).map(([b, t]) => `${esc(b)} ${pct(t.decided)}${t.mismatches ? ` · <span class="badt">${t.mismatches} mismatch${t.mismatches > 1 ? 'es' : ''}</span>` : ''}`).join(' · ')}</li>`).join('');
   const body = !days.length || !latest
     ? `<section><h2>No runs recorded yet</h2><p>fuzz.yml records a run here once a day (and when it is dispatched with <code>record=true</code>). Start one with <code>gh workflow run fuzz.yml -f record=true</code>.</p></section>`
-    : `<section><h2>Trend</h2><p class="muted">Share of seeded pages veriss decided (verified or violated, the rest Unknown) per browser, and the mismatches of each day: a case veriss decided that the browser drew differently. A hollow point is a day whose chunks did not all finish.</p>${trendChart(days)}</section>
+    : `<section><h2>Trend</h2><p class="muted">Share of seeded pages veriss decided (verified or violated, the rest Unknown) per browser, and the mismatches of each day: a case veriss decided that the browser drew differently. A hollow point is a day with a chunk that did not finish or failed; an × on the axis is a day with no finished chunk for that browser (no share).</p>${trendChart(days)}</section>
 <section><h2>Latest run: ${esc(latest.date)} <span class="${latest.ok ? 'okt' : 'badt'}">${latest.ok ? 'ok' : 'failed'}</span></h2><p class="muted">Commit <a href="${repo}/commit/${esc(latest.commit)}"><code>${esc(String(latest.commit).slice(0, 7))}</code></a> · <a href="${esc(latest.runUrl)}">the run on GitHub Actions</a> (each chunk's log and artifact)</p>${latestTable(latest)}</section>
 <section><h2>Open mismatches</h2><p class="muted">The mismatches of the latest run, shrunk to a minimal page. Fix the analysis, then paste the shrunk case into <code>regressions</code> in <code>e2e/layout-fuzz-safe-subset.spec.mjs</code> (they run on every pull request).</p>${mismatchList(latest)}</section>
 <section><h2>Runs</h2><ul class="runs">${runs}</ul></section>`;
@@ -100,8 +109,9 @@ pre{background:var(--code-bg);padding:8px 10px;border-radius:6px;margin:0;white-
 .muted{color:var(--muted)}.okt{color:var(--ok);font-weight:600}.badt{color:var(--bad);font-weight:600}
 .chart{width:100%;height:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
 .chart .grid{stroke:var(--line);stroke-width:1}.chart .tick{fill:var(--muted);font:11px var(--mono)}.chart .label{font:600 12px var(--sans)}
-.chart .s0{stroke:var(--s0);fill:var(--s0)}.chart .s1{stroke:var(--s1);fill:var(--s1)}.chart .s2{stroke:var(--s2);fill:var(--s2)}
-.chart polyline{fill:none}.chart .hollow{fill:var(--surface);stroke-width:2}.chart .s0t{fill:var(--s0)}.chart .s1t{fill:var(--s1)}.chart .s2t{fill:var(--s2)}
+.chart .s0,.chart .s0x{stroke:var(--s0)}.chart .s1,.chart .s1x{stroke:var(--s1)}.chart .s2,.chart .s2x{stroke:var(--s2)}
+.chart polyline{fill:none}.chart circle.s0{fill:var(--s0)}.chart circle.s1{fill:var(--s1)}.chart circle.s2{fill:var(--s2)}.chart circle.hollow{fill:var(--surface);stroke-width:2}.chart .unavailable{fill:none}
+.chart .s0t{fill:var(--s0)}.chart .s1t{fill:var(--s1)}.chart .s2t{fill:var(--s2)}
 .chart .bad{fill:var(--bad)}.chart .zero{fill:var(--line)}
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}

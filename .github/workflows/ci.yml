@@ -114,10 +114,13 @@ jobs:
           ATTEMPT: ${{ matrix.attempt }}
         run: |
           if [ "$ATTEMPT" = before ]; then node tools/eval-component-lint.mjs; else node tools/eval-component-lint.mjs --attempt "$ATTEMPT"; fi
+      # Also after a failed attempt: whatever it wrote is uploaded (eval-compare then refuses to compare).
       - uses: actions/upload-artifact@v4
+        if: success() || failure()
         with:
           name: component-lint-eval-${{ matrix.attempt }}
           path: evals/results/component-lint/${{ matrix.attempt }}.json
+          if-no-files-found: warn
           retention-days: 14
 
   eval-compare:
@@ -157,8 +160,9 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           [ ! -s eval.diff ]
+      # Also when the comparison fails: that is when the results are downloaded to be recorded again.
       - uses: actions/upload-artifact@v4
-        if: needs.eval.result == 'success'
+        if: (success() || failure()) && needs.eval.result == 'success'
         with:
           name: component-lint-eval
           path: |

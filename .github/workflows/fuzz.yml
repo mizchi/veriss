@@ -1,7 +1,8 @@
 # The safe-subset differential fuzz (e2e/layout-fuzz-safe-subset.spec.mjs) at a size a pull request cannot afford, once a
 # day. Pull requests run only its fixed regression cases (ci.yml, FUZZ_CASES=0).
 #   plan       one job per browser × seed × chunk of cases (FUZZ_FIRST + FUZZ_CASES, `chunk` cases each: a few minutes)
-#   fuzz       each chunk; a mismatch fails its job, and its shrunk case is in the job log and the fuzz-* artifact
+#   fuzz       each chunk; a mismatch fails its job, and its shrunk case is in the job log and the fuzz-* artifact. The
+#              decided-share and population checks are made on each browser × seed's combined chunks, in aggregate
 #   aggregate  merges the chunks into the day's result, appends it to the fuzz-data branch (history/<date>.json and
 #              index.json, tools/ci/fuzz-summary.mjs) and redeploys GitHub Pages, whose /fuzz/ page is the dashboard
 #              (tools/fuzz-dashboard/build.mjs): https://mizchi.github.io/veriss/fuzz/
@@ -91,6 +92,7 @@ jobs:
       - name: Install the browser
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Fuzz
+        id: fuzz
         run: |
           set -o pipefail
           mkdir -p fuzz-out
@@ -100,9 +102,11 @@ jobs:
         if: success() || failure()
         env:
           BROWSER: ${{ matrix.browser }}
+          OUTCOME: ${{ steps.fuzz.outcome }}
         run: |
+          mkdir -p fuzz-out
           node tools/ci/fuzz-summary.mjs job --report "$FUZZ_REPORT" --browser "$BROWSER" --seed "$FUZZ_SEED" \
-            --first "$FUZZ_FIRST" --cases "$FUZZ_CASES" > fuzz-out/summary.json
+            --first "$FUZZ_FIRST" --cases "$FUZZ_CASES" --outcome "$OUTCOME" > fuzz-out/summary.json
           cat fuzz-out/summary.json
       - uses: actions/upload-artifact@v4
         if: success() || failure()
@@ -139,6 +143,7 @@ jobs:
         run: |
           printf '%s' "$MATRIX" > plan.json
           shopt -s nullglob
+          # The record's date is the UTC date: the 03:17 JST run is recorded under the previous day.
           date=$(date -u +%F)
           node tools/ci/fuzz-summary.mjs day --date "$date" --commit "$GITHUB_SHA" --run-url "$RUN_URL" --plan plan.json \
             runs/*/fuzz-out/summary.json > day.json
@@ -173,6 +178,6 @@ jobs:
         if: env.RECORD == 'true'
         run: gh workflow run pages.yml --ref "${{ github.event.repository.default_branch }}"
       # After recording, so a red run is on the dashboard too.
-      - name: Fail on a mismatch or an unfinished chunk
+      - name: Fail on a mismatch, an unfinished or failed chunk, or a population problem
         run: |
-          node -e "if (!require('./day.json').ok) { console.error('mismatches or unfinished chunks (see the run summary)'); process.exit(1); }"
+          node -e "if (!require('./day.json').ok) { console.error('mismatches, unfinished or failed chunks, or population problems (see the run summary)'); process.exit(1); }"
