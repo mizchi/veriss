@@ -84,7 +84,9 @@ tools/gate.sh                                     # push の前に毎回。単�
 | `coverage.yml` | 手動だけ | 安全なサブセットの被覆(`tools/subset-coverage.mjs`、mizchi/vlmkit を `.corpus/vlmkit` に checkout して渡す) | `gh workflow run coverage.yml` |
 | `text-widths.yml` | 手動だけ | Windows / macOS の文字幅の記録と照合 | `gh workflow run text-widths.yml -f os=both` |
 
-- branch で回すときは `--ref <branch>` を付ける(`gh workflow run fuzz.yml --ref claude/x -f cases=500`)
+- branch で回すときは `--ref <branch>` を付ける(`gh workflow run fuzz.yml --ref claude/x -f cases=500`)。手で起動する workflow は
+  main にあるものしか起動できない(新しい workflow を branch で試すときは、一時的に `push: branches: [<branch>]` を足す)
+- Linux の job は `tools/ci/install-fonts.sh` で、文字幅の記録(`models/text/linux-widths.json`)を取ったマシンのフォントをそろえる
 - 結果の見方: `gh run list --workflow ci.yml --branch <branch>`、`gh run watch <id> --exit-status`、落ちた job のログは `gh run view <id> --log-failed`、
   Playwright の report と trace・fuzz の縮めたケース・eval の結果は `gh run download <id>`(artifact は失敗したときに上がる。fuzz と eval は毎回)
 - 各 job の summary(run のページ)に、eval の差分と fuzz の決まった割合の表が出る
@@ -150,10 +152,24 @@ tools/gate.sh                                     # push の前に毎回。単�
 - worktree に `node_modules` をシンボリックリンクでつながない。worktree で pnpm を動かすと、元の作業ツリーの `node_modules/.pnpm/node_modules`
   のリンクがその worktree 基準に張り替えられ、worktree を消すと壊れる(react-adapter のテストが `@babel/plugin-syntax-jsx` を見失った)。
   worktree ごとに `pnpm install --frozen-lockfile` する
-- `tools/gate.sh` は Node 24 の `ℹ fail` を数えるようになった(以前は `# fail` だけで、単体テストの失敗を見落としていた)。root の 2 件
-  (MoonBit の文字幅の較正、"compared 0")はこの環境で main でも落ちる
-- gate の既知の失敗(main でも同じ): root の 2 件のほか、e2e の F119(Firefox)と F130(Chromium)。component-lint の eval は
-  320〜375px の見出しの行が動くことがある(`evals/results/component-lint/` を `git restore` で戻し、コミットに混ぜない)
+- `tools/gate.sh` は Node 24 の `ℹ fail` を数えるようになった(以前は `# fail` だけで、単体テストの失敗を見落としていた)
+- 手元の Mac でだけ落ちるもの(もう push を止めない。CI の Linux で通ることを確かめた、2026-11-28 PR #83):
+  - root の 2 件(MoonBit の文字幅の較正、generic family)は、`models/text/linux-widths.json` を記録したマシンのフォントを
+    `/usr/share/fonts` から読む。CI は `tools/ci/install-fonts.sh` でそのフォント(Inter は記録と同じ 4.0)と fontconfig の
+    `sans-serif` / `system-ui` → Inter を入れ、通る。Ubuntu 26.04 の Inter 4.1 では "Pricing" が 0.09px ずれる
+  - e2e の F130(スクロールバー)、100vw とクラシックスクロールバー、invalid-fields-and-messages、フォントの差し替えの警告は Linux で通る
+  - component-lint の eval の 320〜375px の行の揺れは Linux では出ない(Roboto をファイルで渡すので)
+  - svelte-adapter の `text-max-length` は実時間を測る。CI では上限を 30s にした(runner は 3.5 倍ほど遅い)。gate.sh はこれだけ他と並べずに回す
+- CI(Linux)でも落ちるもの。環境ではなく本物の所見(PR #83 で報告):
+  - `layout-cls-facts` の inert sizes on a display: inline span(3 ブラウザー): 解析器が inline の span の `aspect-ratio:1` に
+    `W_LAYOUT_DECLARATION_INERT` を出さない(width・height などには出す)。ブラウザーを使う前の静的な判定で落ちる
+  - 同じ spec の transition of display(Firefox)、inert text-overflow と inert resize(WebKit): Chromium で測った警告を
+    Firefox・WebKit でも比べていて、そのブラウザーでは描画が違う(警告がそのブラウザーでは正しくないか、spec が Chromium 専用)
+  - `layout-svelte` の anonymous flex items of text(Chromium): Linux の Chromium が Roboto の文字を model と 0.5625px 違う幅に組む
+  - fuzz(Firefox、seed 3 の index 63): `white-space: nowrap` の "Sign in" に 57.133px 要るところ 57.111px(514/9)しかないと
+    veriss は違反を出すが、Firefox(LayoutUnit 1/60px)ははみ出さない
+  - component-lint の eval: 記録が `U_LAYOUT_IMAGE`(img の width/height 属性の比)より前のもので、main のコードとずれている。
+    ci.yml の eval は止めない job のまま。記録を取り直せば止める job にできる
 - ゲートの実行中に作業ツリーを変えると、結果がどの版のものか分からなくなる。ゲートの間はツリーの外(一時ディレクトリ)で準備する
 - `css-mistakes.test.mjs` は 1 ファイルで 20 秒以上かかる(止まっているのではない)
 - ブラウザーが Playwright の期待する場所にない環境(クラウドのセッションなど)では、e2e も `tools/eval-component-lint.mjs` も起動の時点で

@@ -2,14 +2,14 @@
 //   node tools/ci/fuzz-summary.mjs parse <fuzz.log> <browser> <seed>   one run's tally as JSON (stdout)
 //   node tools/ci/fuzz-summary.mjs table <summary.json>...              a Markdown table of the runs
 // The spec prints one line per run: "safe-subset fuzz (<browser>, seed <s>, <a>..<b>): {...}; decided cases N%, boxes
-// with a rectangle M%"; each mismatch it found starts a line "seed <s> index <i>: <kind>".
+// with a rectangle M%"; each mismatch it found is "seed <s> index <i>: <kind>" in the failure message.
 import {readFileSync} from 'node:fs';
 
 const [command, ...args] = process.argv.slice(2);
 if (command === 'parse') {
   const [log, browser, seed] = args, text = readFileSync(log, 'utf8');
   const m = text.match(/safe-subset fuzz \([^)]*\): (\{[^}]*\}); decided cases ([\d.]+)%, boxes with a rectangle ([\d.]+)%/);
-  const mismatches = (text.match(/^\s*seed \d+ index \d+: /gm) ?? []).length;
+  const mismatches = new Set(text.match(/seed \d+ index \d+: /g) ?? []).size;
   console.log(JSON.stringify({browser, seed, tally: m ? JSON.parse(m[1]) : null, decided: m?.[2] ?? null, boxes: m?.[3] ?? null, mismatches}));
 } else if (command === 'table') {
   const rows = args.map(f => JSON.parse(readFileSync(f, 'utf8')));

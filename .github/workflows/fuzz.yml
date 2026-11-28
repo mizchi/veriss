@@ -4,8 +4,6 @@
 # A mismatch fails the job; the shrunk cases are in the job log and in the fuzz-<browser>-<seed> artifact.
 name: fuzz
 on:
-  push:
-    branches: [claude/remote-ci]   # TEMPORARY: first run before the workflow is on main
   schedule:
     - cron: '17 18 * * *'   # 03:17 JST
   workflow_dispatch:
@@ -53,7 +51,7 @@ jobs:
         browser: ${{ fromJSON(needs.plan.outputs.browsers) }}
         seed: ${{ fromJSON(needs.plan.outputs.seeds) }}
     env:
-      FUZZ_CASES: ${{ inputs.cases || (github.event_name == 'push' && '500') || '5000' }}
+      FUZZ_CASES: ${{ inputs.cases || '5000' }}
       FUZZ_SEED: ${{ matrix.seed }}
       FUZZ_FIRST: ${{ inputs.first || '0' }}
     steps:
@@ -82,8 +80,8 @@ jobs:
         run: |
           node tools/ci/fuzz-summary.mjs parse fuzz-out/fuzz.log "$BROWSER" "$FUZZ_SEED" > fuzz-out/summary.json
           node tools/ci/fuzz-summary.mjs table fuzz-out/summary.json >> "$GITHUB_STEP_SUMMARY"
-          if grep -qE '^\s*seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log; then
-            { echo; echo '### Shrunk cases'; echo '```'; grep -A4 -E '^\s*seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log | head -100; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if grep -qE 'Error: seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log; then
+            { echo; echo '### Shrunk cases'; echo '```'; grep -A4 -E 'Error: seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log | head -100; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@v4
         if: success() || failure()

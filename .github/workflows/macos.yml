@@ -4,8 +4,6 @@
 # A spec that picks a profile by process.platform belongs in SPECS below.
 name: macos
 on:
-  push:
-    branches: [claude/remote-ci]   # TEMPORARY: first run before the workflow is on main
   schedule:
     - cron: '41 19 * * 0'   # Monday 04:41 JST
   workflow_dispatch:
