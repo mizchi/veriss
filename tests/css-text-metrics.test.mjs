@@ -38,6 +38,41 @@ test('a character domain yields a monotone bound table with the widest character
   for (let i = 1; i < domain.bounds.length; i++) assert.ok(domain.bounds[i] >= domain.bounds[i - 1]);
 });
 
+test('a length domain asked again gives what a fresh measurement gives, for every input it depends on', async () => {
+  // domainBounds keeps its per-character and pair figures per (font file, coordinates, size, characters, language): an
+  // answer from that cache must equal one from text metrics that never saw the domain.
+  const asks = [
+    {font: ro, characters: 'abcfilAVW', maxLength: 6},
+    {font: ro, characters: 'abcfilAVW', maxLength: 12},
+    {font: {...ro, size: 32, lineHeight: 48}, characters: 'abcfilAVW', maxLength: 6},
+    {font: {...ro, weight: 700}, characters: 'abcfilAVW', maxLength: 6},
+    {font: ro, characters: 'WVAlifcba', maxLength: 6},
+    {font: ro, characters: 'abcfil', maxLength: 6},
+    {font: jp, characters: '日本語ABC\'"', maxLength: 8},
+    {font: jp, characters: '日本語ABC\'"', maxLength: 8, lang: 'ja'},
+    {font: {...jp, family: 'noto sans jp'}, characters: '日本語ABC\'"', maxLength: 8},
+    {font: jp, characters: 'A\'"', maxLength: 4, lang: 'en'},
+    {font: jp, characters: 'A\'"', maxLength: 4},
+    {font: ro, characters: '0123456789', maxLength: 4},
+    {font: ro, characters: '9876543210', maxLength: 4},
+    {font: jp, characters: 'abcfilAVW', maxLength: 6},
+  ];
+  const fresh = async () => loadTextMetrics({fonts: {'Noto Sans JP': {file: fixtures + 'japanese-variable.ttf'}, Roboto: {file: fixtures + 'roboto-variable.ttf'}}});
+  const shared = await fresh();
+  for (const ask of [...asks, ...asks]) assert.deepEqual(shared.domainBounds(ask), (await fresh()).domainBounds(ask), JSON.stringify(ask));
+  // The figures differ across these inputs, so a key that left one out would have answered wrong above.
+  assert.notEqual(shared.domainBounds(asks[0]).perCharacter, shared.domainBounds(asks[2]).perCharacter);
+  assert.notEqual(shared.domainBounds(asks[0]).perCharacter, shared.domainBounds(asks[3]).perCharacter);
+  assert.notEqual(shared.domainBounds(asks[0]).perCharacter, shared.domainBounds(asks[5]).perCharacter);
+  assert.notEqual(shared.domainBounds(asks[0]).perCharacter, shared.domainBounds(asks[13]).perCharacter);
+  // Without lang the ja quotes are measured too (their pair adjustment); with lang en they are not.
+  assert.notEqual(shared.domainBounds(asks[9]).pairAdjustment, shared.domainBounds(asks[10]).pairAdjustment);
+  // Tabular digits tie: the first widest in the given order is named.
+  assert.deepEqual([shared.domainBounds(asks[11]).widest, shared.domainBounds(asks[12]).widest], ['0', '9']);
+  // An error is not cached as an answer: it is raised again.
+  for (let i = 0; i < 2; i++) assert.throws(() => shared.domainBounds({font: ro, characters: 'aあ', maxLength: 4}), /lacks U\+3042/);
+});
+
 test('inputs the model cannot cover are rejected instead of guessed', () => {
   for (const [input, pattern] of [
     [() => metrics.measureText({font: jp, text: '日本Ω'}), /lacks U\+03A9; fallback fonts are not modeled/],
