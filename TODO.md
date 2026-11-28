@@ -265,6 +265,7 @@ engine から独立した Z3 の仕様で、engine(範囲全体で UNSAT)と 3 �
 
 ## 実装済み(最近)
 
+- UA × reset の行列(`veriss/reset-matrix`、[docs/reset-matrix.md](docs/reset-matrix.md)): 7 つの reset を版とライセンス付きで同梱し(`src/resets/manifest.json`、vlmkit も読む)、UA 3 つ × reset 7 つの枝ごとに解析して、全枝で成り立つ指摘・一部の枝だけの指摘(いちばん小さい UA × reset の組)・枝ごとの Unknown を返す。CLI の `--reset-matrix` は css-lint の CLI を adapter-core に移したあとで足す
 - L1 の Lean による定義と証明、oracle による差分テスト。ランダムな設定の乱数の不具合(Flex がすべて 1 項目、Grid がすべて 1 列)を直した
 - クリティカル CSS の抽出(`veriss/critical`)
 - 壊れた状態変化の CLS を L1 の仕様の上で Z3 が検出(SAT の反例)、正しい版は UNSAT

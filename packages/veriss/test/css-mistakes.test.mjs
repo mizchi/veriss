@@ -1101,8 +1101,9 @@ test('F84: tab-size does nothing where white-space collapses tabs (and no longer
   // where tabs are kept it changes the line, which is not modeled
   assert.equal(run('.a{white-space:pre;tab-size:2}').status, 'unknown');
   assert.equal(run('.a{white-space:pre-wrap;tab-size:2}').status, 'unknown');
-  // on a box with an element inside it is inherited there: still Unknown
-  assert.equal(run('.p{tab-size:2}', '<div class="p"><div class="a"></div></div>').status, 'unknown');
+  // on a box with an element inside it is inherited there: Unknown only where a descendant keeps tabs
+  assert.equal(run('.p{tab-size:2}', '<div class="p"><div class="a"></div></div>').status, 'verified');
+  assert.equal(run('.p{tab-size:2}.a{white-space:pre}', '<div class="p"><div class="a"></div></div>').status, 'unknown');
 });
 
 test('F96: in a fixed table a width on a cell after the first row does nothing', () => {

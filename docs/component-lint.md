@@ -52,6 +52,8 @@ npx veriss-linaria --viewport 320-1280 src/**/*.tsx   # .js / .jsx / .ts / .tsx�
 
 その差を打ち消す最小の reset は、`--suggest-reset chromium,firefox,webkit` で出せます。
 
+よく使われる reset(normalize.css、modern-normalize、sanitize.css、Josh Comeau の reset、Tailwind Preflight、destyle.css)のどれを先に読み込んでも成り立つかは、UA × reset の行列で調べられます(`analyzeResetMatrix`、[UA × reset の行列](reset-matrix.md))。今は API だけで、CLI のフラグはまだありません。
+
 ## ルールセット
 
 `recommended` には、Chromium e2e または差分 fuzz harness で静的な判定とブラウザーの実測が一致すると確かめたルールだけを入れています。一覧と直し方は `packages/adapter-core/src/lint.mjs` の `recommended` にあります。
