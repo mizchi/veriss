@@ -1526,6 +1526,14 @@ test('F131: a var() shorthand is named as written, once, and compared as written
   assert.equal(hit(':root{--s:#eee}.b:hover{background:var(--s)}.b.c{background:var(--s)}').length, 0);
   // A longhand var() too.
   assert.match(hit(':root{--t:#000}.b:hover{color:var(--t)}.b.c{color:#222}')[0]?.message ?? '', /\{ color: var\(--t\) \}/);
+  // The same var() through another shorthand maps to other longhands: padding-inline: 4px 8px is left 4px, padding
+  // puts 8px there. Equal text is equal only for the same property.
+  assert.equal(hit(':root{--p:4px 8px}.b:hover{padding-inline:var(--p)}.b.c{padding:var(--p)}').length, 1);
+  // Two rules each beating one longhand of the same declaration: one warning, naming both.
+  const both = codes(run(':root{--s:#eee}.b:hover{background:var(--s)}.b.c{background-color:#fff}.b.d{background-image:none}', '<a href="/x" class="b c d">link text</a>'), 'W_CSS_STATE_SHADOWED');
+  assert.equal(both.length, 1, JSON.stringify(both.map(x => x.message)));
+  assert.match(both[0].message, /\.b\.c \{ background-color: #fff \}/);
+  assert.match(both[0].message, /\.b\.d \{ background-image: none \}/);
 });
 
 test('F132: a -moz- or -ms- selector in a list drops the whole rule where it is invalid', () => {
