@@ -12,7 +12,8 @@
     "test": "node --test tests/*.test.mjs && pnpm -r test",
     "test:e2e": "playwright test -c playwright.layout.config.mjs",
     "css-lint": "node tools/css-lint.mjs",
-    "eval:component-lint": "node tools/eval-component-lint.mjs"
+    "eval:component-lint": "node tools/eval-component-lint.mjs",
+    "coverage:subset": "node tools/safe-subset-coverage.mjs"
   },
   "devDependencies": {
     "@mizchi/vlmkit": "0.24.0",

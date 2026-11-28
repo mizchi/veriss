@@ -167,3 +167,5 @@ veriss が新しい書き方を判定できるようになったら、その項�
 
 3 ブラウザーでの実測が前提である。§1〜§3 の書き方は、seed つきの生成器が作るページで 3 ブラウザーと照合し続けている
 (`e2e/layout-fuzz-safe-subset.spec.mjs`、[チェックリスト I27](static-check-checklist.md))。
+
+実ページの CSS がこのサブセットにどれだけ収まるかの測定: [evals/reports/2026-11-28-safe-subset-coverage.md](../evals/reports/2026-11-28-safe-subset-coverage.md)。
