@@ -39,6 +39,8 @@ more than `maxStates` states is Unknown.
   are measured instead (a first pass reports each text's font, `reportTextFonts`; a second analyses with the derived
   contracts). The CLI's `--font Family=file.ttf` sets them.
 - A state whose analysis throws is Unknown (`U_ADAPTER_ANALYSIS`), never a crash.
+- A component its compiler rejects (a Svelte `CompileError`, a Babel syntax error, a Vue SFC parse error) is a result
+  with `compileErrors` (`notCompiled`), never an exception; `lint` reports each as `E_ADAPTER_COMPILE` (error) at its line and column.
 
 The command line is `runLint({argv, adapters, name})` from `veriss-adapter-core/cli` ([docs/component-lint.md](../../docs/component-lint.md)):
 `tools/css-lint.mjs` runs it with every adapter of the workspace, and the `veriss-svelte` and `veriss-linaria` bins with
