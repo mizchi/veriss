@@ -99,8 +99,8 @@ const List = styled.ul`
 ```
 
 ```
-src/broken/Menu.tsx  error    E_SCOPE_REACHES  .lx-List a can style elements of <MenuLink>, which another component renders: …  [items ×2]
-src/broken/Menu.tsx  warning  W_CSS_SELECTOR_UNMATCHED  .lx-List a matches no element of the template
+src/broken/Menu.tsx:11  error    E_SCOPE_REACHES  .lx-List a can style elements of <MenuLink>, which another component renders: …  [items ×2]
+src/broken/Menu.tsx:11  warning  W_CSS_SELECTOR_UNMATCHED  .lx-List a matches no element of the template
 src/broken/Menu.tsx  info     U_REACT_COMPONENT  not checked: child component <MenuLink>: MenuLink is imported from './MenuLink', which was not read (pass options.resolveModule)
 ```
 
@@ -126,20 +126,21 @@ const form = css`
 ```
 
 ```
+src/broken/SearchForm.tsx:8  error    E_SCOPE_ESCAPE  .lx-form :global(body) uses :global, which reaches outside the component's own elements …
 src/broken/SearchForm.tsx:25  error    E_A11Y_LABEL  .lx-field has no label here: add a visible <label>, aria-label, aria-labelledby or title
-src/broken/SearchForm.tsx  error    E_SCOPE_ESCAPE  .lx-form :global(body) uses :global, which reaches outside the component's own elements …
-src/broken/SearchForm.tsx  warning  W_CSS_SELECTOR_RELATION  .lx-form body: 1 element(s) match body, but none is inside an element matching .lx-form; …
+src/broken/SearchForm.tsx:8  warning  W_CSS_SELECTOR_RELATION  .lx-form body: 1 element(s) match body, but none is inside an element matching .lx-form; …
 ```
 
 直した版は `htmlFor` と `id` で label を結び、`body` の margin はページの CSS(checker には `--page-css`)に移します。
 
 ## Linaria に固有のこと
 
-- `E_SCOPE_ESCAPE` と `E_SCOPE_REACHES` は行番号なしで出ます。セレクタの文字列で検索してください。
+- `E_SCOPE_ESCAPE`、`E_SCOPE_REACHES` とセレクタの warning は、生成したクラス名(`.lx-form`)で書かれますが、行はテンプレートで
+  そのセレクタを書いた行(`:global(body) {` や `& a {` の行)です。
 - `<p>` の中の `<div>` は何も出ません(React は DOM API で木を作るので、`W_HTML_RESTRUCTURED` の対象外)。
 - JSX / TSX の構文エラーは `E_ADAPTER_COMPILE`(error)として、Babel の行と列に出ます(`ファイル:行:列`)。import した module の中の
   構文エラーは、その module のファイルで出ます。そのファイルのほかの検査はしません。
 - `css` のテンプレートの CSS が読めないとき(閉じていないブロックなど)は、`U_LINARIA_CSS`(not checked)になり、そのクラスの規則なしで
   検査を続けます。
-- `info` の `W_A11Y_ORDER`(「li@Component/0/0/0/1 comes after … but is placed before it」)が `Menu.tsx` に出ますが、子の中身を
-  見ていない(中身が空の)`<li>` どうしを比べた結果と推定しています(inferred)。recommended のルールではなく、直した版にも出ます。
+- `Menu.tsx` には `U_A11Y_ORDER`(not checked)が出ます。`<li>` の大きさは子の `<MenuLink>` の中身で決まり、それを読んでいないので、
+  見た目の順と DOM の順が合うかは検査していません(以前は、大きさのない `<li>` どうしを比べた `W_A11Y_ORDER` が出ていました)。

@@ -121,6 +121,29 @@ function wrapTextRuns(html) {
   return { html: serialize(fragment), count: n };
 }
 
+// The text markers (class __textN, __phN) are the adapter's, not the component's: an element whose label would be its
+// marker alone (no class or id of its own) is named as the engine names an element without a class, tag@path, in the
+// state's findings (the path as the engine counts it: the page's html, its body, then the component's elements).
+const markerLabel = /(^|[^\w-])\.(__(?:text|ph)\d+)(?![\w-])/g;
+function namedMarkers(report, html, name) {
+  if (!/__(?:text|ph)\d/.test(html)) return report;
+  const names = new Map();
+  const walk = (node, path) => (node.childNodes ?? []).filter(c => c.tagName).forEach((el, i) => {
+    const at = `${path}/${i}`, attrs = Object.fromEntries(el.attrs.map(a => [a.name, a.value]));
+    const classes = String(attrs.class ?? '').split(/\s+/).filter(Boolean);
+    if (!attrs.id && classes.length && classes.every(c => /^__(?:text|ph)\d+$/.test(c))) for (const c of classes) names.set(c, `${el.tagName}@${at}`);
+    walk(el.tagName === 'template' ? el.content : el, at);
+  });
+  walk(parseFragment(html), `${name}/0`);
+  if (!names.size) return report;
+  const rename = text => typeof text === 'string' ? text.replace(markerLabel, (m, before, marker) => names.has(marker) ? `${before}${names.get(marker)}` : m) : text;
+  const renamed = list => list?.map(d => ({ ...d, ...(d.box !== undefined ? { box: rename(d.box) } : {}), ...(d.message !== undefined ? { message: rename(d.message) } : {}) }));
+  return { ...report, diagnostics: renamed(report.diagnostics) ?? report.diagnostics, ...(report.layoutWarnings ? { layoutWarnings: renamed(report.layoutWarnings) } : {}),
+    ...(report.accessibility ? { accessibility: { ...report.accessibility, ...(report.accessibility.warnings ? { warnings: renamed(report.accessibility.warnings) } : {}) } } : {}),
+    ...(report.integrity ? { integrity: { ...report.integrity, ...(report.integrity.warnings ? { warnings: renamed(report.integrity.warnings) } : {}) } } : {}),
+    ...(report.selectors ? { selectors: { ...report.selectors, warnings: renamed(report.selectors.warnings) ?? [] } } : {}) };
+}
+
 function markText(html, start = 0) {
   const fragment = parseFragment(html);
   let n = start;
@@ -237,9 +260,16 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   // (docs/css-shorthands.md): a shorthand conflict in it is a warning, unless the caller asks for the rule.
   options = { ...options, shorthandConflicts: options.shorthandConflicts ?? 'warning' };
   const unbounded = new Map(), unmeasurable = new Map();
-  // Component scope: the component's own CSS starts on its own line after the page CSS, so the scope check can tell
-  // the component's selectors from the page's.
+  // The component's own CSS starts on its own line after the page CSS, so the scope check and the selector usage can
+  // tell the component's selectors from the page's.
+  // (Without a scope the component's CSS goes on the page CSS's last line, as it always has: the lines callers relocate.)
   const allCSS = scope ? `${pageCSS}\n${css}` : pageCSS + css;
+  const pageLines = pageCSS.split('\n');
+  // The page's CSS is not the component's: its selectors that match nothing in the component (button, input, select,
+  // textarea { font: inherit }, for the controls this component does not have) are not the component's unused selectors.
+  // A rule on the line the two share (no scope, a page CSS with no final newline) is the page's when only its text has it.
+  const inPage = w => w.line < pageLines.length || (w.line === pageLines.length && (scope || (pageLines.at(-1).includes(w.selector) && !css.split('\n')[0].includes(w.selector))));
+  const ownSelectors = selectors => ({ ...selectors, warnings: (selectors.warnings ?? []).filter(w => !(/^W_CSS_SELECTOR_/.test(w.code) && (w.file ?? '<css>') === '<css>' && inPage(w))) });
   const scopeOption = scope ? { mode: scope.mode, ...(scope.ancestors ? { ancestors: scope.ancestors } : {}), ...(scope.owned ? { owned: scope.owned } : {}), firstLine: pageCSS.split('\n').length + 1, ...(scope.sheets ? { sheets: scope.sheets.map(s => ({ mode: s.mode, from: s.from + pageCSS.split('\n').length, to: s.to + pageCSS.split('\n').length })) } : {}) } : null;
   const results = states.map(state => {
     let html = state.html, boxes = options.boxes;
@@ -293,6 +323,8 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
     }
     try { report = analyzeHTML(wrap(html), { name, ...options, ...knownFonts, ...(boxes ? { boxes } : {}), css: allCSS, ...(scopeOption ? { scope: scopeOption } : {}) }); }
     catch (error) { report = { status: 'unknown', diagnostics: [{ code: 'U_ADAPTER_ANALYSIS', severity: 'unknown', message: `the analysis of this state failed: ${error.message}` }], sizes: [] }; }
+    if (report.selectors) report = { ...report, selectors: ownSelectors(report.selectors) };
+    report = namedMarkers(report, html, name);
     return { choices: state.choices, html: state.html, report };
   });
   if (measuredTexts) assumptions = [...assumptions, `${measuredTexts} text box(es) measured with the given font files (${Object.keys(fonts).join(', ')}): their widths and line breaks are derived, not assumed`];

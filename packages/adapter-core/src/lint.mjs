@@ -239,11 +239,21 @@ export const strict = {
 const fixFor = (code, fix, html, path, layout) => code !== 'E_LAYOUT_TRACKS' ? fix
   : nodeAt(html, path)?.tagName === 'table' ? 'let the cells wrap (no white-space: nowrap, shorter headers), or scroll the table inside a wrapper with overflow-x: auto'
   : layout === 'flex' ? 'let the items shrink (flex-shrink: 1 with min-width: 0 and a flexible width), wrap them (flex-wrap: wrap), or scroll the row (overflow-x: auto)' : fix;
-// The source line of a box or selector: the first line that mentions its first class, or the selector text.
+// The source line of a box or selector: the first line that mentions its first class, or the selector text. Comments
+// do not count (an HTML comment that names the old class, a CSS comment, a // line in the script): they are blanked out,
+// line breaks kept, before searching. Strings are searched (class="…" and css`…` are strings).
+const commentFree = new Map();
+const uncommented = source => {
+  if (!commentFree.has(source)) {
+    if (commentFree.size > 64) commentFree.clear();
+    commentFree.set(source, source.replace(/<!--[\s\S]*?(?:-->|(?![\s\S]))|\/\*[\s\S]*?(?:\*\/|(?![\s\S]))|^[ \t]*\/\/.*$/gm, m => m.replace(/[^\n]/g, ' ')));
+  }
+  return commentFree.get(source);
+};
 const lineOf = (source, needle) => {
   if (!needle) return undefined;
-  const index = source.indexOf(needle);
-  return index < 0 ? undefined : source.slice(0, index).split('\n').length;
+  const text = uncommented(source), index = text.indexOf(needle);
+  return index < 0 ? undefined : text.slice(0, index).split('\n').length;
 };
 
 /**
@@ -325,7 +335,7 @@ export function lint(result, { file = '<component>', source = '', profile = 'rec
   for (const w of result.selectors?.warnings ?? []) {
     if (rules && !rules[w.code]) continue;
     if (/^(?:html|body|\*)/.test(w.selector)) continue;
-    out.push({ file, line: lineOf(source, w.selector) ?? lineOf(source, /\.([\w-]+)/.exec(w.selector)?.[1]), severity: rules?.[w.code]?.[0] ?? 'warning', code: w.code, message: w.message, fix: rules?.[w.code]?.[1], states: 'every state' });
+    out.push({ file, line: w.sourceLine ?? lineOf(source, w.selector) ?? lineOf(source, /\.([\w-]+)/.exec(w.selector)?.[1]), severity: rules?.[w.code]?.[0] ?? 'warning', code: w.code, message: w.message, fix: rules?.[w.code]?.[1], states: 'every state' });
   }
   // Not checked: the adapter's Unknowns, each state's Unknowns, and the assumptions made.
   for (const u of result.unknowns) out.push({ file, severity: 'info', code: u.code, message: `not checked: ${readable(u.message)}` });

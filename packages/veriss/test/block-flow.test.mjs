@@ -232,3 +232,12 @@ test('a button whose only child is an absolutely positioned badge is a container
     {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body{${g}}.p{${g}}.box{display:block}.a{position:relative;display:block;width:44px;height:44px;padding:0;border:1px solid #555}.c{position:absolute;top:0;right:0;width:20px;height:20px;font-family:Roboto;font-size:12px;line-height:20px;font-weight:400}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}, boxes: {'.c': {minInlineSize: 8, intrinsicBlockSize: 20, font: {family: 'Roboto', size: 12, lineHeight: 20, weight: 400}}}, integrity: true});
   assert.ok(!r.diagnostics.some(d => d.code === 'U_LAYOUT_TEXT_FONT'), JSON.stringify(r.diagnostics.map(d => d.message)));
 });
+
+test('fit-content in block flow: an Unknown content width is worded for block flow, not flex', () => {
+  const r = analyzeHTML('<html lang="en"><body><main class="p"><div class="fit"><div class="a"></div></div></main></body></html>', {name: 'P', css: `*{box-sizing:border-box;margin:0}html,body{${g}}.p{display:block}.fit{width:fit-content}.a{margin-left:-8px;width:40px;height:10px}`, viewport: {min: 320, max: 800, height: {min: 600, max: 900}}});
+  const d = r.diagnostics.find(d => d.severity === 'unknown' && /margin is -8px/.test(d.message));
+  assert.ok(d, JSON.stringify(r.diagnostics.map(d => [d.code, d.message])));
+  assert.equal(d.code, 'U_LAYOUT_GEOMETRY');
+  assert.doesNotMatch(d.message, /flex/);
+  assert.match(d.message, /fit-content/);
+});

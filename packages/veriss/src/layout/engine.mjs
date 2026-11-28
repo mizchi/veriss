@@ -2852,12 +2852,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
   // (Grid §6.6). Where every one is a known constant C the column is rewritten to minmax(Cpx, Nfr) (minmax(0, Nfr)
   // for 0), which the fr sizing (with its freezing loop) handles; otherwise Unknown.
   // probe: instead, the min- and max-content widths (border box) of box itself: { min, max } (a flex item's content).
-  function frAutoMinimums(box, style, region, parents, probe = false) {
+  // within: the layout that asked for the content widths ('flex' items; 'shrink-to-fit' for a fit-content box in block
+  // flow or an absolute box with one inset), which the Unknown's wording and code name.
+  function frAutoMinimums(box, style, region, parents, probe = false, within = 'flex') {
     if (!probe && (!['grid', 'inline-grid'].includes(style.display) || style.$blockFlow)) return style;
     const source = String(style['grid-template-columns']);
     // repeat(auto-fill | auto-fit, …) takes no bare fr (invalid there); subgrid has no own tracks.
     if (!probe && (/auto-fill|auto-fit|subgrid/.test(source) || !/fr\b|\bauto\b|min-content|max-content|fit-content/.test(source))) return style;
-    const unknown = why => { throw Object.assign(new Error(probe ? `${box.label}: its content ${why.replace(/^has /, 'has ')}; its content width is not known (give it a px width or flex-basis)` : `${box.label}: a bare fr column (minmax(auto, fr)) ${why}; its minimum is not known`), { code: probe ? 'U_LAYOUT_FLEX' : 'U_LAYOUT_GRID_FR', box, region }); };
+    const unknown = why => { throw Object.assign(new Error(!probe ? `${box.label}: a bare fr column (minmax(auto, fr)) ${why}; its minimum is not known`
+      : within === 'shrink-to-fit' ? `${box.label}: its content ${why}; its shrink-to-fit (fit-content) width is not known (give it a px width)`
+      : `${box.label}: its content ${why}; its content width is not known (give it a px width or flex-basis)`), { code: !probe ? 'U_LAYOUT_GRID_FR' : within === 'shrink-to-fit' ? 'U_LAYOUT_GEOMETRY' : 'U_LAYOUT_FLEX', box, region }); };
     let tokens; try { tokens = probe ? ['auto'] : expandTracks(source); } catch { return style; }
     const frOf = token => { const m = token.match(/^(\d+(?:\.\d+)?)fr$/) ?? token.match(/^minmax\(\s*auto\s*,\s*(\d+(?:\.\d+)?)fr\s*\)$/); return m ? m[1] : null; };
     const bare = tokens.map(frOf);
@@ -3451,7 +3455,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         // not, Unknown. (Measured in Chromium, Firefox and WebKit.)
         if (style.position === 'absolute' && style['inline-size'] === 'auto' && available.containingBlock && !box.pseudo
           && ['left', 'right'].filter(side => style[side] !== undefined && style[side] !== 'auto').length === 1) {
-          const sizes = frAutoMinimums(box, style, state.region, parents, true);
+          const sizes = frAutoMinimums(box, style, state.region, parents, true, 'shrink-to-fit');
           const set = ['left', 'right'].find(side => style[side] !== undefined && style[side] !== 'auto');
           const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
           // The content measurement's max-content width is not capped by the box's own max-width (a flex base size
@@ -3492,7 +3496,7 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         if (['fit-content', 'min-content', 'max-content'].includes(intrinsicKeyword) && !box.pseudo && (style.display === 'block' || style.$inlineLevel) && ['static', 'relative'].includes(style.position)
           && ['block', 'flow-root'].includes(String(parents.at(-1)?.style.display)) && ['auto', '0', '0px'].includes(String(style['min-inline-size'])) && String(style['max-inline-size'] ?? 'none') === 'none'
           && !['inline-size', 'size'].includes(String(style['container-type']))) {
-          const sizes = frAutoMinimums(box, style, state.region, parents, true);
+          const sizes = frAutoMinimums(box, style, state.region, parents, true, 'shrink-to-fit');
           const edges = ['left', 'right'].flatMap(side => [style[`padding-${side}`], style[`border-${side}`]]).map(v => v === 'ua' || v === undefined || v === '0' ? zero : px(v)).reduce(add, zero);
           // (Border-box widths; a content-box box declares them less its inline padding and borders.)
           const declare = value => {
