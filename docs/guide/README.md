@@ -92,6 +92,7 @@ stderr の時間の行と、最後のまとめの行は出ません。
 | `--images images.json` | なし | 画像ファイルの自然な大きさ(`{"/avatar.png": {"width": 128, "height": 128}}`)。ないと、高さを確保しない img は `U_LAYOUT_IMAGE`(not checked)になり、`E_LAYOUT_IMAGE_UNRESERVED` は出ない。ビルドの時に画像の header から作るのが確実 |
 | `--trust-image-attributes` | なし | `--images` にない img の `width` / `height` 属性をファイルの大きさとみなす(仮定として info に出る) |
 | `--ua chromium,firefox,webkit` | Chromium の既定 | フォームの部品の UA スタイルをブラウザーごとに使い、一部のブラウザーでだけ成り立つ指摘にブラウザーを添える。`--suggest-reset chromium,firefox,webkit` は、その差を消す最小の reset を出して終わる |
+| `--resets all` | なし | reset(none、modern-normalize、normalize、sanitize、josh-comeau、tailwind-preflight、destyle)のどれを先に読み込んでも成り立つかを、UA × reset の枝ごとに検査する。`--ua` が UA の軸(省くと 3 つ)。一部の枝だけの指摘は `only in firefox × none` のように出る。`--sample N --seed S` で枝の一部だけ |
 | `--profile all` | `recommended` | ブラウザーと照合していないルールも error / warning として出す。最初は recommended のまま使い、info の「outside the recommended rules」を読むほうがよい |
 
 `--ua` の例(幅 100px のボタンの「Publish now」を Roboto で測る):
@@ -99,6 +100,31 @@ stderr の時間の行と、最後のまとめの行は出ません。
 ```
 U.svelte:2  error    E_LAYOUT_CONTENT  .publish requires 86.72px but receives 84px on inline axis at viewport 800px × 690px (in chromium, webkit; not in firefox)
 ```
+
+`--resets` の例(幅 107px の列に置いた content-box の textarea。UA の border は Chromium と WebKit で 1px、Firefox で 2px):
+
+```svelte
+<!-- Note.svelte -->
+<div class="col"><textarea class="s" aria-label="Note"></textarea></div>
+
+<style>
+  .col { width: 107px; }
+  .s { display: block; inline-size: 100px; block-size: 40px; resize: none; }
+</style>
+```
+
+```
+$ npx veriss-svelte --viewport 400 --height 300 --resets all Note.svelte
+Note.svelte: 21 branches (chromium, firefox, webkit × none, modern-normalize, normalize, sanitize, josh-comeau, tailwind-preflight, destyle)
+  only in firefox × none, normalize (not decided in chromium:sanitize, …, webkit:destyle):
+    Note.svelte:1  error    E_LAYOUT_ITEM_SIZE  .s requires 108px but receives 107px on inline axis at viewport 400px × 300px
+        fix: give the box room (a flexible track, max-width: 100%, min-width: 0) or let it shrink
+  not decided in chromium:sanitize, …, webkit:destyle: not checked: .s: a rule the analysis cannot read (its selector) may repaint it or an ancestor
+
+1 error(s), 0 warning(s) across the branches; 2 branch(es) with an error; 9 branch(es) not decided
+```
+
+Firefox で、textarea の box を変えない reset(none と normalize.css)のときだけはみ出します。modern-normalize、Josh Comeau の reset は `box-sizing: border-box` で収め、sanitize.css・Preflight・destyle は、解析が読めない規則が textarea を塗り直しうるので決まっていません(合格ではない)。直すなら `box-sizing: border-box` か `max-inline-size: 100%` を `.s` に書きます。
 
 **オプション名の綴りに注意**: CLI は知らない `--xxx` を、次の引数を値として取るオプションとして読みます。`--image images.json`
 と書くとエラーにならず、`images.json` が消費されて画像の大きさが渡りません。`not checked` が減らないときは綴りを疑ってください。

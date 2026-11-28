@@ -123,3 +123,11 @@ test('::-moz-focus-inner moves no button in any engine (normalize.css)', () => {
   const sized = 'button{display:block;inline-size:100px;block-size:20px;padding:0;border:0}';
   for (const ua of ['chromium', 'firefox', 'webkit']) assert.equal(run(`${sized}button::-moz-focus-inner,[type="button"]::-moz-focus-inner{border-style:none;padding:0}`, '<div class="a"><button type="button" aria-label="b"></button></div>', {ua}).status, 'verified', ua);
 });
+
+test('the component scope check reads the component\'s CSS only, not a reset put before it', () => {
+  const r = analyzeHTML('<html lang="en"><body><div class="c"></div></body></html>', {name: 'P', css: '.c{height:10px}', viewport: {min: 400, max: 400, height: {min: 300, max: 300}}, scope: {mode: 'global', owned: ['c']}, reset: [{css: 'html,body,p{margin:0}a{color:inherit}', file: 'reset:x'}]});
+  assert.deepEqual((r.selectors?.warnings ?? []).filter(w => w.code === 'E_SCOPE_GLOBAL').map(w => w.selector), []);
+  // the component's own global selector is still reported
+  const own = analyzeHTML('<html lang="en"><body><div class="c"></div></body></html>', {name: 'P', css: '.c{height:10px}div{color:red}', viewport: {min: 400, max: 400, height: {min: 300, max: 300}}, scope: {mode: 'global', owned: ['c']}, reset: [{css: 'a{color:inherit}', file: 'reset:x'}]});
+  assert.deepEqual((own.selectors?.warnings ?? []).filter(w => w.code === 'E_SCOPE_GLOBAL').map(w => w.selector), ['div']);
+});

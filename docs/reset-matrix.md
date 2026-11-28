@@ -41,7 +41,7 @@ m.onlyIn[0].absent;    // 解析が決まって、指摘が出なかった枝
   `where` は解析した枝の上で言う。`enumerateBranches`、`sampleBranches`、`describeBranchSet` も単体で使える。
 - `analyze`: 解析の関数(既定は `{html}` なら `analyzeHTML`、`{tree}` なら `analyzeLayout`)。
 
-CLI の `--reset-matrix` はまだない(css-lint の CLI を adapter-core に移したあとで足す)。
+コンポーネントの CLI(`css-lint`、`veriss-svelte`、`veriss-linaria`)では `--resets none,modern-normalize,…|all`([コンポーネントの lint](component-lint.md) の「reset の行列」)。中の比較は同じ `compareBranches`。
 
 ## reset のデータ(`veriss/resets/manifest.json`)
 
