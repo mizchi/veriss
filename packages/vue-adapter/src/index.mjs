@@ -22,7 +22,9 @@ export function expandVue(source, { maxStates = 64, eachCounts = [0, 1, 2], sour
   const { descriptor, errors } = parse(source);
   const unknowns = [], assumptions = new Set();
   const unknown = (code, message) => { if (!unknowns.some(u => u.message === message)) unknowns.push({ code, message }); };
-  if (errors.length) unknown('U_VUE_PARSE', `the SFC does not parse: ${errors[0].message ?? errors[0]}`);
+  // The SFC parser's errors (a missing end tag) mean it does not build: compile errors (E_ADAPTER_COMPILE in lint). The
+  // parser recovers, and the template it recovered is still analysed.
+  const compileErrors = errors.map(e => ({ message: e.message ?? String(e), line: e.loc?.start.line, column: e.loc?.start.column }));
   for (const style of descriptor.styles) if (style.module) unknown('U_VUE_CSS_MODULE', '<style module> class names come from $style at run time');
   const css = descriptor.styles.filter(s => !s.module).map(s => unscopeVueCSS(s.content)).join('\n');
   // Props typed as literal unions (defineProps<{ status: 'Active' | 'Pending' }>()): their text is each value.
@@ -45,7 +47,15 @@ export function expandVue(source, { maxStates = 64, eachCounts = [0, 1, 2], sour
         if (d && literal(d.value) !== undefined) defaultProps.set(keyOf(p), literal(d.value));
       }
       for (const k of literalProps.keys()) defaultProps.delete(k);
-    } catch { /* not parsed: the props stay placeholder text */ }
+    } catch (error) {
+      // Not parsed: the props stay placeholder text. A syntax error (a Babel error in the plain script, parsed again
+      // without the TypeScript plugin when the block is not lang="ts") does not build: a compile error at its place.
+      const lang = descriptor.scriptSetup.lang, start = descriptor.scriptSetup.loc.start;
+      const syntax = e => e?.code === 'BABEL_PARSER_SYNTAX_ERROR' && e.loc;
+      let failure = syntax(error) ? error : null;
+      if (failure && lang !== 'ts') try { parseScript(descriptor.scriptSetup.content, { sourceType: 'module' }); failure = null; } catch (e) { failure = syntax(e) ? e : null; }
+      if (failure && (lang === undefined || lang === 'js' || lang === 'ts')) compileErrors.push({ code: failure.reasonCode, message: failure.message.replace(/ \(\d+:\d+\)$/, ''), line: start.line + failure.loc.line - 1, column: failure.loc.line === 1 ? start.column + failure.loc.column : failure.loc.column + 1 });
+    }
     if (literalProps.size) assumptions.add(`text of props typed as literal unions (${[...literalProps.keys()].join(', ')}) is each of their values`);
     if (defaultProps.size) assumptions.add(`props with a literal default (${[...defaultProps.keys()].join(', ')}) are checked with that default and with placeholder text for any other value`);
   }
@@ -190,10 +200,12 @@ export function expandVue(source, { maxStates = 64, eachCounts = [0, 1, 2], sour
   let line = 1;
   const ranges = sheets.map(s => { const lines = unscopeVueCSS(s.content).split('\n').length, range = { mode: s.scoped ? 'scoped' : 'global', from: line, to: line + lines - 1 }; line += lines; return range; });
   const scope = { mode: sheets.every(s => s.scoped) ? 'scoped' : 'global', owned: [], escapes: sheets.flatMap(s => scopeEscapes(s.content, ['deep', 'slotted', 'global'])), ...(new Set(ranges.map(r => r.mode)).size > 1 ? { sheets: ranges } : {}) };
-  return { states, css, unknowns, assumptions: [...assumptions], scope };
+  return { states, css, unknowns, assumptions: [...assumptions], scope, compileErrors };
 }
 
 /** Analyse every template state of a Vue SFC (options: veriss options, pageCSS, page, maxStates, eachCounts). */
 export function analyzeVue(source, { maxStates, eachCounts, sourceLines, ...options } = {}) {
-  return analyzeStates(expandVue(source, { maxStates, eachCounts, sourceLines }), options);
+  const { compileErrors, ...expanded } = expandVue(source, { maxStates, eachCounts, sourceLines });
+  const result = analyzeStates(expanded, options);
+  return compileErrors.length ? { ...result, status: 'violated', compileErrors } : result;
 }

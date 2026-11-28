@@ -13,7 +13,7 @@
 // Unknown (never verified): child components, {@html}, {@render}, <slot>, dynamic class={…} that is not a literal
 // conditional, style: directives and style={…}, <svelte:element>, and more states than `maxStates`.
 import { parse } from 'svelte/compiler';
-import { analyzeStates, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree } from 'veriss-adapter-core';
+import { analyzeStates, notCompiled, scopeEscapes, boundary, literalUnionProps, propsMembers, literalChoicesAgree } from 'veriss-adapter-core';
 
 const escapeText = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = s => escapeText(s).replace(/"/g, '&quot;');
@@ -179,7 +179,15 @@ export const unscopeCSS = css => css.replace(/:global\(([^()]*)\)/g, '$1');
  *   maxStates, eachCounts — the enumeration bounds.
  */
 export function analyzeSvelte(source, { maxStates, eachCounts, sourceLines, ...options } = {}) {
-  const { states, css, unknowns, assumptions } = expandSvelte(source, { maxStates, eachCounts, sourceLines });
+  let expanded;
+  // A component the Svelte compiler rejects (<p><div></div></p>: element_invalid_closing_tag_autoclosed) does not
+  // build: its CompileError is the result, at 1-based line and column, without the docs link Svelte appends.
+  try { expanded = expandSvelte(source, { maxStates, eachCounts, sourceLines }); }
+  catch (error) {
+    if (error?.name !== 'CompileError' || !error.start) throw error;
+    return notCompiled([{ code: error.code, message: error.message.replace(/\nhttps:\/\/svelte\.dev\/\S+$/, ''), line: error.start.line, column: error.start.column + 1 }]);
+  }
+  const { states, css, unknowns, assumptions } = expanded;
   // Svelte scopes every compound of a selector to the component (an ancestor outside it never matches: an unused
   // selector, which the Svelte compiler and W_CSS_SELECTOR_* report); :global(…) reaches past it (E_SCOPE_ESCAPE).
   return analyzeStates({ states, css: unscopeCSS(css), unknowns, assumptions, scope: { mode: 'scoped', ancestors: 'scoped', escapes: scopeEscapes(css, ['global']) } }, options);

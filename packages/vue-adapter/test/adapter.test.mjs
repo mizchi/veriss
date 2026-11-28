@@ -82,3 +82,17 @@ test('props with a literal default (withDefaults, or a runtime default): the def
     assert.equal(normalize(states.find(s => s.choices['label given'] === false).html), normalize(await ssr(source, {label: 'Save changes'})));
   }
 });
+
+test('an SFC that does not parse carries its compile errors (an error in lint), and the recovered template is still analysed', () => {
+  const result = analyzeVue('<template>\n  <div><span></div>\n</template>\n');
+  assert.equal(result.status, 'violated');
+  assert.ok(result.states.length >= 1);
+  const [error] = result.compileErrors;
+  assert.deepEqual([error.line, error.column], [2, 8]);
+  assert.match(error.message, /missing end tag/);
+  assert.ok(!result.unknowns.some(u => u.code === 'U_VUE_PARSE'));
+  // <script setup> is parsed by the adapter, not by the SFC parser: its syntax error is placed in the file.
+  const script = analyzeVue('<script setup lang="ts">\nconst a: number = ;\n</script>\n<template><div>x</div></template>\n');
+  assert.deepEqual([script.compileErrors[0].line, script.compileErrors[0].column], [2, 19]);
+  assert.equal(analyzeVue('<script setup>\nconst a = 1;\n</script>\n<template><div>{{ a }}</div></template>\n').compileErrors, undefined);
+});

@@ -76,7 +76,9 @@ export function collectStyled(ast, text, names) {
  */
 export function loadModule({ file, source, ast }, resolveModule, cache = new Map()) {
   if (cache.has(file)) return cache.get(file);
-  ast ??= parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+  // A syntax error in an imported module names that module (error.module), for analyzeReact to report there.
+  try { ast ??= parse(source, { sourceType: 'module', plugins: ['jsx', 'typescript'] }); }
+  catch (error) { if (error?.code === 'BABEL_PARSER_SYNTAX_ERROR') error.module ??= file; throw error; }
   const names = styledImports(ast);
   const { defs, fragments } = collectStyled(ast, source, names);
   // exports: aliases (export default X, export { a as b }), re-exports (export { a as b } from 'm') and export * from 'm'

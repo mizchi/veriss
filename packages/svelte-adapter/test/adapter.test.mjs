@@ -93,3 +93,14 @@ test('a prop with a literal default: the default (prop left out) is a measured s
   assert.equal(normalize(omitted.html), normalize((await renderSSR(source, {})).html));
   assert.ok(assumptions.some(a => /literal default \(label\)/.test(a)));
 });
+
+test('a component the Svelte compiler rejects is a result with its compile error (code, 1-based line and column), not an exception', () => {
+  const result = analyzeSvelte('<section>\n  <p><div></div></p>\n</section>\n');
+  assert.deepEqual(result.states, []);
+  assert.equal(result.status, 'violated');
+  const [error] = result.compileErrors;
+  assert.deepEqual([error.code, error.line, error.column], ['element_invalid_closing_tag_autoclosed', 2, 17]);
+  assert.match(error.message, /cannot nest `<div>` inside `<p>`/);
+  assert.doesNotMatch(error.message, /https:/);
+  assert.equal(analyzeSvelte('<script>\n  let a = ;\n</script>').compileErrors[0].code, 'js_parse_error');
+});
