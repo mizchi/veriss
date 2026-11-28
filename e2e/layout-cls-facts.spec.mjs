@@ -945,12 +945,13 @@ test('inert text-overflow and -webkit-line-clamp: where the static check warns, 
     ['.c{width:120px;white-space:nowrap;overflow:hidden}', 'text-overflow:ellipsis', false],
     ['.c{width:120px;white-space:nowrap;overflow-x:clip}', 'text-overflow:ellipsis', false],
     ['.c{display:flex;width:120px;white-space:nowrap;overflow:hidden}', 'text-overflow:ellipsis', true],
-    ['.c{display:grid;grid-template-columns:minmax(0,1fr);width:120px;white-space:nowrap;overflow:hidden}', 'text-overflow:ellipsis', true],
+    // Not reported on a grid container: WebKit draws the ellipsis on its anonymous item's text, Chromium and Firefox do not.
+    ['.c{display:grid;grid-template-columns:minmax(0,1fr);width:120px;white-space:nowrap;overflow:hidden}', 'text-overflow:ellipsis', false, ['webkit']],
     ['.c{width:120px;overflow:hidden;line-height:20px}', '-webkit-line-clamp:2', true],
     ['.c{width:120px;overflow:hidden;line-height:20px;display:-webkit-box;-webkit-box-orient:vertical}', '-webkit-line-clamp:2', false],
     ['.c{width:120px;height:40px;background:linear-gradient(red,blue)}', 'object-fit:cover', true],
   ];
-  for (const [base, decl, warn] of cases) {
+  for (const [base, decl, warn, paintsIn] of cases) {
     const css = `*{box-sizing:border-box;margin:0}html,body{${g}}body{margin:0}.p{${g}}${base}`;
     // The warning does not depend on the content: the static side checks the empty box (text without a size contract
     // is Unknown), Chromium paints the text.
@@ -958,7 +959,8 @@ test('inert text-overflow and -webkit-line-clamp: where the static check warns, 
     expect((report.layoutWarnings ?? []).some(w => w.code === 'W_LAYOUT_DECLARATION_INERT' && w.properties.some(p => decl.includes(p))), `${base} ${decl}`).toBe(warn);
     await page.setViewportSize({width: 400, height: 600});
     const shot = async withDecl => { await page.setContent(`<!doctype html><html lang="en"><head><style>${css}${withDecl ? `.c{${decl}}` : ''}</style></head><body><div class="p"><div class="c">${text}</div></div></body></html>`); return (await page.screenshot()).toString('base64'); };
-    expect((await shot(true)) === (await shot(false)), `${base} ${decl}: same pixels without it`).toBe(warn);
+    // Where it is not reported because the browsers differ (paintsIn), it paints in those browsers only.
+    expect((await shot(true)) === (await shot(false)), `${base} ${decl}: same pixels without it`).toBe(paintsIn ? !paintsIn.includes(test.info().project.name) : warn);
   }
 });
 
@@ -1003,6 +1005,9 @@ test('inert resize: dragging the corner resizes a box only where its overflow is
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body>${html}</body></html>`);
     await page.mouse.move(97, 97); await page.mouse.down(); await page.mouse.move(150, 150, {steps: 5}); await page.mouse.up();
     const size = await page.evaluate(() => document.querySelector('.p').getBoundingClientRect().width);
+    // The control (a box that does resize) is measured in Chromium and Firefox: WebKit does not resize the box under
+    // Playwright's mouse drag of its corner (Linux, headless), so there only the warned box is checked.
+    if (!warn && test.info().project.name === 'webkit') continue;
     expect(size === 100, `${overflow || 'overflow visible'}: width ${size}`).toBe(warn);
   }
 });
@@ -1113,8 +1118,9 @@ test('transition of display: Chromium hides the box at once without allow-discre
     expect((report.layoutWarnings ?? []).some(w => w.code === 'W_CSS_TRANSITION_DISPLAY'), decl).toBe(warn);
     await page.setContent(`<!doctype html><html lang="en"><head><style>${css}</style></head><body><div class="m"></div></body></html>`);
     const shownDuring = await page.evaluate(async () => { const m = document.querySelector('.m'); m.getBoundingClientRect(); m.classList.add('off'); await new Promise(r => setTimeout(r, 100)); return getComputedStyle(m).display !== 'none'; });
-    // Without allow-discrete the box is gone at once: the transition the author wrote does nothing.
-    expect(!shownDuring, `${decl}: hidden at once in Chromium`).toBe(warn);
+    // Without allow-discrete the box is gone at once: the transition the author wrote does nothing. Firefox does not
+    // transition display at all (allow-discrete or not), so there the warned case holds and the control is hidden too.
+    expect(!shownDuring, `${decl}: hidden at once in ${test.info().project.name}`).toBe(warn || test.info().project.name === 'firefox');
   }
 });
 

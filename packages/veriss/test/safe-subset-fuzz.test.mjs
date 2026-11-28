@@ -103,3 +103,19 @@ test('a justified grid item whose end margin does not fit starts outside its are
   assert.equal(run(`${g}#n1{width:60px;margin-right:20px;justify-self:center;height:10px}`).status, 'verified');
   assert.deepEqual(codes(run(`${g}#n1{width:100px;margin-right:20px;justify-self:center;height:10px}`)), ['E_LAYOUT_ITEM_SIZE #n1 inline']);
 });
+
+test('a deficit within layout rounding is Unknown, not a violation: Firefox shows none at 0.022px (fuzz seed 3 index 63)', () => {
+  // Firefox: "Sign in" is 57.133347px wide here, the text box's content box gets 514/9px by the exact fractions
+  // (0.022px short), and Firefox, which lays out in 1/60px, draws no overflow. Chromium and WebKit round in
+  // 1/64px. A shortfall this small is not one every browser shows, so it is not claimed.
+  const css = '#n0{padding:4px;border:1px solid #000;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr)}#n9{display:flex}#n10{flex:2}#n11{flex:1;min-width:0}#n12{padding:12px;white-space:nowrap;line-height:24px}';
+  const body = '<div id="n0"><div id="n9"><div id="n10"></div><div id="n11"><div id="n12">Sign in</div></div></div></div>';
+  const at = text => analyzeHTML(`<html lang="en"><body>${body}</body></html>`, {name: 'P', css: base + css, viewport: {min: 375, max: 375, height: {min: 700, max: 700}}, scrollIntent: 'css', boxes: {'#n12': {minInlineSize: text, maxInlineSize: text, intrinsicBlockSize: 24}}});
+  const near = at(57.133347);
+  assert.deepEqual(codes(near), []);
+  assert.equal(near.status, 'unknown');
+  assert.ok(near.diagnostics.some(d => d.code === 'U_LAYOUT_ROUNDING' && d.box === '#n12'), JSON.stringify(near.diagnostics));
+  // A shortfall past rounding is still a violation; one that fits is verified.
+  assert.deepEqual(codes(at(58)), ['E_LAYOUT_CONTENT #n12 inline']);
+  assert.equal(at(57).status, 'verified');
+});

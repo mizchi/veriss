@@ -2675,7 +2675,7 @@
           "reason": "rem (and a root font-size in %, em or medium) resolved at a Npx browser default font size; other user settings are not checked"
         }
       ],
-      "errors": 4,
+      "errors": 5,
       "warnings": 1,
       "assumptions": [
         "4 text box(es) measured with the given font files (Roboto): their widths and line breaks are derived, not assumed",

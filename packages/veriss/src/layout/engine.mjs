@@ -23,6 +23,8 @@ import { gapSize, trackArea, trackSlice, inheritTracks } from './subgrid.mjs';
 import { scrollbarFrames } from './scrollbars.mjs';
 import {absoluteOrigin, absoluteMarginText, insetLength} from './positioned.mjs';
 import {easedFrames} from './animation-extremes.mjs';
+// The rounding a layout may accumulate past the exact model (see obligation): 1/16px, four 1/64px units, about four 1/60px.
+const LAYOUT_ROUNDING = scalar('0.0625');
 import {textFontMismatch, textBrowserMismatch, textLinesMismatch, textLangMismatch, fittingLength, fittingLines, strutFromText} from './text-font.mjs';
 import {validateFlexContainer, flexItem, crossAlignment, distribution, flexUnknown} from './flex.mjs';
 import {judgeIntegrity, intersect } from './integrity.mjs';
@@ -426,6 +428,16 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
     }
     const failed = clip(region, diff(required, available), true);
     if (!failed) return;
+    // Browsers lay out in fixed units (Firefox 1/60px, Chromium and WebKit 1/64px) and may round once per ancestor and
+    // sibling, where this model is exact: a shortfall that stays within LAYOUT_ROUNDING over the whole region is one some
+    // browser does not draw (Firefox: 0.022px under a 2fr/1fr grid and a 2/1 flex row, safe-subset fuzz). Unknown.
+    if (!clip(failed, diff(required, sum(available, LAYOUT_ROUNDING)), true)) {
+      const p = sample(failed);
+      diagnostics.push({ code: 'U_LAYOUT_ROUNDING', severity: 'unknown', box: box.label, path: box.path, source: box.source, axis,
+        message: `${box.label} is short of what it requires by ${exact(sub(evaluate(required, p), evaluate(available, p)))}px on the ${axis} axis at viewport ${exact(p.x)}px, within the browsers' layout rounding (up to 1/16px): whether a browser draws the overflow depends on its rounding`,
+        ...ranges(failed) });
+      return;
+    }
     const p = sample(failed), need = evaluate(required, p), offered = evaluate(available, p);
     findings.push({ code, severity: 'error', box: box.label, path: box.path, source: box.source, axis,
       message: code === 'E_LAYOUT_ABSOLUTE_CLIPPED' ? `${box.label} reaches past its containing block ${box[PARENT]?.label ?? ''}, which hides its overflow: it needs ${exact(need)}px but only ${exact(offered)}px is visible on the ${axis} axis at viewport ${exact(p.x)}px${block ? ` × ${exact(p.y)}px` : ''}, so the rest is cut off`
@@ -1882,7 +1894,9 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
       // transforms (CSS Transforms 1 §1: only block-level and atomic inline boxes are transformable; measured too).
       if (!['img', 'video', 'canvas', 'iframe', 'svg', 'input', 'button', 'select', 'textarea'].includes(child.tag) && !layoutWarnings.some(w => w.code === 'W_LAYOUT_DECLARATION_INERT' && w.path === child.path)) {
         const initial = { 'inline-size': ['auto'], 'block-size': ['auto'], 'min-inline-size': ['auto', '0', '0px'], 'min-block-size': ['auto', '0', '0px'], 'max-inline-size': ['none'], 'max-block-size': ['none'], 'margin-top': ['0', '0px', 'auto'], 'margin-bottom': ['0', '0px', 'auto'], 'aspect-ratio': ['auto'], transform: ['none'], translate: ['none'], rotate: ['none'], scale: ['none'] };
-        const written = Object.keys(initial).filter(key => style.$sources?.[key] && !initial[key].includes(String(style[key])));
+        // The style stage already drops aspect-ratio on an inline box (css.mjs, reason aspect-ratio): it reads auto here.
+        const droppedRatio = droppedOf(style, 'aspect-ratio').some(d => d.where === 'inline');
+        const written = Object.keys(initial).filter(key => style.$sources?.[key] && (!initial[key].includes(String(style[key])) || (key === 'aspect-ratio' && droppedRatio)));
         if (written.length) layoutWarnings.push({ code: 'W_LAYOUT_DECLARATION_INERT', severity: 'warning', box: child.label, path: child.path, properties: written,
           css: written.map(key => ({ property: key, file: style.$sources[key].file, line: style.$sources[key].line, selector: style.$sources[key].selector })),
           message: `${child.label}: ${written.join(', ')} ${written.length === 1 ? 'has' : 'have'} no effect (it is display: inline, a box that flows in the line: ${written.every(key => ['transform', 'translate', 'rotate', 'scale'].includes(key)) ? 'transforms do not apply' : written.some(key => ['transform', 'translate', 'rotate', 'scale'].includes(key)) ? 'sizes, vertical margins and transforms do not apply' : 'sizes and vertical margins do not apply'}). Use display: inline-block (or block) to ${written.every(key => ['transform', 'translate', 'rotate', 'scale'].includes(key)) ? 'transform' : 'size'} it`, ...ranges(state.region) });

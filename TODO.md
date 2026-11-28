@@ -31,7 +31,7 @@ CSS × DOM の静的検査パターンを、**カテゴリごとに洗う**。�
 
 作業の進め方の約束:
 
-- ゲート `tools/gate.sh`(全パッケージの単体テスト、component-lint の eval が変わらないこと、css-mistakes の e2e を 3 ブラウザーで)を通してから commit し、main と claude ブランチへ push
+- ゲート `tools/gate.sh`(単体テスト)を通してから commit し、claude ブランチへ push して PR の CI(ci.yml: 単体テスト、layout の e2e を 3 ブラウザー、component-lint の eval)を通す
   (claude ブランチからは PR を作って merge する。PR では CodeRabbit がレビューする)
 - [検査ルール一覧](docs/rule-catalog.md) は main に push すると `.github/workflows/pages.yml` が https://mizchi.github.io/veriss/ に出す。
   実例の画像(NG / OK の組)は CI では作らないので、`tools/rule-catalog/examples.mjs` を変えたら `node tools/rule-catalog/shoot.mjs` で

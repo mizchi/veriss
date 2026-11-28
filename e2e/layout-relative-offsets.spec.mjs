@@ -54,13 +54,14 @@ test('absolute boxes with an auto height take their content height', async ({pag
     ['top:0;width:50px;min-height:100px;max-height:50px', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['top:0;width:50px;min-height:30px;max-height:50px', 'display:grid;grid-template-columns:minmax(0,1fr)'],
     ['top:0;width:50px', 'display:block'], ['top:0;width:50px;row-gap:4px', 'display:grid;grid-template-columns:minmax(0,1fr)'], ['top:0;width:50px', 'display:flex;flex-direction:column']];
   // A min or max height bounds the content height (laid out again at the bound); a min-height above the max-height wins.
-  // (Under overflow: hidden, the nested absolute .n has a clipping ancestor, which is Unknown.)
+  // (Under overflow: hidden, the nested absolute .n has a clipping ancestor: Unknown is allowed there, and a decided
+  // answer is compared with the browser like the others.)
   const unknownOk = o => /overflow:hidden/.test(o);
   let compared = 0;
   for (const [o, d] of cases) {
     const css = `*{box-sizing:border-box;margin:0}html,body,.page,.card{${g}}.card{position:relative;height:200px}.o{position:absolute;${d};${o}}${kids}`;
     const r = analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css, viewport: {min: 400, max: 400, height: {min: 600, max: 600}}});
-    expect(r.status === 'unknown', `${o} / ${d}: ${JSON.stringify(r.diagnostics.filter(x => x.severity === 'unknown').map(x => x.message))}`).toBe(unknownOk(o));
+    if (!unknownOk(o)) expect(r.status === 'unknown', `${o} / ${d}: ${JSON.stringify(r.diagnostics.filter(x => x.severity === 'unknown').map(x => x.message))}`).toBe(false);
     if (r.status === 'unknown') continue;
     const n = t => { const [a, b = '1'] = String(t ?? '0').split('/'); return Number(a) / Number(b); };
     const v = x => n(x.constant) + 400 * n(x.coefficient) + 600 * n(x.heightCoefficient);

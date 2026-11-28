@@ -281,6 +281,7 @@ React・Vue・Svelte の adapter がコンポーネントを状態ごとの箱�
 | `U_LAYOUT_ATTRIBUTE` / `U_LAYOUT_STRUCTURAL` | 属性の値や兄弟の位置に頼るセレクタ(状態や結合子を含む `:nth-child(… of S)` など) |
 | `U_LAYOUT_INLINE` / `U_LAYOUT_TEXT_METRICS` / `U_LAYOUT_TEXT_FONT` / `U_LAYOUT_INTRINSIC` / `U_TEXT_NOT_MEASURED` | 文字の行: 行を高くする画像・`vertical-align`、大きさや family の違う inline、bidi の混ざった rtl、測っていない文字 |
 | `U_LAYOUT_TABLE` / `U_LAYOUT_LEGEND` | 表の自動配置(中身で決まる列幅)、collapse の共有の線、`visibility: collapse`、fieldset の legend |
+| `U_LAYOUT_ROUNDING` | 足りない幅が 1/16px 以内で、ブラウザーの配置の丸め(Firefox は 1/60px、Chromium と WebKit は 1/64px)によっては溢れが描かれない |
 | `U_LAYOUT_FLEX` / `U_LAYOUT_GRID_FR` / `U_LAYOUT_GRID_SHRINK` / `U_LAYOUT_SUBGRID` / `U_LAYOUT_AXES` | 縮む項目どうしの重みが一定でない flex、中身の幅が分からない fr、subgrid の一部 |
 | `U_LAYOUT_POSITIONED` / `U_LAYOUT_POSITIONED_OWNER` / `U_LAYOUT_FIXED_CONTAINED` / `U_LAYOUT_ABSOLUTE_ALLOCATION` / `U_LAYOUT_DIALOG` / `U_LAYOUT_POPOVER` | `%` や rtl の relative オフセット、閉じ込められた fixed、描かれる閉じた dialog・popover |
 | `U_LAYOUT_ELEMENT` / `U_LAYOUT_IMAGE` / `U_LAYOUT_PSEUDO` / `U_LAYOUT_HTML` / `U_LAYOUT_STRUCTURE` | 大きさの adapter のない要素(`<br>` など)、動的な srcset、ファイルの大きさが分からず属性の比で大きさが決まる img(`images` か `trustImageAttributes` で渡す)、配置を変える擬似要素、文字と子要素の混在 |

@@ -1,0 +1,55 @@
+# How much of real CSS the safe subset covers (the safe-subset coverage tool, tools/subset-coverage.mjs), measured
+# against a checkout of mizchi/vlmkit. By hand only:
+#   gh workflow run coverage.yml [-f vlmkit_ref=main] [-f args='...']
+# Until the tool is on the branch this runs on, the job says so and passes.
+name: coverage
+on:
+  workflow_dispatch:
+    inputs:
+      vlmkit_ref:
+        description: mizchi/vlmkit ref to measure
+        default: main
+      args:
+        description: Extra arguments for tools/subset-coverage.mjs
+        default: ''
+permissions:
+  contents: read
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: mizchi/vlmkit
+          ref: ${{ inputs.vlmkit_ref }}
+          path: .corpus/vlmkit
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Safe-subset coverage
+        env:
+          ARGS: ${{ inputs.args }}
+        # bash (pipefail): a failing tool is a failing step even through tee.
+        shell: bash
+        run: |
+          if [ ! -f tools/subset-coverage.mjs ]; then
+            echo "::notice::tools/subset-coverage.mjs is not on this branch yet (the safe-subset coverage PR); nothing to run"
+            echo "tools/subset-coverage.mjs is not on this branch yet." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          mkdir -p coverage-out
+          # shellcheck disable=SC2086
+          node tools/subset-coverage.mjs --vlmkit "$GITHUB_WORKSPACE/.corpus/vlmkit" $ARGS | tee coverage-out/coverage.txt
+          { echo '## safe-subset coverage'; echo '```'; cat coverage-out/coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: subset-coverage
+          path: coverage-out/
+          if-no-files-found: ignore

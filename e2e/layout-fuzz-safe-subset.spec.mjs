@@ -40,6 +40,11 @@ const regressions = [
   {width: 320, height: 640, fixed: [], unknown: true, root: leaf(0, {}, [leaf(1, {display: 'flex', 'flex-direction': 'column', gap: '4px', height: '130px'}, [leaf(2, {height: '40px'}),
     leaf(5, {flex: '1', 'min-height': '0', display: 'flex'}, [leaf(6, {display: 'flex', position: 'relative'}, [leaf(7, {height: '40px'}), leaf(11, {position: 'absolute', top: '0%', bottom: '50%', width: '60px', border: '3px solid #000'})])]),
     leaf(15, {width: '180px', 'min-height': '0', padding: '4px 8px', 'box-sizing': 'content-box', display: 'flex', 'flex-wrap': 'wrap', 'align-items': 'stretch'}, [leaf(16, {width: '120px', 'flex-grow': '0', height: '80px'})])])])},
+  // Firefox drew no overflow where the exact fractions left a nowrap text box 0.022px short (2fr/1fr columns, a 2/1 flex
+  // row; Firefox lays out in 1/60px): a shortfall within layout rounding is Unknown (U_LAYOUT_ROUNDING), not a violation.
+  // (Its status depends on the browser's own width of the text: Unknown is required in Firefox only.)
+  {width: 375, height: 700, fixed: [], unknown: ['firefox'], root: leaf(0, {padding: '4px', border: '1px solid #000', display: 'grid', 'grid-template-columns': 'minmax(0,2fr) minmax(0,1fr)'}, [leaf(9, {display: 'flex'}, [leaf(10, {flex: '2'}),
+    leaf(11, {flex: '1', 'min-width': '0'}, [{...leaf(12, {padding: '12px', 'white-space': 'nowrap', 'line-height': '24px'}), text: 'Sign in'}])])])},
 ];
 
 test('safe-subset fuzz: the shrunk regression cases', async ({page}) => {
@@ -47,8 +52,9 @@ test('safe-subset fuzz: the shrunk regression cases', async ({page}) => {
   for (const [i, c] of regressions.entries()) {
     const r = await checkCase(page, c, tol);
     expect(r.mismatches, `regression ${i}: ${renderCase(c).css}`).toEqual([]);
-    if (c.unknown) expect(r.status, `regression ${i} is Unknown (the browsers disagree)`).toBe('unknown');
-    else expect(r.status, `regression ${i} is decided`).not.toBe('unknown');
+    const project = test.info().project.name;
+    if (c.unknown === true || c.unknown?.includes?.(project)) expect(r.status, `regression ${i} is Unknown (the browsers disagree)`).toBe('unknown');
+    else if (!c.unknown) expect(r.status, `regression ${i} is decided`).not.toBe('unknown');
   }
 });
 

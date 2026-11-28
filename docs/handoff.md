@@ -62,13 +62,37 @@ isle から切り出した CSS 検証器(veriss)を、別のマシンで続け�
 git clone https://github.com/mizchi/veriss && cd veriss
 pnpm install
 npx playwright install chromium firefox webkit   # e2e は 3 ブラウザで測る
-tools/gate.sh                                     # push の前に毎回。20〜30 分かかる(eval が長い)
+tools/gate.sh                                     # push の前に毎回。単体テストだけ(1 分ほど)。e2e と eval は PR の CI
 ```
 
 - ブラウザーが既定の場所にないときは `PLAYWRIGHT_BROWSERS_PATH` を指定する
 - 1 つのパターンだけの e2e: `npx playwright test -c playwright.layout.config.mjs --trace off e2e/layout-css-mistakes.spec.mjs -g F106 --project=chromium --project=firefox --project=webkit`
 - 解析器の読み方を見る: `node tools/probe.mjs '<css>' ['<html>']`
 - 宣言が効くかを 3 ブラウザで比べる: `node tools/browser-diff.cjs '<css>' '<css + 宣言>' '<html>'`
+
+## どこで何が走るか
+
+重い検査は GitHub Actions で回す。手元の Mac でしか落ちない失敗(下の「環境でだけ落ちるもの」)は、もう push を止めない。
+
+| どこ | いつ | 何を | 起動 |
+|---|---|---|---|
+| 手元 `tools/gate.sh` | push の前 | root と全 package の単体テスト(並列、1 分ほど) | `tools/gate.sh` |
+| 手元 `tools/gate.sh --full` | 必要なときだけ | 以前の gate(単体テスト、eval、css-mistakes の e2e を 3 ブラウザー。20〜30 分) | `tools/gate.sh --full` |
+| `ci.yml`(Linux) | PR と main への push | `unit`(単体テスト)、`e2e`(layout の e2e 全部を 3 ブラウザー × 4 shard)、`eval`(component-lint の eval 4 回分が記録と同じこと) | PR を開く、または `tools/gate.sh --remote` |
+| `fuzz.yml`(Linux) | 毎晩 | 安全なサブセットの fuzz(既定 5000 ケース × seed 1,2,3 × 3 ブラウザー) | `gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit` |
+| `macos.yml`(macOS) | 毎週 | platform で UA プロファイルを選ぶ spec(ua-profiles、reset-matrix)を 3 ブラウザー。`webkit-macos` / `firefox-macos` の照合 | `gh workflow run macos.yml` |
+| `coverage.yml` | 手動だけ | 安全なサブセットの被覆(`tools/subset-coverage.mjs`、mizchi/vlmkit を `.corpus/vlmkit` に checkout して渡す) | `gh workflow run coverage.yml` |
+| `text-widths.yml` | 手動だけ | Windows / macOS の文字幅の記録と照合 | `gh workflow run text-widths.yml -f os=both` |
+
+- branch で回すときは `--ref <branch>` を付ける(`gh workflow run fuzz.yml --ref claude/x -f cases=500`)。手で起動する workflow は
+  main にあるものしか起動できない(新しい workflow を branch で試すときは、一時的に `push: branches: [<branch>]` を足す)
+- Linux の job は `tools/ci/install-fonts.sh` で、文字幅の記録(`models/text/linux-widths.json`)を取ったマシンのフォントをそろえる
+- 結果の見方: `gh run list --workflow ci.yml --branch <branch>`、`gh run watch <id> --exit-status`、落ちた job のログは `gh run view <id> --log-failed`、
+  Playwright の report と trace・fuzz の縮めたケース・eval の結果は `gh run download <id>`(artifact は失敗したときに上がる。fuzz と eval は毎回)
+- 各 job の summary(run のページ)に、eval の差分と fuzz の決まった割合の表が出る
+- `tools/gate.sh --remote` は branch を push し、その commit の ci.yml を `gh run watch` で待つ(PR がないと ci.yml は走らない)。`--print` でコマンドだけ出す
+- e2e の spec はファイルごとに結果の置き場所が別で、状態を共有しないので、CI では `--workers 2`(1 つのファイルの中は順に 1 worker)
+- 新しい spec が `process.platform` で UA プロファイルを選ぶなら、`macos.yml` の `SPECS` に足す
 
 ## パターンを足す手順
 
@@ -81,7 +105,7 @@ tools/gate.sh                                     # push の前に毎回。20〜
    - box と祖先の style から判る → `src/rules/css-mistakes.mjs`(必要な事実は `createCssMistakes` の引数で受ける)
    - 判定できない値は **Unknown のまま**(成功に変えない)
 5. e2e(`e2e/layout-css-mistakes.spec.mjs`)、新しいコードなら `packages/adapter-core/src/lint.mjs` の説明、チェックリストの行、TODO.md の観点を更新
-6. `tools/gate.sh` が通ったら commit して push
+6. `tools/gate.sh` が通ったら commit して push し、PR の CI(ci.yml)が通るのを待つ
 
 ## 次にやること
 
@@ -128,10 +152,21 @@ tools/gate.sh                                     # push の前に毎回。20〜
 - worktree に `node_modules` をシンボリックリンクでつながない。worktree で pnpm を動かすと、元の作業ツリーの `node_modules/.pnpm/node_modules`
   のリンクがその worktree 基準に張り替えられ、worktree を消すと壊れる(react-adapter のテストが `@babel/plugin-syntax-jsx` を見失った)。
   worktree ごとに `pnpm install --frozen-lockfile` する
-- `tools/gate.sh` は Node 24 の `ℹ fail` を数えるようになった(以前は `# fail` だけで、単体テストの失敗を見落としていた)。root の 2 件
-  (MoonBit の文字幅の較正、"compared 0")はこの環境で main でも落ちる
-- gate の既知の失敗(main でも同じ): root の 2 件のほか、e2e の F119(Firefox)と F130(Chromium)。component-lint の eval は
-  320〜375px の見出しの行が動くことがある(`evals/results/component-lint/` を `git restore` で戻し、コミットに混ぜない)
+- `tools/gate.sh` は Node 24 の `ℹ fail` を数えるようになった(以前は `# fail` だけで、単体テストの失敗を見落としていた)
+- 手元の Mac でだけ落ちるもの(もう push を止めない。CI の Linux で通ることを確かめた、2026-11-28 PR #83):
+  - root の 2 件(MoonBit の文字幅の較正、generic family)は、`models/text/linux-widths.json` を記録したマシンのフォントを
+    `/usr/share/fonts` から読む。CI は `tools/ci/install-fonts.sh` でそのフォント(Inter は記録と同じ 4.0)と fontconfig の
+    `sans-serif` / `system-ui` → Inter を入れ、通る。Ubuntu 26.04 の Inter 4.1 では "Pricing" が 0.09px ずれる
+  - e2e の F130(スクロールバー)、100vw とクラシックスクロールバー、invalid-fields-and-messages、フォントの差し替えの警告は Linux で通る
+  - component-lint の eval の 320〜375px の行の揺れは Linux では出ない。記録は CI で取るので、手元の `--full` で eval が変わっても push は止めない
+  - svelte-adapter の `text-max-length` は実時間を測る。CI では上限を 30s にした(runner は 3.5 倍ほど遅い)。gate.sh はこれだけ他と並べずに回す
+- CI(Linux)で初めて見つかり、PR #83 で直したもの:
+  - inline の span の `aspect-ratio` が `W_LAYOUT_DECLARATION_INERT` にならなかった(style の段で捨てた値が auto に見えていた)
+  - 足りない幅が 1/16px 以内の違反は `U_LAYOUT_ROUNDING`(Unknown)。Firefox は 1/60px で組み、0.022px の不足を描かなかった(fuzz seed 3 の index 63)
+  - grid container の `text-overflow` は inert として報告しない(WebKit は匿名の item の文字に省略記号を描く)。flex は 3 ブラウザーで inert
+  - e2e の期待をブラウザーごとに: Firefox は display を transition しない。WebKit は Playwright の mouse で角をドラッグしても大きさが変わらない(対照は Chromium・Firefox で測る)
+  - Linux の Chromium は既定で字形の送り幅を hinting する(フォントファイルの文字が 1 語で 0.5625px 広がった)。chromium の project は `--font-render-hinting=none`(macOS と同じ、モデルと同じ)
+  - component-lint の eval の記録は CI(Linux)で取り直した(`U_LAYOUT_IMAGE` の分)。ci.yml の eval は止める job。取り直すときは run の `component-lint-eval` artifact を commit する
 - ゲートの実行中に作業ツリーを変えると、結果がどの版のものか分からなくなる。ゲートの間はツリーの外(一時ディレクトリ)で準備する
 - `css-mistakes.test.mjs` は 1 ファイルで 20 秒以上かかる(止まっているのではない)
 - ブラウザーが Playwright の期待する場所にない環境(クラウドのセッションなど)では、e2e も `tools/eval-component-lint.mjs` も起動の時点で

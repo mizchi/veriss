@@ -1733,3 +1733,11 @@ test('F138: a quoted animation name is not a var(); a non-ASCII variable keeps i
   assert.equal(codes(run(':root{--délai:300}.a{transition:opacity var(--délai,.2s)}'), 'W_CSS_DURATION_UNITLESS').length, 1);
   assert.equal(codes(run(':root{--d:2}@keyframes k{to{opacity:.5}}.a{animation:k var(--d) infinite}'), 'W_CSS_DURATION_UNITLESS').length, 1);
 });
+
+test('aspect-ratio on a display: inline span in a line of text is inert, like its width (e2e layout-cls-facts: inert sizes)', () => {
+  const html = '<p class="t">Some <span class="s">marked</span> text</p>';
+  const inertOn = css => codes(analyzeHTML(`<html lang="en"><body>${html}</body></html>`, {name: 'P', css: `*{margin:0}html,body{display:grid;grid-template-columns:minmax(0,1fr)}.t{font-size:16px;line-height:24px;width:300px}${css}`, viewport: {min: 400, max: 400, height: {min: 200, max: 200}}, boxes: {'.t': {minInlineSize: 0, intrinsicBlockSize: 24}}}), 'W_LAYOUT_DECLARATION_INERT').filter(w => w.box === '.s').flatMap(w => w.properties);
+  assert.deepEqual(inertOn('.s{aspect-ratio:1}'), ['aspect-ratio']);
+  assert.deepEqual(inertOn('.s{width:200px;aspect-ratio:2}'), ['inline-size', 'aspect-ratio']);
+  assert.deepEqual(inertOn('.s{display:inline-block;aspect-ratio:1}'), []);
+});

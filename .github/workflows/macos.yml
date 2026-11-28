@@ -1,0 +1,46 @@
+# The specs whose answer depends on the platform, on macOS: they pick the UA profile of the platform they run on
+# (webkit-macos / firefox-macos here, webkit-linux / firefox-linux in ci.yml), so the macOS profiles stay checked
+# without a Mac. Weekly, or by hand: gh workflow run macos.yml
+# A spec that picks a profile by process.platform belongs in SPECS below.
+name: macos
+on:
+  schedule:
+    - cron: '41 19 * * 0'   # Monday 04:41 JST
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  e2e:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      SPECS: e2e/layout-ua-profiles.spec.mjs e2e/layout-reset-matrix.spec.mjs
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx playwright install ${{ matrix.browser }}
+      - name: Platform-dependent e2e
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test -c playwright.layout.config.mjs --project ${{ matrix.browser }} --trace retain-on-failure --reporter list,html $SPECS
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: macos-e2e-${{ matrix.browser }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

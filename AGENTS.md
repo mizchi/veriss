@@ -25,7 +25,8 @@ CSS の書き間違いを、ページを描かずに静的に検査するライ�
 
 ## ツールと検証
 
-- push の前に `tools/gate.sh`(全 package の単体テスト、component-lint の eval が変わらないこと、css-mistakes の e2e を 3 ブラウザー)。
+- push の前に `tools/gate.sh`(既定は全 package の単体テストだけ。1 分ほど)。ブラウザーの e2e と component-lint の eval は PR の CI
+  (`.github/workflows/ci.yml`)で回る。どこで何が走るかは `docs/handoff.md` の「どこで何が走るか」。重い検査を手元の Mac で回さない
 - `node tools/probe.mjs '<css>'` で解析器の読み方を、`node tools/browser-diff.cjs '<css>' '<css + 宣言>' '<html>'` で 3 ブラウザーの差を見る。
 
 - Node.js 24+、pnpm 12。`pnpm install --frozen-lockfile` が通る状態を保つ。

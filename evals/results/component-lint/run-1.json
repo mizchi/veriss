@@ -120,11 +120,23 @@
       "count": 1
     },
     {
+      "reason": "U_LAYOUT_IMAGE: .X: its size depends on the ratio of its width/height attributes (1200/800), which holds only until the file loads, and its file's size is not known; pass the f",
+      "count": 1
+    },
+    {
+      "reason": "U_LAYOUT_IMAGE: .X: its size depends on the ratio of its width/height attributes (320/180), which holds only until the file loads, and its file's size is not known; pass the fi",
+      "count": 1
+    },
+    {
       "reason": "U_TEXT_NOT_MEASURED: .X: Font Roboto lacks U+00B7; fallback fonts are not modeled; its text is only assumed to fit, so its overflow is not checked",
       "count": 1
     },
     {
       "reason": "ASSUMPTION: 1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked",
+      "count": 1
+    },
+    {
+      "reason": "U_LAYOUT_IMAGE: .X: its size depends on the ratio of its width/height attributes (400/250), which holds only until the file loads, and its file's size is not known; pass the fi",
       "count": 1
     }
   ],
@@ -1175,7 +1187,7 @@
       "file": "gallery.vue",
       "framework": "vue",
       "intent": "Product image gallery: a main photo and a row of thumbnails.",
-      "status": "verified",
+      "status": "unknown",
       "expected": [
         {
           "code": "E_A11Y_IMAGE_ALT",
@@ -1189,6 +1201,11 @@
       "unconfirmed": [],
       "environment": [],
       "notChecked": [
+        {
+          "code": "U_LAYOUT_IMAGE",
+          "reason": ".X: its size depends on the ratio of its width/height attributes (1200/800), which holds only until the file loads, and its file's size is not known; pass the f",
+          "line": 3
+        },
         {
           "code": "ASSUMPTION",
           "reason": "the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own defaul"
@@ -1605,6 +1622,11 @@
       "unconfirmed": [],
       "environment": [],
       "notChecked": [
+        {
+          "code": "U_LAYOUT_IMAGE",
+          "reason": ".X: its size depends on the ratio of its width/height attributes (320/180), which holds only until the file loads, and its file's size is not known; pass the fi",
+          "line": 3
+        },
         {
           "code": "U_TEXT_NOT_MEASURED",
           "reason": ".X: Font Roboto lacks U+00B7; fallback fonts are not modeled; its text is only assumed to fit, so its overflow is not checked"
@@ -2146,7 +2168,7 @@
       "file": "recipe-card.svelte",
       "framework": "svelte",
       "intent": "A recipe card: photo, title, and cook time with a servings count.",
-      "status": "verified",
+      "status": "unknown",
       "expected": [
         {
           "code": "E_LAYOUT_TRACKS",
@@ -2160,6 +2182,11 @@
       "unconfirmed": [],
       "environment": [],
       "notChecked": [
+        {
+          "code": "U_LAYOUT_IMAGE",
+          "reason": ".X: its size depends on the ratio of its width/height attributes (400/250), which holds only until the file loads, and its file's size is not known; pass the fi",
+          "line": 2
+        },
         {
           "code": "ASSUMPTION",
           "reason": "the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own defaul"
