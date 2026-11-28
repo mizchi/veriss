@@ -45,7 +45,7 @@ jobs:
 
   fuzz:
     needs: plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -73,7 +73,7 @@ jobs:
             fonts-jetbrains-mono fonts-dejavu-core fonts-liberation fonts-freefont-ttf fonts-ipafont-gothic \
             fonts-tlwg-loma-otf fonts-unifont fonts-opensymbol
           sudo cp tools/ci/fonts.conf /etc/fonts/local.conf
-          fc-match sans-serif; fc-match system-ui; fc-match serif; fc-match monospace
+          fc-match sans-serif; fc-match system-ui; fc-match serif; fc-match monospace; dpkg -s fonts-inter | grep Version
       - name: Install the browser
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Fuzz
