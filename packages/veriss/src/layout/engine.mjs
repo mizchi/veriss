@@ -1035,7 +1035,13 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
         }
       }
     }
-    const marginOk = (key, axis) => style.position === 'absolute' || (available.flexItem?.main === 'inline' && axis === 'inline' && /^-\d+(?:\.\d+)?px$/.test(String(style[key]))) || style[key] === '0' || (style[key] === 'auto' && available.flexItem?.main === axis) || ((available.gridItem || available.flexItem) && /^\d+(?:\.\d+)?px$/.test(String(style[key]))) || (available.gridItem && axis === 'inline' && style[key] === 'auto' && available.autoMargins);
+    // Checklist I25: a block-level box in block flow may have a negative px inline margin (pulled out into the padding):
+    // with an auto width it is the containing block's width less both margins; with a px or % width (of the containing
+    // block) it is over-constrained and placed by its start margin; an intrinsic keyword has been resolved to px or to
+    // min/max clamps of an auto width by now (measured in Chromium, Firefox and WebKit). Beside an auto margin it is not
+    // modeled, nor on an inline-level box alone on its line (I22) or a table, which do not fill the containing block.
+    const negativeInline = key => available.blockFlowChild && !available.flexItem && !style.$inlineLevel && ['block', 'grid', 'flex'].includes(style.display) && /^-\d+(?:\.\d+)?px$/.test(String(style[key])) && /^(?:auto|\d+(?:\.\d+)?(?:px|%))$/.test(String(style['inline-size'])) && !['margin-left', 'margin-right'].some(side => style[side] === 'auto');
+    const marginOk = (key, axis) => style.position === 'absolute' || (axis === 'inline' && negativeInline(key)) || (available.flexItem?.main === 'inline' && axis === 'inline' && /^-\d+(?:\.\d+)?px$/.test(String(style[key]))) || style[key] === '0' || (style[key] === 'auto' && available.flexItem?.main === axis) || ((available.gridItem || available.flexItem) && /^\d+(?:\.\d+)?px$/.test(String(style[key]))) || (available.gridItem && axis === 'inline' && style[key] === 'auto' && available.autoMargins);
     // px margins on items of a row flex container are modeled (layoutFlex adds them to the outer sizes); a column's not.
     // px margins on flex items are modeled (layoutFlex adds them to the outer sizes on both axes).
     if (['margin-left', 'margin-right'].some(key => !marginOk(key, 'inline'))) throw new Error(available.flexItem && ['margin-left', 'margin-right'].some(key => style[key] === 'auto') ? 'Cross-axis auto margins of a flex item are outside the subset' : 'Only known zero inline margins are supported');
@@ -3935,9 +3941,10 @@ export function analyzeBoxTree(root, options, scrollbarProfile, budget, inlineSh
                   // A grid item's px margins: the item is laid out in its area less them, offset by the start margins, and
                   // its margin box (block size plus margins) sizes auto rows. rtl with unequal inline margins and margins on
                   // subgrid items are not modeled.
-                  const marginOf = (item, side) => /^\d+(?:\.\d+)?px$/.test(String(item.style[`margin-${side}`])) ? px(item.style[`margin-${side}`]) : zero;
+                  // (In block flow a negative inline margin is modeled too, checklist I25; solve rejects the cases it is not.)
+                  const marginOf = (item, side) => (style.$blockFlow && ['left', 'right'].includes(side) ? /^-?\d+(?:\.\d+)?px$/ : /^\d+(?:\.\d+)?px$/).test(String(item.style[`margin-${side}`])) ? (String(item.style[`margin-${side}`]).startsWith('-') ? q(String(item.style[`margin-${side}`]).slice(0, -2)) : px(item.style[`margin-${side}`])) : zero;
                   const marginInline = item => add(marginOf(item, 'left'), marginOf(item, 'right')), marginBlock = item => add(marginOf(item, 'top'), marginOf(item, 'bottom'));
-                  for (const item of placed) if (cmp(add(marginInline(item), marginBlock(item)), zero) !== 0) {
+                  for (const item of placed) if (['left', 'right', 'top', 'bottom'].some(side => cmp(marginOf(item, side), zero) !== 0)) {
                     if (item.style['grid-template-columns'] === 'subgrid' || item.style['grid-template-rows'] === 'subgrid') throw Object.assign(new Error(`${item.box.label}: margins on a subgrid are not modeled`), { code: 'U_LAYOUT_SUBGRID', box: item.box });
                     if (style.direction === 'rtl' && cmp(marginOf(item, 'left'), marginOf(item, 'right')) !== 0) throw Object.assign(new Error(`${item.box.label}: unequal inline margins in rtl are not modeled`), { code: 'U_LAYOUT_CSS', box: item.box });
                   }

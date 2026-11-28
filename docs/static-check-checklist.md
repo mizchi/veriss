@@ -689,6 +689,20 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (e2e `px margins offset absolute and fixed boxes`。対照として margin を 0 にすると全組で矩形が変わる)。包含ブロックの外に出る負の margin は
   inset と同じく `E_LAYOUT_ABSOLUTE_START`。`auto` と % の margin、静的位置の軸(両側の inset が auto)の margin、shrink-to-fit の幅の箱の
   横の margin は Unknown のまま(文言は箱の名前と margin を出す)
+- [x] **I25. block flow の中の block の箱の px の inline margin(負の値も)**(issue #58): `.page { padding: 0 24px } .table-wrap { margin: 0 -24px }`
+  (表や帯を親の padding まで引き出す)で `Only known zero inline margins are supported` になり、実ページの要素の 11% が止まっていた。
+  正の px は block flow(1 列の grid として解く)の item の margin として済んでいたので、負の px を足した。幅が auto なら包含ブロックの幅から
+  両側の margin を引いた幅(負なら広がる)、px か % の幅(% は包含ブロックに対して)なら決まりすぎで、ltr は margin-right を捨てて
+  margin-left の位置に置く(CSS 2 §10.3.3)。fit-content・max-content・min-content はその前に px か auto の幅の上下限に直っているので、
+  fit-content は margin の分だけ広い利用可能幅を取る。Chromium・Firefox・WebKit で、正、負(両側・片側・小数・-500px)、決まりすぎ
+  (px、%、幅の広すぎ)、max-width、content-box の padding と border、入れ子(2 段)、fit-content・max-content、rtl の等しい margin
+  (auto と px の幅)、grid と flex の箱の 20 通りを 320px と 500px で照合し、4 つの箱の矩形がすべて一致した。スクロールする箱(`overflow: auto` / `hidden`)
+  の中は位置が出ないので大きさを照合した(e2e `layout-inline-margins.spec.mjs`)。はみ出しは今までどおり integrity で:
+  padding までは何も出ず、border に入れば `E_LAYOUT_PROTRUSION`、viewport の右を越えれば `E_LAYOUT_PAGE_OVERFLOW`(ブラウザーでも
+  横にスクロールすることを確かめた)、px の幅が margin を引いた幅より広ければ `E_LAYOUT_ITEM_SIZE`。
+  Unknown のまま: % の margin(Firefox は丸めが違う。-5% で 380.6 と 380.59375)、rtl の等しくない margin(負と正で和が 0 になる組も)、
+  負の margin と auto の margin の組、flex の item の交差軸の負の margin、負の margin の子を持つ箱の中身の幅(fit-content の親、grid の
+  auto の列)
 - 残り(Unknown のまま): % の max-width の flex の item、中身で大きさの決まる flex の item
   (`flex-basis: auto` で幅も auto)。そのほかは、
   [安全なサブセット](safe-subset.md) の「代わりの書き方」に回す。
