@@ -23,13 +23,14 @@ pnpm run check          # exits 0: no error, no warning
 ```
 
 Both scripts pass `--images images.json` (the natural size of `/avatar.png`) and `--font Roboto=…` (the font file the
-`PublishButton` label is measured with). Every finding is a line: `file:line  severity  CODE  message  [states]`,
+`PublishButton` label is measured with). Every finding is a line: `file:line  severity  CODE  message  [states]` (`file:line:column` when the compiler gives a column),
 followed by `fix:`. `info` lines are what was not checked or what was assumed; they are never a pass.
 
 ## The pairs
 
 | Component | The mistake | Codes on the broken version |
 |---|---|---|
+| `ArticleMeta.svelte` | a `<div>` byline inside a `<p>`, which Svelte refuses to compile (the HTML parser would close the `<p>`) | `E_ADAPTER_COMPILE` |
 | `ProfileCard.svelte` | `width: 480px` on the card, and an `<img>` with a CSS width only | `E_LAYOUT_ITEM_SIZE`, `E_LAYOUT_PAGE_OVERFLOW`, `E_LAYOUT_IMAGE_UNRESERVED` |
 | `PublishButton.svelte` | a fixed `width: 80px` on a button whose label is declared one line (`data-text-one-line`) | `E_LAYOUT_CONTENT`, `W_LAYOUT_LONG_WORD` |
 | `SaveStatus.svelte` | a status message that pushes the canvas down, against its `data-noshift` contract | `E_LAYOUT_NOSHIFT` |

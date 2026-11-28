@@ -15,8 +15,8 @@ npx veriss-svelte --viewport 320-1280 $(git ls-files '*.svelte')
 ```sh
 pnpm install
 cd examples/svelte
-pnpm run check:broken   # 壊れた 6 つ。7 error(s), 2 warning(s)、終了コード 1。出力は expected.txt と同じ
-pnpm run check          # 直した 6 つ。0 error(s), 0 warning(s)、終了コード 0
+pnpm run check:broken   # 壊れた 7 つ。9 error(s), 3 warning(s)、終了コード 1。出力は expected.txt と同じ
+pnpm run check          # 直した 7 つ。0 error(s), 0 warning(s)、終了コード 0
 ```
 
 どちらの script も `--images images.json`(`/avatar.png` の大きさ)と `--font Roboto=…`(テキストを測るフォント)を渡しています。
@@ -34,6 +34,25 @@ pnpm run check          # 直した 6 つ。0 error(s), 0 warning(s)、終了コ
 ## 例: 壊れたものと直したもの
 
 各組の出力は `pnpm run check:broken` の実物から引いています(長い行は省略)。
+
+### コンパイルできない `<p>` の中の `<div>`(`ArticleMeta.svelte`)
+
+```svelte
+<p class="meta">
+  <div class="author">Ada Lovelace</div>
+  <div class="date">28 Nov 2026</div>
+</p>
+```
+
+```
+src/broken/ArticleMeta.svelte:5:1  error    E_ADAPTER_COMPILE  the component does not compile (element_invalid_closing_tag_autoclosed): `</p>` attempted to close element that was already automatically closed by `<div>` (cannot nest `<div>` inside `<p>`); nothing else in it was checked
+    fix: a <p> holds phrasing content only (text, <span>, <a>, <strong>, <img>…), so the HTML parser closes it before the <div>: make the <p> a <div> container, or make the <div> inside it a <span>
+```
+
+`<p>` が持てるのは phrasing content(テキスト、`<span>`、`<a>`、`<strong>`、`<img>` など)だけです。HTML の解析器は `<div>` の前で
+`<p>` を閉じるので、Svelte 5 はこのマークアップをコンパイルしません(`element_invalid_closing_tag_autoclosed`)。checker はその位置
+(行:列)の error として出し、残りのファイルを検査し続けます。このファイルのほかの検査はしません。直した版は外側を `<div>` に、中を
+`<span>` にします。
 
 ### はみ出しと、場所を取らない画像(`ProfileCard.svelte`)
 
@@ -156,8 +175,8 @@ src/broken/ThemedPanel.svelte:9  warning  W_CSS_SELECTOR_RELATION  .theme-dark .
 
 ## Svelte に固有のこと
 
-- Svelte のコンパイラが拒否するマークアップ(`<p>` の中の `<div>` など)は、checker の指摘ではなく、Svelte のエラー
-  (`element_invalid_closing_tag_autoclosed`)のスタックトレースで止まります(終了コード 1)。
+- Svelte のコンパイラが拒否するマークアップ(`<p>` の中の `<div>` など)は、`E_ADAPTER_COMPILE`(error)としてコンパイラの行と列に出ます。
+  コードとメッセージは Svelte のもの(`element_invalid_closing_tag_autoclosed`、`<script>` の構文エラーなら `js_parse_error`)です。
 - Svelte はセレクタのすべての部分をスコープするので、`:global` のない `.theme-dark .panel` は当たらず、
   `W_CSS_SELECTOR_RELATION`(warning)になります。
 - 未使用のセレクタ(`W_CSS_SELECTOR_UNMATCHED`)は、Svelte のコンパイラの `css_unused_selector` と一致することを確かめています。

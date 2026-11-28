@@ -1,3 +1,5 @@
+src/broken/ArticleMeta.svelte:5:1  error    E_ADAPTER_COMPILE  the component does not compile (element_invalid_closing_tag_autoclosed): `</p>` attempted to close element that was already automatically closed by `<div>` (cannot nest `<div>` inside `<p>`); nothing else in it was checked
+    fix: a <p> holds phrasing content only (text, <span>, <a>, <strong>, <img>…), so the HTML parser closes it before the <div>: make the <p> a <div> container, or make the <div> inside it a <span>
 src/broken/ProfileCard.svelte:6  error    E_LAYOUT_ITEM_SIZE  .card requires 480px but receives 400px on inline axis at viewport 400px × 690px (also: 1 box inside it reaches past the viewport)
     fix: give the box room (a flexible track, max-width: 100%, min-width: 0) or let it shrink
 src/broken/ProfileCard.svelte:6  error    E_LAYOUT_PAGE_OVERFLOW  .card reaches past the viewport, so the page scrolls horizontally
@@ -51,4 +53,4 @@ src/broken/ThemedPanel.svelte  info     ASSUMPTION  the user-agent default color
 src/broken/ThemedPanel.svelte  info     ASSUMPTION  rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked
 src/broken/ThemedPanel.svelte  info     ASSUMPTION  text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)
 
-8 error(s), 3 warning(s), 30 not checked or assumed
+9 error(s), 3 warning(s), 30 not checked or assumed
