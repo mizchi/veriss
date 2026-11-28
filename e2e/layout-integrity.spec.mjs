@@ -50,7 +50,11 @@ const holds = (row, width) => row.range && (row.range.minInclusive === false ? w
 let metrics;
 test.beforeAll(async () => { metrics = await loadTextMetrics({fonts: {Roboto: {file: new URL('roboto-variable.ttf', fonts).pathname}}}); });
 const table = [];
+// The report is the whole table: written only by a worker that ran (and passed) every case — not by a shard, a
+// --grep, a run whose tests were spread over workers (fullyParallel) or a project that skips cases.
 test.afterAll(() => {
+  if (table.length !== cases.length) return;
+  table.sort((a, b) => cases.findIndex(c => c.name === a.name) - cases.findIndex(c => c.name === b.name));
   mkdirSync(results, {recursive: true});
   writeFileSync(new URL('report.json', results), JSON.stringify({version: 1, widths, height, rules, scope: 'Static integrity rules vs vlmkit check integrity (runtime). Exempted overlays count on both sides; text-clipped counts as clipped-content. Text with a font-derived contract is compared by its painted line and must agree; other text is compared by its border box and only runtime ⇒ static is required.', cases: table}, null, 2) + '\n');
 });

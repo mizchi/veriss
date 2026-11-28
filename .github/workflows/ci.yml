@@ -1,8 +1,11 @@
 # The checks a pull request must pass (docs/handoff.md「どこで何が走るか」). tools/gate.sh runs only the unit tests by
 # default; this workflow runs the rest on Linux:
 #   unit  root tests and every package's tests
-#   e2e   the layout e2e (playwright.layout.config.mjs), one job per browser x shard
-#   eval  the component-lint eval (before + 3 attempts) must reproduce evals/results/component-lint/
+#   e2e           the layout e2e (playwright.layout.config.mjs), one job per browser x shard; shards are cut per test by
+#                 measured time (tools/ci/e2e-shards.mjs, tools/ci/e2e-durations.json) so each takes a few minutes. The
+#                 safe-subset fuzz runs only its fixed regression cases here (FUZZ_CASES=0); the seeded run is fuzz.yml's
+#   eval          the component-lint eval, one job per attempt (before, run-1, run-2, run-3)
+#   eval-compare  the four results must reproduce evals/results/component-lint/
 name: ci
 on:
   pull_request:
@@ -35,14 +38,15 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     env:
-      SHARDS: 4
+      SHARDS: 6
+      FUZZ_CASES: 0
       PLAYWRIGHT_HTML_OPEN: never
     steps:
       - uses: actions/checkout@v6
@@ -64,12 +68,19 @@ jobs:
       # integrity and contrast gates), so Chromium is installed in every job.
       - name: Install the browsers
         run: npx playwright install --with-deps chromium ${{ matrix.browser }}
-      # The spec files share no state (each writes its own results directory), so they run two at a time; the tests
-      # inside one file stay in order in one worker (no fullyParallel).
+      # The tests of this shard: every job lists the same tests and cuts the same plan (the longest test first, each to
+      # the shard it lengthens least, two workers a shard). A test missing from e2e-durations.json counts as the median.
+      - name: Plan the shard
+        run: |
+          npx playwright test -c playwright.layout.config.mjs --list --reporter json > e2e-list.json
+          node tools/ci/e2e-shards.mjs plan --list e2e-list.json --project ${{ matrix.browser }} \
+            --shards "$SHARDS" --shard ${{ matrix.shard }} --workers 2 --out e2e-shard.txt
+      # The config is fullyParallel: the two workers take tests one at a time (a spec whose tests depend on each other
+      # keeps them in one worker with test.describe.configure).
       - name: Layout e2e
         run: >-
           npx playwright test -c playwright.layout.config.mjs --project ${{ matrix.browser }}
-          --shard ${{ matrix.shard }}/${{ env.SHARDS }} --workers 2 --trace retain-on-failure --reporter list,html
+          --test-list e2e-shard.txt --workers 2 --trace retain-on-failure --reporter list,html
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -77,13 +88,18 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            e2e-shard.txt
           retention-days: 14
 
   eval:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    # evals/results/component-lint/ is recorded by this job (Linux, Chromium of the pinned Playwright): to record again,
-    # download the component-lint-eval artifact of a run and commit its files.
+    timeout-minutes: 15
+    # evals/results/component-lint/ is recorded by these jobs (Linux, Chromium of the pinned Playwright): to record
+    # again, download the component-lint-eval artifact of a run (eval-compare uploads all four) and commit its files.
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [before, run-1, run-2, run-3]
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -93,20 +109,41 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - name: Component-lint eval (before, run-1, run-2, run-3)
-        id: eval
-        run: |
-          for a in '' run-1 run-2 run-3; do node tools/eval-component-lint.mjs ${a:+--attempt $a}; done
-      - name: Compare with the committed results
-        if: success() || failure()
+      - name: Component-lint eval (${{ matrix.attempt }})
         env:
-          EVAL_OUTCOME: ${{ steps.eval.outcome }}
+          ATTEMPT: ${{ matrix.attempt }}
         run: |
-          # A failed eval writes nothing: the checkout would then "match" — say it could not be compared instead.
-          if [ "$EVAL_OUTCOME" != success ]; then
-            { echo "## component-lint eval on Linux"; echo "The eval did not finish (outcome: $EVAL_OUTCOME), so the results were not compared."; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ATTEMPT" = before ]; then node tools/eval-component-lint.mjs; else node tools/eval-component-lint.mjs --attempt "$ATTEMPT"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: component-lint-eval-${{ matrix.attempt }}
+          path: evals/results/component-lint/${{ matrix.attempt }}.json
+          retention-days: 14
+
+  eval-compare:
+    needs: eval
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        if: needs.eval.result == 'success'
+        with:
+          pattern: component-lint-eval-*
+          path: eval-out/
+          merge-multiple: true
+      - name: Compare with the committed results
+        env:
+          EVAL_OUTCOME: ${{ needs.eval.result }}
+        run: |
+          # Compared only when all four attempts ran: with one missing, the checkout's file would "match".
+          missing=$(for a in before run-1 run-2 run-3; do [ -f "eval-out/$a.json" ] || echo "$a"; done | xargs)
+          if [ "$EVAL_OUTCOME" != success ] || [ -n "$missing" ]; then
+            { echo "## component-lint eval on Linux"; echo "Not every attempt finished (outcome: $EVAL_OUTCOME; missing: ${missing:-none}), so the results were not compared."; } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          cp eval-out/*.json evals/results/component-lint/
           git diff --no-ext-diff --stat evals/results/component-lint/ > eval.diffstat
           git diff --no-ext-diff evals/results/component-lint/ > eval.diff
           {
@@ -121,7 +158,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           [ ! -s eval.diff ]
       - uses: actions/upload-artifact@v4
-        if: success() || failure()
+        if: needs.eval.result == 'success'
         with:
           name: component-lint-eval
           path: |

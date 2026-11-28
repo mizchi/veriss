@@ -1,7 +1,13 @@
-# The safe-subset differential fuzz (e2e/layout-fuzz-safe-subset.spec.mjs) at a size a pull request cannot afford:
-# every night with the defaults, or by hand:
+# The safe-subset differential fuzz (e2e/layout-fuzz-safe-subset.spec.mjs) at a size a pull request cannot afford, once a
+# day. Pull requests run only its fixed regression cases (ci.yml, FUZZ_CASES=0).
+#   plan       one job per browser × seed × chunk of cases (FUZZ_FIRST + FUZZ_CASES, `chunk` cases each: a few minutes)
+#   fuzz       each chunk; a mismatch fails its job, and its shrunk case is in the job log and the fuzz-* artifact
+#   aggregate  merges the chunks into the day's result, appends it to the fuzz-data branch (history/<date>.json and
+#              index.json, tools/ci/fuzz-summary.mjs) and redeploys GitHub Pages, whose /fuzz/ page is the dashboard
+#              (tools/fuzz-dashboard/build.mjs): https://mizchi.github.io/veriss/fuzz/
+# The scheduled run always records; a dispatched one only with record=true:
 #   gh workflow run fuzz.yml -f cases=5000 -f seeds=7 -f browsers=webkit
-# A mismatch fails the job; the shrunk cases are in the job log and in the fuzz-<browser>-<seed> artifact.
+#   gh workflow run fuzz.yml -f browsers=firefox -f seeds=3 -f first=63 -f cases=1 -f chunk=1   one case again
 name: fuzz
 on:
   schedule:
@@ -9,10 +15,10 @@ on:
   workflow_dispatch:
     inputs:
       cases:
-        description: Seeded pages per run (FUZZ_CASES)
+        description: Seeded pages per browser and seed
         default: '5000'
       seeds:
-        description: Comma-separated seeds (FUZZ_SEED), one run each
+        description: Comma-separated seeds (FUZZ_SEED)
         default: '1,2,3'
       browsers:
         description: Comma-separated Playwright projects
@@ -20,6 +26,13 @@ on:
       first:
         description: First case index (FUZZ_FIRST)
         default: '0'
+      chunk:
+        description: Cases per job
+        default: '500'
+      record:
+        description: Record the result to the fuzz-data branch and the dashboard
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -28,32 +41,37 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      seeds: ${{ steps.plan.outputs.seeds }}
-      browsers: ${{ steps.plan.outputs.browsers }}
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
+      - uses: actions/checkout@v6
       - id: plan
         env:
+          CASES: ${{ inputs.cases || '5000' }}
           SEEDS: ${{ inputs.seeds || '1,2,3' }}
           BROWSERS: ${{ inputs.browsers || 'chromium,firefox,webkit' }}
+          FIRST: ${{ inputs.first || '0' }}
+          CHUNK: ${{ inputs.chunk || '500' }}
         run: |
-          list() { node -e 'console.log(JSON.stringify(process.argv[1].split(",").map(s => s.trim()).filter(Boolean)))' "$1"; }
-          echo "seeds=$(list "$SEEDS")" >> "$GITHUB_OUTPUT"
-          echo "browsers=$(list "$BROWSERS")" >> "$GITHUB_OUTPUT"
+          matrix=$(node tools/ci/fuzz-summary.mjs plan --browsers "$BROWSERS" --seeds "$SEEDS" --cases "$CASES" --first "$FIRST" --chunk "$CHUNK")
+          jobs=$(node -p "JSON.parse(process.argv[1]).include.length" "$matrix")
+          echo "$jobs jobs: $matrix"
+          if [ "$jobs" -gt 256 ]; then echo "a matrix holds at most 256 jobs: raise chunk" >&2; exit 1; fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   fuzz:
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        browser: ${{ fromJSON(needs.plan.outputs.browsers) }}
-        seed: ${{ fromJSON(needs.plan.outputs.seeds) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
-      FUZZ_CASES: ${{ inputs.cases || '5000' }}
+      FUZZ_CASES: ${{ matrix.cases }}
       FUZZ_SEED: ${{ matrix.seed }}
-      FUZZ_FIRST: ${{ inputs.first || '0' }}
+      FUZZ_FIRST: ${{ matrix.first }}
+      FUZZ_REPORT: fuzz-out/report.json
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -64,6 +82,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install the recorded Linux fonts
         run: tools/ci/install-fonts.sh
+      - id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
       - name: Install the browser
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Fuzz
@@ -71,37 +95,84 @@ jobs:
           set -o pipefail
           mkdir -p fuzz-out
           npx playwright test -c playwright.layout.config.mjs e2e/layout-fuzz-safe-subset.spec.mjs \
-            --project ${{ matrix.browser }} --trace off --reporter list 2>&1 | tee fuzz-out/fuzz.log
-      # The spec prints one tally line per run: "safe-subset fuzz (<browser>, seed <s>, <a>..<b>): {...}; decided cases N%, ...".
+            --project ${{ matrix.browser }} -g 'seeded pages' --trace off --reporter list 2>&1 | tee fuzz-out/fuzz.log
       - name: Summary
         if: success() || failure()
         env:
           BROWSER: ${{ matrix.browser }}
         run: |
-          node tools/ci/fuzz-summary.mjs parse fuzz-out/fuzz.log "$BROWSER" "$FUZZ_SEED" > fuzz-out/summary.json
-          node tools/ci/fuzz-summary.mjs table fuzz-out/summary.json >> "$GITHUB_STEP_SUMMARY"
-          if grep -qE '(Error: )?seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log; then
-            { echo; echo '### Shrunk cases'; echo '```'; grep -A4 -E '(Error: )?seed [0-9]+ index [0-9]+: ' fuzz-out/fuzz.log | head -100; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          node tools/ci/fuzz-summary.mjs job --report "$FUZZ_REPORT" --browser "$BROWSER" --seed "$FUZZ_SEED" \
+            --first "$FUZZ_FIRST" --cases "$FUZZ_CASES" > fuzz-out/summary.json
+          cat fuzz-out/summary.json
       - uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
-          name: fuzz-${{ matrix.browser }}-${{ matrix.seed }}
+          name: fuzz-${{ matrix.browser }}-${{ matrix.seed }}-${{ matrix.first }}
           path: |
             fuzz-out/
             test-results/
           retention-days: 30
 
-  summary:
-    needs: fuzz
-    if: always() && needs.fuzz.result != 'skipped'
+  aggregate:
+    needs: [plan, fuzz]
+    if: always() && needs.plan.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The one job that writes: the fuzz-data branch, and a dispatch of pages.yml (a workflow_dispatch made with this
+    # token does start the workflow).
+    permissions:
+      contents: write
+      actions: write
+    env:
+      RECORD: ${{ github.event_name == 'schedule' || inputs.record }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
         with:
           pattern: fuzz-*
           path: runs
-      - name: Decided share per run
+      - name: The day's result
+        env:
+          MATRIX: ${{ needs.plan.outputs.matrix }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          { echo '## safe-subset fuzz'; node tools/ci/fuzz-summary.mjs table runs/*/fuzz-out/summary.json; } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s' "$MATRIX" > plan.json
+          shopt -s nullglob
+          date=$(date -u +%F)
+          node tools/ci/fuzz-summary.mjs day --date "$date" --commit "$GITHUB_SHA" --run-url "$RUN_URL" --plan plan.json \
+            runs/*/fuzz-out/summary.json > day.json
+          { echo "## safe-subset fuzz, $date"; node tools/ci/fuzz-summary.mjs table day.json; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-day
+          path: day.json
+          retention-days: 90
+      - name: Record to the fuzz-data branch
+        if: env.RECORD == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # The branch holds only the data (an orphan branch with no code), so a worktree of it is small.
+          for try in 1 2 3 4 5; do
+            rm -rf ../fuzz-data; git worktree prune; git branch -D fuzz-data 2> /dev/null || true
+            if git ls-remote --exit-code --heads origin fuzz-data > /dev/null; then
+              git fetch --depth 1 origin fuzz-data && git worktree add ../fuzz-data FETCH_HEAD
+              git -C ../fuzz-data switch -c fuzz-data
+            else
+              git worktree add --orphan -b fuzz-data ../fuzz-data
+            fi
+            node tools/ci/fuzz-summary.mjs record --data ../fuzz-data day.json
+            git -C ../fuzz-data add -A
+            git -C ../fuzz-data commit -q -m "fuzz: $(node -p "require('./day.json').date") ($(node -p "require('./day.json').ok ? 'ok' : 'failed'"))"
+            git -C ../fuzz-data push origin fuzz-data && exit 0
+            sleep $((try * 5))
+          done
+          echo "could not push to fuzz-data" >&2; exit 1
+      - name: Redeploy the dashboard
+        if: env.RECORD == 'true'
+        run: gh workflow run pages.yml --ref "${{ github.event.repository.default_branch }}"
+      # After recording, so a red run is on the dashboard too.
+      - name: Fail on a mismatch or an unfinished chunk
+        run: |
+          node -e "if (!require('./day.json').ok) { console.error('mismatches or unfinished chunks (see the run summary)'); process.exit(1); }"

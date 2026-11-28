@@ -1,6 +1,7 @@
-# Publishes the rule catalog (docs/rule-catalog.md and its images) to GitHub Pages.
-# The page is built from committed files only: no install, no browser (the images are made locally by
-# tools/rule-catalog/shoot.mjs and committed).
+# Publishes the rule catalog (docs/rule-catalog.md and its images) and the fuzz dashboard (/fuzz/) to GitHub Pages.
+# The catalog is built from committed files only: no install, no browser (the images are made locally by
+# tools/rule-catalog/shoot.mjs and committed). The dashboard is built from the fuzz-data branch, which fuzz.yml writes
+# once a day and then dispatches this workflow (with no fuzz-data branch yet, the page says no runs are recorded).
 name: pages
 on:
   push:
@@ -10,6 +11,7 @@ on:
       - docs/rule-catalog/**
       - tools/rule-catalog/build-page.mjs
       - tools/rule-catalog/page-template.html
+      - tools/fuzz-dashboard/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 permissions:
@@ -26,6 +28,13 @@ jobs:
         with:
           node-version: 24
       - run: node tools/rule-catalog/build-page.mjs _site
+      - name: Fetch the fuzz history
+        run: |
+          mkdir -p fuzz-data
+          if git ls-remote --exit-code --heads origin fuzz-data > /dev/null; then
+            git fetch --depth 1 origin fuzz-data && git archive FETCH_HEAD | tar -x -C fuzz-data
+          fi
+      - run: node tools/fuzz-dashboard/build.mjs fuzz-data _site/fuzz
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
