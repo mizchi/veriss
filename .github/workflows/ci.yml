@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   unit:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -25,16 +25,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The fonts models/text/linux-widths.json was recorded with (its "fonts" table): the text-width tests read them from
-      # /usr/share/fonts, and Firefox and WebKit resolve sans-serif / system-ui to Inter.
       - name: Install the recorded Linux fonts
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends fonts-inter fonts-crosextra-caladea fonts-crosextra-carlito \
-            fonts-jetbrains-mono fonts-dejavu-core fonts-liberation fonts-freefont-ttf fonts-ipafont-gothic \
-            fonts-tlwg-loma-otf fonts-unifont fonts-opensymbol
-          sudo cp tools/ci/fonts.conf /etc/fonts/local.conf
-          fc-match sans-serif; fc-match system-ui; fc-match serif; fc-match monospace; dpkg -s fonts-inter | grep Version
+        run: tools/ci/install-fonts.sh
       - name: Root tests
         run: node --test tests/*.test.mjs
       - name: Package tests
@@ -42,7 +34,7 @@ jobs:
         run: pnpm -r test
 
   e2e:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -60,16 +52,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The fonts models/text/linux-widths.json was recorded with (its "fonts" table): the text-width tests read them from
-      # /usr/share/fonts, and Firefox and WebKit resolve sans-serif / system-ui to Inter.
       - name: Install the recorded Linux fonts
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends fonts-inter fonts-crosextra-caladea fonts-crosextra-carlito \
-            fonts-jetbrains-mono fonts-dejavu-core fonts-liberation fonts-freefont-ttf fonts-ipafont-gothic \
-            fonts-tlwg-loma-otf fonts-unifont fonts-opensymbol
-          sudo cp tools/ci/fonts.conf /etc/fonts/local.conf
-          fc-match sans-serif; fc-match system-ui; fc-match serif; fc-match monospace; dpkg -s fonts-inter | grep Version
+        run: tools/ci/install-fonts.sh
       - id: pw
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
@@ -96,7 +80,7 @@ jobs:
           retention-days: 14
 
   eval:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     # Not blocking yet: the committed results were recorded on macOS (docs/handoff.md). Make it blocking once Linux
     # reproduces them.
