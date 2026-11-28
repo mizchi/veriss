@@ -17,6 +17,18 @@ Card.vue  info     ASSUMPTION  v-for is checked at 0, 2 items, all items taking 
 
 error が 1 件でもあれば終了コードは 1 です。
 
+npm では、Svelte と Linaria の検査を CLI 付きの package として配っています。オプションと出力は `css-lint` と同じです(実装は
+`veriss-adapter-core/cli` の `runLint` 一つ)。
+
+```bash
+npm install -D veriss-svelte veriss-linaria
+npx veriss-svelte --viewport 320-1280 src/**/*.svelte
+npx veriss-linaria --viewport 320-1280 src/**/*.tsx   # .js / .jsx / .ts / .tsx。Linaria の css`` と styled.tag``(veriss-react)
+```
+
+導入の手順(インストール、出力の読み方、package.json と CI、指摘から構造を直す方法)は [導入ガイド](guide/README.md) に、壊れた例と直した例の組は
+[`examples/svelte/`](../examples/svelte/) と [`examples/linaria/`](../examples/linaria/) にあります。
+
 ## オプション
 
 | オプション | 既定 | 意味 |
@@ -188,7 +200,7 @@ flex や grid の容器で、テキストが button や div、文字のない sp
 
 ```js
 import {analyzeVue} from '@mizchi/veriss-vue';
-import {lint, formatText} from '@mizchi/veriss-adapter-core';
+import {lint, formatText} from 'veriss-adapter-core';
 const result = analyzeVue(source, {pageCSS, viewport, accessibility: true, selectors: true, assumeText: true, sourceLines: true});
 console.log(formatText(lint(result, {file: 'Card.vue', source})));
 ```

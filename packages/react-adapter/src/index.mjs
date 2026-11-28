@@ -13,7 +13,7 @@
 // spreads other than stylex.props, and more states than maxStates.
 import { parse } from '@babel/parser';
 import postcss from 'postcss';
-import { product, merge, choose, conditionKey, analyzeStates, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings, relocateFindings } from '@mizchi/veriss-adapter-core';
+import { product, merge, choose, conditionKey, analyzeStates, notCompiled, scopeEscapes, boundary, literalChoicesAgree, lowerNested, relocateSelectorWarnings, relocateFindings } from 'veriss-adapter-core';
 import { loadModule, binding, styledTag, evaluateStyled, evaluateExpression, isUnknownValue, symbolOf, symbolInfo, styledClass, stableClass, TooManyVariants } from './styled-components.mjs';
 import { typeMembers, literalValues, isTextType } from './types.mjs';
 
@@ -143,7 +143,10 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
         if (failed) { unknown('U_LINARIA_INTERPOLATION', `${name}: the interpolation \${${text(failed)}} in a Linaria template is not a module constant or class`); continue; }
         const body = init.quasi.quasis.map((q, i) => q.value.cooked + (parts[i] ?? '')).join('');
         const className = `lx-${name}`;
-        cssText.push(linariaRules(className, body));
+        // CSS postcss cannot read (an unclosed block) is Unknown, as a styled-components template's is (U_STYLED_CSS):
+        // the class is kept on its elements with no rules.
+        try { cssText.push(linariaRules(className, body)); }
+        catch (error) { if (error?.name !== 'CssSyntaxError') throw error; unknown('U_LINARIA_CSS', `${name}: its CSS cannot be read (${error.reason})`); }
         if (text(init.tag) === 'css') linaria.set(name, className);
         else styled.set(name, { tag: init.tag.type === 'MemberExpression' ? init.tag.property.name : literal(init.tag.arguments[0]), className });
       }
@@ -561,7 +564,14 @@ export function expandReact(source, { component, maxStates = 64, eachCounts = [0
  *   component, maxStates, eachCounts
  */
 export function analyzeReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule, dynamicValues, css = '', ...options } = {}) {
-  const expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule, dynamicValues });
+  let expanded;
+  // A syntax error (in the component, or in a module it imports: error.module) means it does not build: Babel's error
+  // is the result, at 1-based line and column.
+  try { expanded = expandReact(source, { component, maxStates, eachCounts, sourceLines, theme, file, resolveModule, dynamicValues }); }
+  catch (error) {
+    if (error?.code !== 'BABEL_PARSER_SYNTAX_ERROR' || !error.loc) throw error;
+    return notCompiled([{ code: error.reasonCode, message: error.message.replace(/ \(\d+:\d+\)$/, ''), line: error.loc.line, column: error.loc.column + 1, ...(error.module ? { file: error.module } : {}) }]);
+  }
   // An external stylesheet is the page's, not the component's: with a component scope it goes before the component CSS.
   const scoped = Boolean(expanded.scope && css);
   const pageCSS = scoped ? `${options.pageCSS ?? ''}\n${css}` : options.pageCSS ?? '';

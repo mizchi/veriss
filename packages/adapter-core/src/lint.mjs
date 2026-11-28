@@ -5,6 +5,8 @@
 // The recommended rules: code → severity and a fix. Errors are failures in the browser; warnings are likely bugs.
 export const recommended = {
   // Layout: boxes that do not fit (cut off, covered or sticking out — invisible regions).
+  // The component (or a module it imports) does not compile: the framework's compiler rejects it, so it does not build.
+  E_ADAPTER_COMPILE: ['error', 'fix the error the compiler reports at this position, so the component builds'],
   E_LAYOUT_ITEM_SIZE: ['error', 'give the box room (a flexible track, max-width: 100%, min-width: 0) or let it shrink'],
   E_LAYOUT_TRACKS: ['error', 'use flexible tracks (minmax(0, 1fr)) or fewer columns at this width'],
   E_LAYOUT_CONTENT: ['error', 'let the content wrap (overflow-wrap: anywhere) or give the box more room'],
@@ -253,8 +255,22 @@ const lineOf = (source, needle) => {
 const pageRules = new Set(['W_A11Y_PAGE_H1', 'W_A11Y_NO_MAIN', 'W_A11Y_MULTIPLE_MAIN', 'W_A11Y_REGION', 'W_A11Y_BYPASS', 'W_A11Y_LANDMARK_TOP_LEVEL', 'W_A11Y_DUPLICATE_LANDMARK']);
 // Messages as an author reads them: the adapter's internal text markers removed, exact fractions as px decimals.
 const readable = message => message.replace(/\.__(?:text|ph)\d+/g, '').replace(/(\d+)\/(\d+)(?=px)/g, (m, a, b) => String(Math.round(Number(a) / Number(b) * 100) / 100));
+// A compile error's fix. Svelte rejects an element the HTML parser would close early (`</p>` after a <div> inside it:
+// element_invalid_closing_tag_autoclosed), naming the two tags; the fix is the content model. Otherwise the compiler's
+// own message is the instruction.
+function compileFix({ message }) {
+  const [, inner, outer] = /cannot nest `<([\w-]+)>` inside `<([\w-]+)>`/.exec(message) ?? [];
+  if (outer === 'p') return `a <p> holds phrasing content only (text, <span>, <a>, <strong>, <img>…), so the HTML parser closes it before the <${inner}>: make the <p> a <div> container, or make the <${inner}> inside it a <span>`;
+  if (outer) return `the HTML parser closes <${outer}> before a <${inner}>, which its content model does not allow: change the outer <${outer}> to an element that may hold a <${inner}>, or the <${inner}> to one a <${outer}> may hold`;
+  return recommended.E_ADAPTER_COMPILE[1];
+}
+
 export function lint(result, { file = '<component>', source = '', profile = 'recommended', page = false } = {}) {
   const total = result.states.length, out = [];
+  // A component that does not compile does not build: an error at the compiler's position, whatever the profile. When
+  // the parser could not recover (no states), nothing else in the file was checked.
+  for (const c of result.compileErrors ?? []) out.push({ file: c.file ?? file, ...(c.line ? { line: c.line } : {}), ...(c.column ? { column: c.column } : {}), severity: 'error', code: 'E_ADAPTER_COMPILE',
+    message: `${c.file ? `${c.file}, imported by ${file},` : 'the component'} does not compile${c.code ? ` (${c.code})` : ''}: ${c.message.replace(/\.$/, '')}${total ? '' : '; nothing else in it was checked'}`, fix: compileFix(c) });
   // Checked with several UA profiles: a finding that holds in some browsers only says which.
   const inBrowsers = f => result.browsers && f.browsers && f.browsers.length < result.browsers.length ? ` (in ${f.browsers.join(', ')}; not in ${result.browsers.filter(b => !f.browsers.includes(b)).join(', ')})` : '';
   const rules = profile === 'all' ? null : profile === 'strict' ? strict : recommended;
@@ -328,5 +344,5 @@ export function lint(result, { file = '<component>', source = '', profile = 'rec
   return out.sort((a, b) => ({ error: 0, warning: 1, info: 2 })[a.severity] - ({ error: 0, warning: 1, info: 2 })[b.severity] || (a.line ?? 1e9) - (b.line ?? 1e9));
 }
 
-/** Text output: file:line  severity  code  message  (states) and the fix. */
-export const formatText = messages => messages.map(m => `${m.file}${m.line ? `:${m.line}` : ''}  ${m.severity.padEnd(7)}  ${m.code}  ${m.message}${m.states && m.states !== 'every state' ? `  [${m.states}]` : ''}${m.fix ? `\n    fix: ${m.fix}` : ''}`).join('\n');
+/** Text output: file:line[:column]  severity  code  message  (states) and the fix. */
+export const formatText = messages => messages.map(m => `${m.file}${m.line ? `:${m.line}${m.column ? `:${m.column}` : ''}` : ''}  ${m.severity.padEnd(7)}  ${m.code}  ${m.message}${m.states && m.states !== 'every state' ? `  [${m.states}]` : ''}${m.fix ? `\n    fix: ${m.fix}` : ''}`).join('\n');

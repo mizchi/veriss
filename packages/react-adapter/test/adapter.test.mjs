@@ -195,10 +195,10 @@ export default function C({ size, dot, icon }: { size: 'small' | 'medium'; dot: 
 
 test('package exports: the resolve-node entry the README imports resolves through the package name', async () => {
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  const specifiers = [...readme.matchAll(/from '(@mizchi\/veriss-react[^']*)'/g)].map(m => m[1]);
-  assert.ok(specifiers.includes('@mizchi/veriss-react/resolve-node'), JSON.stringify(specifiers));
+  const specifiers = [...readme.matchAll(/from '(veriss-react[^']*)'/g)].map(m => m[1]);
+  assert.ok(specifiers.includes('veriss-react/resolve-node'), JSON.stringify(specifiers));
   for (const specifier of specifiers) await import(specifier);
-  const {nodeModuleResolver} = await import('@mizchi/veriss-react/resolve-node');
+  const {nodeModuleResolver} = await import('veriss-react/resolve-node');
   assert.equal(typeof nodeModuleResolver(), 'function');
 });
 
@@ -209,4 +209,24 @@ export default forwardRef<HTMLSpanElement, Props>(({ tone }, ref) => <span ref={
   const {states, unknowns} = expandReact(source);
   assert.deepEqual(unknowns, []);
   assert.deepEqual(states.map(s => [s.choices.tone, s.html]).sort(), [['a', '<span>a</span>'], ['b', '<span>b</span>']]);
+});
+
+test('a module with a syntax error is a result with its compile error, the imported module\'s naming that file, not an exception', () => {
+  const result = analyzeReact('export default function A() {\n  return <div><span></div>;\n}\n');
+  assert.deepEqual(result.states, []);
+  assert.equal(result.status, 'violated');
+  const [error] = result.compileErrors;
+  assert.equal(error.line, 2);
+  assert.ok(error.column > 0);
+  assert.ok(error.code && error.message);
+  assert.doesNotMatch(error.message, /\(\d+:\d+\)$/);
+  assert.equal(error.file, undefined);
+  const imported = analyzeReact("import {B} from './b';\nexport default function A() { return <B>x</B>; }\n", {file: '/x/a.jsx', resolveModule: () => ({file: '/x/b.jsx', source: "import styled from 'styled-components';\nexport const B = styled.div`color: red`;\nconst = ;\n"})});
+  assert.deepEqual([imported.compileErrors[0].file, imported.compileErrors[0].line, imported.compileErrors[0].column], ['/x/b.jsx', 3, 7]);
+});
+
+test('a Linaria template whose CSS cannot be read is Unknown (U_LINARIA_CSS), as a styled-components one is, not an exception', () => {
+  const result = analyzeReact("import {css} from '@linaria/core';\nconst a = css`\n  color: red;\n  .x { color: blue;\n`;\nexport default function A() { return <div className={a}>x</div>; }\n");
+  assert.ok(result.unknowns.some(u => u.code === 'U_LINARIA_CSS' && /\ba\b/.test(u.message)), JSON.stringify(result.unknowns));
+  assert.equal(result.states.length, 1);
 });

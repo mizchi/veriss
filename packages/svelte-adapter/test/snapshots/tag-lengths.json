@@ -1,0 +1,124 @@
+[
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 9,
+    "severity": "error",
+    "code": "E_LAYOUT_CONTENT",
+    "message": ".tag requires 154.64px but receives 120px on inline axis at viewport 800px × 690px",
+    "fix": "let the content wrap (overflow-wrap: anywhere) or give the box more room",
+    "states": "items ×2"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 9,
+    "severity": "error",
+    "code": "E_LAYOUT_CONTENT",
+    "message": ".tag requires 154.64px but receives 120px on inline axis at viewport 800px × 690px",
+    "fix": "let the content wrap (overflow-wrap: anywhere) or give the box more room",
+    "states": "items ×2"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 12,
+    "severity": "error",
+    "code": "E_LAYOUT_CONTENT",
+    "message": ".owner requires 288.06px but receives 240px on inline axis at viewport 800px × 690px",
+    "fix": "let the content wrap (overflow-wrap: anywhere) or give the box more room",
+    "states": "owner given=true"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 12,
+    "severity": "warning",
+    "code": "W_LAYOUT_LONG_WORD",
+    "message": ".owner wraps only between words (overflow-wrap: normal), and its longest word is wider than the box: it sticks out. Use overflow-wrap: anywhere (or break-word) for URLs and long words",
+    "fix": "use overflow-wrap: anywhere for URLs and long words",
+    "states": "owner given=true"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 7,
+    "severity": "info",
+    "code": "W_A11Y_LIST_STYLE",
+    "message": "outside the recommended rules: .tags has list-style-type: none; Safari/VoiceOver then drops its list semantics unless it has role=\"list\"",
+    "states": "items ×2"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 9,
+    "severity": "info",
+    "code": "E_LAYOUT_TEXT_COLLISION",
+    "message": "outside the recommended rules: .tag and .tag overlap",
+    "states": "items ×2"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 12,
+    "severity": "info",
+    "code": "W_A11Y_ORDER",
+    "message": "outside the recommended rules: .owner comes after .tags in the DOM but is placed before it",
+    "states": "items ×0, owner given=false"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "line": 13,
+    "severity": "info",
+    "code": "W_A11Y_ORDER",
+    "message": "outside the recommended rules: .code comes after .tags in the DOM but is placed before it",
+    "states": "owner given=false, code given=false"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "U_TEXT_NOT_MEASURED",
+    "message": "not checked: .code: Font Roboto lacks U+3042; fallback fonts are not modeled; its text is only assumed to fit, so its overflow is not checked"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "props with a literal default (owner, code) are checked with that default and with placeholder text for any other value"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "{#each} is checked at 0, 2 items, all items taking the same branch choices"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "{expression} text is rendered as placeholder text; its size comes from the box contracts"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "3 text box(es) measured with the given font files (Roboto): their widths and line breaks are derived, not assumed"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "1 text box(es) sized by assumption (one line, no minimum width): text overflow is not checked"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "the user-agent default colors (canvastext black on a white canvas) under the light preference, where the page declares no dark color-scheme; a user's own default colors and forced colors are not checked"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "rem (and a root font-size in %, em or medium) resolved at a 16px browser default font size; other user settings are not checked"
+  },
+  {
+    "file": "fixtures/TagLengths.svelte",
+    "severity": "info",
+    "code": "ASSUMPTION",
+    "message": "text resized to 200% (a 32px default font size) analysed too (SC 1.4.4)"
+  }
+]

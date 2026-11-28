@@ -205,6 +205,8 @@ export function mvarTags(data) {
 export function createTextMetrics({fonts, shaper, limits = {}}) {
   const maxCharacters = limits.characters ?? 128, maxLength = limits.maxLength ?? 1024;
   const loaded = new Map();
+  // domainBounds figures by (font file, coordinates, size, characters, language): see there.
+  const domainFigures = new Map();
   for (const [family, entry] of Object.entries(fonts ?? {})) {
     if (!entry?.data) fail(`Font ${family} has no data`);
     const handle = shaper.load(entry.data);
@@ -278,12 +280,23 @@ export function createTextMetrics({fonts, shaper, limits = {}}) {
     const set = [...new Set(codepoints(String(characters ?? '')))];
     if (!set.length || set.length > maxCharacters) fail(`Use 1..${maxCharacters} distinct characters`);
     for (const c of set) if (/[\t\n\r\f\p{M}\p{Cf}\p{Cs}]/u.test(c) || /\p{Extended_Pictographic}/u.test(c)) fail(`Character U+${c.codePointAt(0).toString(16).toUpperCase()} forms clusters or line breaks that are not modeled`);
-    const languages = languagesFor(font, set, lang);
-    const widestAdvance = text => Math.max(...languages.map(language => shape(font, text, language)));
-    const advance = new Map(set.map(c => [c, widestAdvance(c)]));
-    let widest = set[0], perCharacter = 0, pairAdjustment = 0;
-    for (const [c, a] of advance) if (a > perCharacter) { perCharacter = a; widest = c; }
-    for (const x of set) for (const y of set) pairAdjustment = Math.max(pairAdjustment, ...languages.map(language => clean(shape(font, x + y, language) - advance.get(x) - advance.get(y))));
+    // The per-character and pair figures depend on the font file, its variation coordinates, the size, the characters
+    // (in order: the first widest is named) and the language only, not on the length. They take 1 + n + n² shapes
+    // (9120 for printable ASCII), and a component asks for the same domain in every state and at both text sizes.
+    const {handle, axes} = lookup(font);
+    const key = JSON.stringify([handle, axes, font.size, set.join(''), lang ?? null]);
+    let figures = domainFigures.get(key);
+    if (!figures) {
+      const languages = languagesFor(font, set, lang);
+      const widestAdvance = text => Math.max(...languages.map(language => shape(font, text, language)));
+      const advance = new Map(set.map(c => [c, widestAdvance(c)]));
+      let widest = set[0], perCharacter = 0, pairAdjustment = 0;
+      for (const [c, a] of advance) if (a > perCharacter) { perCharacter = a; widest = c; }
+      for (const x of set) for (const y of set) pairAdjustment = Math.max(pairAdjustment, ...languages.map(language => clean(shape(font, x + y, language) - advance.get(x) - advance.get(y))));
+      figures = {perCharacter, pairAdjustment, widest};
+      domainFigures.set(key, figures);
+    }
+    const {perCharacter, pairAdjustment, widest} = figures;
     const bounds = Array.from({length: length + 1}, (_, n) => n === 0 ? 0 : upperBound(n * perCharacter + (n - 1) * pairAdjustment));
     return {characters: set.join(''), maxLength: length, perCharacter, pairAdjustment, widest, bounds};
   }

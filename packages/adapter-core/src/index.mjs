@@ -393,5 +393,12 @@ function analyzeStatesOnce({ states, css, unknowns = [], assumptions = [], scope
   }
   return out;
 }
+/**
+ * The result for a component its framework's compiler rejects: it does not build, so there are no states to analyse.
+ * Each compile error is {code?, message, line, column (both 1-based), file? (an imported module's, when the error is
+ * there)}; lint reports it as E_ADAPTER_COMPILE. An adapter returns this instead of throwing the parser's error.
+ */
+export const notCompiled = compileErrors => ({ status: 'violated', states: [], unknowns: [], coverage: { states: 0, assumptions: [] }, findings: [], compileErrors });
+
 export { lint, formatText, recommended, strict } from './lint.mjs';
 export { lowerNested, relocateSelectorWarnings, relocateFindings } from './nested.mjs';

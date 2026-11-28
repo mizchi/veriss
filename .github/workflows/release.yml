@@ -1,19 +1,28 @@
 name: release
 
-# Push a v* tag to publish veriss (packages/veriss; the adapters stay private for now).
-# The npm side trusts this workflow by filename:
-#   npm trust github veriss --repo mizchi/veriss --file release.yml --allow-publish
+# Push a v* tag to publish every public package of the workspace, in dependency order:
+#   veriss (packages/veriss) → veriss-adapter-core → veriss-react → veriss-svelte → veriss-linaria
+# (the Vue adapter stays private). All of them share one version, the tag's.
+# The npm side trusts this workflow by filename, per package:
+#   npm trust github <package> --repo mizchi/veriss --file release.yml --allow-publish -y
+# A trusted publisher can only be added to a package that exists, so a new package's first version is published by
+# hand (pnpm pack, then npm publish <tgz>) before this workflow can publish it.
 # No NPM_TOKEN: npm authenticates through OIDC and attaches provenance.
 #
 # Three jobs, so the OIDC token is never in reach of dependency code: `test` installs the
-# workspace (and runs its lifecycle scripts) with no id-token; `publish` holds id-token but installs
-# nothing (the package ships its sources, nothing is built) and publishes with --ignore-scripts;
-# `release` writes the GitHub release.
+# workspace (and runs its lifecycle scripts) with no id-token and packs every package with pnpm (which turns
+# workspace: ranges into versions); `publish` holds id-token but installs nothing and publishes those tarballs
+# with --ignore-scripts (the packages ship their sources, nothing is built); `release` writes the GitHub release.
 on:
   push:
     tags: ['v*']
 
 permissions: {}
+
+env:
+  # Package directories and their npm names, in dependency order.
+  PACKAGES: veriss adapter-core react-adapter svelte-adapter linaria
+  NAMES: veriss veriss-adapter-core veriss-react veriss-svelte veriss-linaria
 
 jobs:
   test:
@@ -22,20 +31,41 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - name: Tag matches the package version
+      - name: Tag matches every package's version
         run: |
-          v=$(node -p "require('./packages/veriss/package.json').version")
-          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
-            echo "packages/veriss is $v, tag is $GITHUB_REF_NAME"; exit 1
-          fi
+          for dir in $PACKAGES; do
+            v=$(node -p "require('./packages/$dir/package.json').version")
+            if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+              echo "packages/$dir is $v, tag is $GITHUB_REF_NAME"; exit 1
+            fi
+          done
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The unit tests of the published package (the browser e2e and the evals are tools/gate.sh, run before a push).
-      - run: pnpm --filter veriss test
+      # The unit tests of the published packages (the browser e2e and the evals are tools/gate.sh, run before a push),
+      # and the packaging tests: each tarball installed on its own, the checkers' CLIs run on fixtures.
+      - run: pnpm --filter veriss --filter veriss-adapter-core --filter veriss-react --filter veriss-svelte --filter veriss-linaria test
+      - run: node --test tests/veriss-package.test.mjs tests/checker-packages.test.mjs
+      - name: Pack
+        run: |
+          mkdir -p dist
+          for dir in $PACKAGES; do
+            (cd "packages/$dir" && pnpm pack --config.ignore-scripts=true --pack-destination ../../dist)
+          done
+          for tgz in dist/*.tgz; do
+            if tar -xOzf "$tgz" package/package.json | grep -q '"workspace:'; then
+              echo "$tgz: the packed package.json keeps a workspace: range"; exit 1
+            fi
+          done
+          ls dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarballs
+          path: dist/*.tgz
+          if-no-files-found: error
 
   publish:
     needs: test
@@ -44,21 +74,28 @@ jobs:
       contents: read
       id-token: write   # npm trusted publishing (OIDC)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarballs
+          path: dist
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
       # Trusted publishing needs npm >= 11.5.1.
       - run: npm install -g npm@11
+      # In dependency order; a version already on npm (a re-run, or a first version published by hand) is skipped.
       - name: Publish
-        working-directory: packages/veriss
         run: |
           version=${GITHUB_REF_NAME#v}
-          case "$version" in
-            *-*) npm publish --access public --ignore-scripts --tag next ;;
-            *)   npm publish --access public --ignore-scripts ;;
-          esac
+          tag=latest
+          case "$version" in *-*) tag=next ;; esac
+          for name in $NAMES; do
+            if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
+              echo "$name@$version is already published"; continue
+            fi
+            npm publish "dist/$name-$version.tgz" --access public --ignore-scripts --tag "$tag"
+          done
 
   release:
     needs: publish

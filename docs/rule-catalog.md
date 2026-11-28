@@ -266,6 +266,7 @@ React・Vue・Svelte の adapter がコンポーネントを状態ごとの箱�
 | コード | 検出すること | 判定 |
 |---|---|---|
 | `E_SCOPE_OUTSIDE` / `E_SCOPE_REACHES` / `E_SCOPE_GLOBAL` / `E_SCOPE_ESCAPE` / `E_SCOPE_CONTRACT` | 外の文脈に頼るセレクタ、子コンポーネントの中を塗るセレクタ、ページ全体に当たるセレクタ、`:global`・`:deep`・`createGlobalStyle`、子の中の noshift | 検査可 |
+| `E_ADAPTER_COMPILE` | コンパイラーが受け付けないコンポーネント(Svelte の `CompileError`、たとえば `<p><div></div></p>` の `element_invalid_closing_tag_autoclosed`、JSX・TSX の構文エラー、Vue SFC の解析エラー)。ビルドできないので error。位置はコンパイラーの行と列 | 検査可(パーサーが立ち直れないときは、そのファイルの他は検査しない) |
 | `U_REACT_*` / `U_VUE_*` / `U_SVELTE_*` / `U_STYLEX_*` / `U_LINARIA_*` | 動的な class・style、spread、map の中身、読めないテンプレート | Unknown(その部分は検査しない) |
 
 ## 13. 検査しないもの(Unknown)
