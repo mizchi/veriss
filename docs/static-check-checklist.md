@@ -417,7 +417,7 @@
 - [x] **F128. 縦の `margin` の %**(`W_CSS_MARGIN_PERCENT_WIDTH`、解析は % の margin で Unknown のまま): 包含ブロックの幅に対する割合で、高さではない(Chromium・Firefox・WebKit で実測: 400×100 で 10% は 40px)。縦の `padding` の % は縦横比の定番の書き方なので報告しない
 - [x] **F129. リセット CSS で中央に来なくなる `<dialog>`**(`W_CSS_DIALOG_NOT_CENTRED`): dialog は UA の `margin: auto`(モーダルでは inset 0 も)で中央に置かれる。`* { margin: 0 }` のようなリセットが届くと左上に出る(Chromium・Firefox・WebKit で実測、`open` でも `showModal()` でも)。dialog の要素名・class・id を書いた規則は意図した配置なので報告しない。閉じた dialog も、スクリプトで開くので対象
 - [x] **F130. `::-webkit-scrollbar` と標準の `scrollbar-width` / `scrollbar-color`**(`W_CSS_SCROLLBAR_WEBKIT_IGNORED`、`W_CSS_SCROLLBAR_FIREFOX_SHOWN`、解析は `::-webkit-scrollbar` で Unknown のまま): 標準のプロパティを書いた要素では Chromium と WebKit が `::-webkit-scrollbar` を無視し(Chromium は `--hide-scrollbars` を外した従来型のスクロールバーで、WebKit はそのまま実測)、Firefox は `::-webkit-scrollbar` を受け付けない(`CSS.supports` で実測)。前者は効かない規則として、`::-webkit-scrollbar` だけで隠したものは Firefox で出たままとして報告する。`scrollbar-width: none` と並べて隠す定番の組み合わせは報告しない
-- [x] **F131. 後の規則に負けて見えない `:hover` / `:focus` / `:active`**(`W_CSS_STATE_SHADOWED`): `a:hover { color }` を `a:link { color }` の前に書くと、ホバーしても色が変わらない(Chromium・Firefox・WebKit でホバーして実測。LVHA の順)。状態を有効にして計算した値の勝者が、状態のいらない規則で、値が違うときに報告する(後に書いたものも、詳細度が高いものも)
+- [x] **F131. 後の規則に負けて見えない `:hover` / `:focus` / `:active`**(`W_CSS_STATE_SHADOWED`): `a:hover { color }` を `a:link { color }` の前に書くと、ホバーしても色が変わらない(Chromium・Firefox・WebKit でホバーして実測。LVHA の順)。状態を有効にして計算した値の勝者が、状態のいらない規則で、値が違うときに報告する(後に書いたものも、詳細度が高いものも)。`var()` を含む shorthand(`background: var(--s)`)は書いたとおりの名前と値で 1 件にまとめ、比べるのも書いた値(以前は longhand ごとに `initial` と出て、両側が同じ `var()` でも報告していた。vlmkit の dashboard で見つかった)
 - [x] **F132. セレクタリストの中の `-moz-` / `-ms-` の擬似**(`W_CSS_SELECTOR_LIST_VENDOR`、解析はこの規則で Unknown のまま): 1 つでも無効なセレクタがあるとリスト全体が捨てられる。`-moz-` は Chromium と WebKit で、`-ms-` と `-o-` はどこでも無効(実測)。`-webkit-` は 3 ブラウザーとも受け付け、`:is()` / `:where()` の中は許される(実測)ので報告しない
 - [x] **F133. container のない軸の container query の単位**(`W_CSS_CONTAINER_UNIT_VIEWPORT`、解析は `cq*` の長さで Unknown のまま): `cqw`・`cqi` は祖先に `container-type: inline-size` か `size` がなければ、`cqh`・`cqb` は `size` がなければ small viewport の単位(`svw`・`svi`・`svh`・`svb`)になる(Chromium・Firefox・WebKit で、10 通りの組で `sv` の単位と同じ箱になることを実測: container のない要素、`inline-size` の container の中の `cqh`、`container-name` だけの祖先、自分自身の `container-type`、`calc()` の中、`font-size`。対照として `inline-size` の container・一括指定 `container: card / inline-size`・祖父母の container では箱が変わる)。ほかの状態や media query で祖先を container にする規則があれば報告しない。解析が読めないセレクタ(`.g:hover .p`)で container を作る規則があるときも報告しない。縦書きは対象外
 - [x] **F134. `<image>` でない `background-image` と、値の中の `:`**(`W_CSS_IMAGE_INVALID`、`W_CSS_STRAY_COLON`、以前はシート全体が `U_LAYOUT_CSS: Missed semicolon`): `url()` のない URL(`background-image: https://example.com/close.png`)や引用符の文字列(`"close.png"`)は `<image>` でないので宣言ごと捨てられ、前の `background-image` が残る(Chromium・Firefox・WebKit で `getComputedStyle` を実測)。一括指定 `background` の画像の位置にある同じものも、一括指定ごと捨てられる(色も付かない)。PostCSS は値の中の `:` で「Missed semicolon」を投げてシート全体を読まないが、ブラウザーはその宣言だけを次の `;` まで捨てて続きを読む(セミコロンの書き忘れも同じ)。解析は `:` を同じ長さの印に置き換えて読み、その宣言を捨てて報告する。`url()`・`image-set()`・グラデーション・`none`・`var()` はそのまま。一括指定の大きさ(`/` の後)や位置に書いた `min()`・`max()`・`clamp()` は画像ではない(3 ブラウザーで `CSS.supports` が true)。捨てられる宣言は前の宣言を上書きしないので、`W_CSS_DUPLICATE_DECLARATION` にもしない。e2e は `layout-css-mistakes.spec.mjs` の F134(捨てられる宣言を外したときと computed style が同じこと、効く値の対照つき)
@@ -689,6 +689,20 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   (e2e `px margins offset absolute and fixed boxes`。対照として margin を 0 にすると全組で矩形が変わる)。包含ブロックの外に出る負の margin は
   inset と同じく `E_LAYOUT_ABSOLUTE_START`。`auto` と % の margin、静的位置の軸(両側の inset が auto)の margin、shrink-to-fit の幅の箱の
   横の margin は Unknown のまま(文言は箱の名前と margin を出す)
+- [x] **I25. block flow の中の block の箱の px の inline margin(負の値も)**(issue #58): `.page { padding: 0 24px } .table-wrap { margin: 0 -24px }`
+  (表や帯を親の padding まで引き出す)で `Only known zero inline margins are supported` になり、実ページの要素の 11% が止まっていた。
+  正の px は block flow(1 列の grid として解く)の item の margin として済んでいたので、負の px を足した。幅が auto なら包含ブロックの幅から
+  両側の margin を引いた幅(負なら広がる)、px か % の幅(% は包含ブロックに対して)なら決まりすぎで、ltr は margin-right を捨てて
+  margin-left の位置に置く(CSS 2 §10.3.3)。fit-content・max-content・min-content はその前に px か auto の幅の上下限に直っているので、
+  fit-content は margin の分だけ広い利用可能幅を取る。Chromium・Firefox・WebKit で、正、負(両側・片側・小数・-500px)、決まりすぎ
+  (px、%、幅の広すぎ)、max-width、content-box の padding と border、入れ子(2 段)、fit-content・max-content、rtl の等しい margin
+  (auto と px の幅)、grid と flex の箱の 20 通りを 320px と 500px で照合し、4 つの箱の矩形がすべて一致した。スクロールする箱(`overflow: auto` / `hidden`)
+  の中は位置が出ないので大きさを照合した(e2e `layout-inline-margins.spec.mjs`)。はみ出しは今までどおり integrity で:
+  padding までは何も出ず、border に入れば `E_LAYOUT_PROTRUSION`、viewport の右を越えれば `E_LAYOUT_PAGE_OVERFLOW`(ブラウザーでも
+  横にスクロールすることを確かめた)、px の幅が margin を引いた幅より広ければ `E_LAYOUT_ITEM_SIZE`。
+  Unknown のまま: % の margin(Firefox は丸めが違う。-5% で 380.6 と 380.59375)、rtl の等しくない margin(負と正で和が 0 になる組も)、
+  負の margin と auto の margin の組、flex の item の交差軸の負の margin、負の margin の子を持つ箱の中身の幅(fit-content の親、grid の
+  auto の列)
 - [x] **I26. img の width / height 属性の比を、ファイルの比として信じていた**(健全性、#55): `images` にファイルの大きさがない img で、
   属性の比(`aspect-ratio: auto w / h`)から高さ(`height: auto`)や幅(I20 の、高さから幅を求める形)を決め、verified にしていた。
   この比は読み込み前だけのもので、読み込むとファイルの比が勝つ(#54 で 3 ブラウザー: `width="120" height="30"` で高さ 24px の img は、

@@ -324,11 +324,32 @@ export function createCssMistakes({ report, facts, tools }) {
       for (const { rule, sel } of own) for (const d of rule.declarations) {
         const winner = on.style.$sources?.[d.property];
         if (!winner || (winner.file === d.file && winner.line === d.line && winner.selector === sel.source) || new RegExp(`:${st}(?![\\w-])`, 'i').test(String(winner.selector))) continue;
-        if (String(winner.specified ?? '').trim().toLowerCase() === String(d.value ?? '').trim().toLowerCase()) continue;
+        // As written: a shorthand with var() is expanded with 'initial' to find its longhands (d.pending), so its value
+        // is what was specified, and it is one declaration however many longhands it writes.
+        const written = d.pending?.property ?? d.property, value = d.specified ?? d.value;
+        const beatenBy = { selector: winner.selector, written: winner.written ?? d.property, specified: winner.specified, file: winner.file, line: winner.line };
+        // Equal text is the same value only through the same property: one var() maps onto other longhands through
+        // another shorthand (padding-inline: 4px 8px puts 4px on the left, padding puts 8px there).
+        // Keywords compare case-folded, custom-property names as written (var(--S) is not var(--s)).
+        const comparable = text => String(text ?? '').trim().split(/(--[A-Za-z_][\w-]*)/).map((part, i) => i % 2 ? part : part.toLowerCase()).join('');
+        if (beatenBy.written === written && comparable(beatenBy.specified) === comparable(value)) continue;
         if (layoutWarnings.some(w => w.code === 'W_CSS_STATE_SHADOWED' && w.path === box.path && w.selector === sel.source && w.property === d.property)) continue;
-        layoutWarnings.push({ code: 'W_CSS_STATE_SHADOWED', severity: 'warning', box: box.label, path: box.path, selector: sel.source, property: d.property, state: `:${st}`,
-          css: [{ property: d.property, file: d.file, line: d.line, selector: sel.source }, { property: d.property, file: winner.file, line: winner.line, selector: winner.selector }],
-          message: `${box.label}: ${sel.source} { ${d.property}: ${d.value} } never shows: ${winner.selector} { ${d.property}: ${winner.specified} } also applies while it is :${st} and wins (it comes later or is more specific). Put the :${st} rule after it (for links: :link, :visited, :hover, :active), or make it more specific` });
+        // One warning per declaration as written, naming every rule that beats one of its longhands.
+        const same = layoutWarnings.find(w => w.code === 'W_CSS_STATE_SHADOWED' && w.path === box.path && w.selector === sel.source && w.written === written && w.line === d.line && w.file === d.file);
+        const shadowed = (w, by) => `${box.label}: ${sel.source} { ${written}: ${value} } never shows: ${by.map(b => `${b.selector} { ${b.written}: ${b.specified} }`).join(' and ')} also ${by.length > 1 ? 'apply' : 'applies'} while it is :${st} and ${by.length > 1 ? 'win' : 'wins'} (later or more specific). Put the :${st} rule after ${by.length > 1 ? 'them' : 'it'} (for links: :link, :visited, :hover, :active), or make it more specific`;
+        if (same) {
+          // One winning declaration is one entry however many longhands it sets; two declarations of one selector are two.
+          if (!same.beatenBy.some(b => b.selector === beatenBy.selector && b.written === beatenBy.written && b.file === beatenBy.file && b.line === beatenBy.line && b.specified === beatenBy.specified)) {
+            same.beatenBy.push(beatenBy);
+            same.css.push({ property: d.property, file: winner.file, line: winner.line, selector: winner.selector });
+            same.message = shadowed(same, same.beatenBy);
+          }
+          continue;
+        }
+        const warning = { code: 'W_CSS_STATE_SHADOWED', severity: 'warning', box: box.label, path: box.path, selector: sel.source, property: d.property, written, file: d.file, line: d.line, state: `:${st}`, beatenBy: [beatenBy],
+          css: [{ property: d.property, file: d.file, line: d.line, selector: sel.source }, { property: d.property, file: winner.file, line: winner.line, selector: winner.selector }] };
+        warning.message = shadowed(warning, warning.beatenBy);
+        layoutWarnings.push(warning);
       }
     }
   }

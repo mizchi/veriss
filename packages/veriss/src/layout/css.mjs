@@ -1598,7 +1598,7 @@ export function computeStyle(rules, box, active, inherited = {}, {spend, state, 
         // The style attribute (element-attached) wins over every selector and layer, below only importance (Cascade 5).
         // Scope proximity (Cascade 6 §6.6): after specificity, the nearer scope root wins; unscoped is farthest.
         const rank = [declaration.important, rule.attached ? 1 : 0, layer, ...selector.specificity, selector.scope ? -scopeProximity(selector, box, state) : -Infinity];
-        const origin = { file: declaration.file, line: declaration.line, selector: selector.source, layer: rule.layerName, specified: declaration.specified ?? declaration.value, ...(declaration.dynamic ? { dynamic: declaration.dynamic } : {}), ...(declaration.wrapShorthand ? { wrapShorthand: declaration.wrapShorthand } : {}), ...conditions(rule), ...(declaration.flip ? { logical: true } : {}) };
+        const origin = { file: declaration.file, line: declaration.line, selector: selector.source, layer: rule.layerName, specified: declaration.specified ?? declaration.value, ...(declaration.dynamic ? { dynamic: declaration.dynamic } : {}), ...(declaration.wrapShorthand ? { wrapShorthand: declaration.wrapShorthand } : {}), ...(declaration.pending ? { written: declaration.pending.property } : {}), ...conditions(rule), ...(declaration.flip ? { logical: true } : {}) };
         // A logical side resolves by the box's direction (an rtl pass when the first one finds rtl; CSS Logical 1).
         if (declaration.flip) flipped = true;
         const property = rtl && declaration.flip ? declaration.flip : declaration.property;

@@ -329,6 +329,8 @@ flex の行の item で、`flex-basis` が auto(か content)で幅が auto、`mi
 
 flex の行の item の主軸の負の px margin(`margin-right: -12px` で重ねたアバターなど)は、item の外側の大きさをその分だけ小さくして解く(Chromium と矩形を比べた)。交差軸や grid の item の負の margin は Unknown のまま。
 
+block flow(1 列の grid として解く)の中の block の箱は、負の px の inline margin も書ける(チェックリスト I25)。幅が auto なら包含ブロックの幅から両側の margin を引いた幅になり(負なら広がって親の padding に入る)、px か % の幅なら決まりすぎで、ltr では margin-right を捨てる。Chromium・Firefox・WebKit で矩形を比べた(`e2e/layout-inline-margins.spec.mjs`)。% の margin、rtl で左右の値が異なる margin、auto の margin との組は Unknown のまま。
+
 flex の行の item で中に子のない箱(ボタンなど)の `min-height` は、その item の内容の高さを引き上げ、行の交差方向の大きさもそれに従う(`align-items` が stretch でも center でも。Chromium と矩形を比べた)。中に子のある item も、中身が block の流れ(子が上から積まれ、下に余白が足されるだけ)なら同じに扱う(中身のほうが高ければ中身の高さ)。grid や flex を中身に持つ flex item の `min-height` は、行や item が伸びて子の配置が変わるので Unknown のまま。
 
 `flex-basis` が px で `min-width: auto` の item(`flex: 0 0 120px` のボタンなど)も、自動の最小サイズは中身の min-content になる(css-flexbox §4.5)。折り返さないラベルのボタンは、基準より広い中身の幅まで広がる(Chromium で測った)。button の UA の `min-width` も、div と同じ auto(以前は 0 としていたが誤り)。
