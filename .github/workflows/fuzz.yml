@@ -4,6 +4,8 @@
 # A mismatch fails the job; the shrunk cases are in the job log and in the fuzz-<browser>-<seed> artifact.
 name: fuzz
 on:
+  push:
+    branches: [claude/remote-ci]   # TEMPORARY: verify on the branch; removed before merge
   schedule:
     - cron: '17 18 * * *'   # 03:17 JST
   workflow_dispatch:
@@ -51,7 +53,7 @@ jobs:
         browser: ${{ fromJSON(needs.plan.outputs.browsers) }}
         seed: ${{ fromJSON(needs.plan.outputs.seeds) }}
     env:
-      FUZZ_CASES: ${{ inputs.cases || '5000' }}
+      FUZZ_CASES: ${{ inputs.cases || (github.event_name == 'push' && '500') || '5000' }}
       FUZZ_SEED: ${{ matrix.seed }}
       FUZZ_FIRST: ${{ inputs.first || '0' }}
     steps:

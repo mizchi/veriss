@@ -219,11 +219,14 @@ test('justify-self: end on a text leaf with a max-width below its min-content: i
   assert.deepEqual([rect.inlineStart.constant, rect.inlineSize.constant], ['40', '260']);
 });
 
-test('text-overflow on a flex or grid container does nothing (its text is in its items)', () => {
+test('text-overflow on a flex container does nothing (its text is in its items); on a grid container WebKit draws it', () => {
   const run = d => analyzeHTML('<html lang="en"><body><div class="r"><span class="s"></span></div></body></html>', {name: 'P', css: `*{margin:0}html,body{${g}}.r{width:150px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${d}}.s{display:block;width:300px;height:20px}`, viewport: {min: 400, max: 400, height: {min: 300, max: 300}}});
   const inertTO = r => (r.layoutWarnings ?? []).some(w => w.code === 'W_LAYOUT_DECLARATION_INERT' && w.properties.includes('text-overflow'));
   assert.equal(inertTO(run('display:flex')), true);
-  assert.equal(inertTO(run('display:grid;grid-template-columns:minmax(0,1fr)')), true);
+  // WebKit draws the ellipsis on the text of a grid container's anonymous item (Chromium and Firefox do not): the
+  // browsers differ, so it is not reported as inert (e2e layout-cls-facts: inert text-overflow).
+  assert.equal(inertTO(run('display:grid;grid-template-columns:minmax(0,1fr)')), false);
+  assert.equal(inertTO(run('display:inline-grid;grid-template-columns:minmax(0,1fr)')), false);
   assert.equal(inertTO(run('display:block')), false);
 });
 
