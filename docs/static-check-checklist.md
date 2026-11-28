@@ -749,12 +749,13 @@ CSS-in-JS(styled-components)とコンポーネントライブラリを使う管�
   数えるだけ。テキストの幅は各ブラウザーで測って、信頼する契約(`boxes` の min / max の幅と line-height の高さ)として渡す。
   食い違いは、部分木・宣言を落とし値を簡単にして最小のページに縮め、spec の `regressions` に置く。
   CI の既定は 1 ブラウザーにつき 400 件(`FUZZ_CASES` / `FUZZ_SEED` / `FUZZ_FIRST` で変える)。直したあとの長い実行では、seed 3 と 4 の
-  2000 件ずつを 3 ブラウザーで回し、食い違いは 0(seed 3: 決まった件 78.8%(verified 666・violated 911・Unknown 423)、矩形を出した箱
-  57.8%(24297 個中 14044)、seed 4: 74.7%、54.5%)。この割合を下回らないよう、spec は決まった件が 60% を超えることも確かめる。
+  2000 件ずつを 3 ブラウザーで回し、食い違いは 0(seed 3: 決まった件 78.8%(verified 666・violated 910・Unknown 424)、矩形を出した箱
+  57.7%(24297 個中 14026)、seed 4: 74.7%、54.5%)。この割合を下回らないよう、spec は決まった件が 60% を超えることも確かめる。
   見つけて直したもの(単体テスト `packages/veriss/test/safe-subset-fuzz.test.mjs`、ブラウザーの値は 3 つで一致):
   - **健全性**: `justify-self: center | end` の grid の item が領域より広くても verified にしていた(`grid-template-columns: 10px` の
     20px の item は end で -10px にあり、領域から出る)。寄せる item は自分の幅で解くので、収まるかを領域の幅と比べていなかった。
-    今は start と同じく `E_LAYOUT_ITEM_SIZE`。
+    今は start と同じく `E_LAYOUT_ITEM_SIZE`。center と end では、終点の margin が入らないことも違反にする(100px の列で
+    `width: 100px; margin-right: 20px; justify-self: end` は -20px から始まる。start なら終点の margin がはみ出すだけで、何も隠さない)。
   - **健全性**: 寄せる item の位置を、`max-width` / `min-width` で抑える前の幅で決めていた(width 20px・max-width 10px の end が 380、
     正しくは 390)。px の上下限で抑え、px でない上下限は Unknown にした。
   - **健全性**: auto の margin で寄せる border-box の箱の padding と border が幅より大きいとき、指定の幅で寄せていた(2px の幅と 2px の

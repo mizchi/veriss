@@ -33,6 +33,8 @@ const regressions = [
   {width: 400, height: 600, fixed: [], root: leaf(0, {width: '100px'}, [leaf(1, {width: '2px', margin: '0 auto', border: '2px solid #000', height: '10px'})])},
   // A text leaf whose line is taller than the box a flex row gives it (E_LAYOUT_CONTENT on the block axis).
   {width: 400, height: 600, fixed: [], root: leaf(0, {}, [leaf(1, {display: 'flex', height: '10px'}, [{...leaf(11, {'white-space': 'nowrap', 'line-height': '24px'}), text: 'Sign in'}])])},
+  // A justified item whose end margin does not fit was verified, though it starts outside its column (now E_LAYOUT_ITEM_SIZE).
+  {width: 400, height: 600, fixed: [], root: leaf(0, {display: 'grid', 'grid-template-columns': '100px'}, [leaf(1, {width: '100px', 'margin-right': '20px', 'justify-self': 'end', height: '10px'})])},
   // WebKit placed this absolute box against its flex container's content height (the container is stretched to 0 by a
   // row flex): 20px where veriss (and Chromium, Firefox) had 6px. Now Unknown.
   {width: 320, height: 640, fixed: [], unknown: true, root: leaf(0, {}, [leaf(1, {display: 'flex', 'flex-direction': 'column', gap: '4px', height: '130px'}, [leaf(2, {height: '40px'}),

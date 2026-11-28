@@ -170,8 +170,11 @@ export function* shrinkCandidates(c) {
     const x = clone(c), {n} = nodes(x)[i];
     n.kids = [...n.kids.slice(0, j), ...n.kids[j].kids, ...n.kids.slice(j + 1)];
     yield x; }
-  for (let i = 0; i < all.length; i++) for (const k of Object.keys(all[i].n.decl)) { const x = clone(c); delete nodes(x)[i].n.decl[k]; yield x; }
-  for (let i = 0; i < all.length; i++) for (const [k, v] of Object.entries(all[i].n.decl)) for (const s of simpler(String(v))) { const x = clone(c); nodes(x)[i].n.decl[k] = s; yield x; }
+  // A text leaf keeps what its trusted contract rests on (one nowrap line of a px line-height): without it the contract
+  // the check hands veriss is wrong, and the "mismatch" would be the shrinker's.
+  const pinned = (n, k) => n.text && ['white-space', 'line-height'].includes(k);
+  for (let i = 0; i < all.length; i++) for (const k of Object.keys(all[i].n.decl)) { if (pinned(all[i].n, k)) continue; const x = clone(c); delete nodes(x)[i].n.decl[k]; yield x; }
+  for (let i = 0; i < all.length; i++) for (const [k, v] of Object.entries(all[i].n.decl)) { if (pinned(all[i].n, k)) continue; for (const s of simpler(String(v))) { const x = clone(c); nodes(x)[i].n.decl[k] = s; yield x; } }
   if (c.width !== 400) { const x = clone(c); x.width = 400; x.height = 600; yield x; }
 }
 export async function shrink(c, fails, budget = 400) {

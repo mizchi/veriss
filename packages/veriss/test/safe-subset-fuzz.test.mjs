@@ -88,3 +88,18 @@ test('an absolute child placed by its containing block height, in a flex contain
     assert.notEqual(page(ok).status, 'unknown', ok);
   assert.deepEqual(rect(page('#n5{height:1px;display:flex}#n11{position:absolute;top:0%;bottom:50%;width:60px}'), '#n11'), [0, 0, 60, 0.5]);
 });
+
+test('a justified grid item whose end margin does not fit starts outside its area (E_LAYOUT_ITEM_SIZE); at start only the end margin sticks out', () => {
+  // Chromium, Firefox, WebKit: width 100px + margin-right 20px at justify-self: end of a 100px column is at -20; at
+  // start it is at 0 (its end margin sticks out, which hides nothing); 80px + 20px at end, and 60px + 20px at center,
+  // fit (0 and 10).
+  const g = '#n0{display:grid;grid-template-columns:100px}';
+  const end = run(`${g}#n1{width:100px;margin-right:20px;justify-self:end;height:10px}`);
+  assert.deepEqual(rect(end, '#n1'), [-20, 0, 100, 10]);
+  assert.deepEqual(codes(end), ['E_LAYOUT_ITEM_SIZE #n1 inline']);
+  assert.equal(run(`${g}#n1{width:100px;margin-right:20px;height:10px}`).status, 'verified');
+  assert.equal(run(`${g}#n1{width:100px;margin-right:20px;justify-self:start;height:10px}`).status, 'verified');
+  assert.equal(run(`${g}#n1{width:80px;margin-right:20px;justify-self:end;height:10px}`).status, 'verified');
+  assert.equal(run(`${g}#n1{width:60px;margin-right:20px;justify-self:center;height:10px}`).status, 'verified');
+  assert.deepEqual(codes(run(`${g}#n1{width:100px;margin-right:20px;justify-self:center;height:10px}`)), ['E_LAYOUT_ITEM_SIZE #n1 inline']);
+});

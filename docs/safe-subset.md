@@ -20,6 +20,7 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - 素の `1fr` は、中身による最小幅を持つ。veriss がそれを判定できるのは、中身の最小幅が定数で分かる場合だけで、それ以外は Unknown になる。確実に判定させるには `minmax(0, 1fr)` と書く。
 - grid の item を `justify-self: start | center | end` で寄せるなら、px の `width` を書く(`max-width` / `min-width` も書くなら px)。
   - 領域より広い item は、寄せても領域からはみ出す(`E_LAYOUT_ITEM_SIZE`。ブラウザーは unsafe に寄せるので、center なら両側に出る)。
+  - center と end では、幅と終点の margin の和が領域に入る必要がある(入らないと始点が領域の外に出る。start なら終点の margin ははみ出してよい)。
   - `max-width` / `min-width` が px でない(`%` など)と Unknown になる。寄せる位置は、それで抑えたあとの幅で決まるため。
 - `float` と段組(`columns`)は使わない(`Unsupported layout property: clear` / `columns`)。
 - `position: absolute` / `fixed` の箱には、両方の軸に inset を書く(`top` か `bottom`、`left` か `right`)のが確実。

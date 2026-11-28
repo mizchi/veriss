@@ -91,7 +91,7 @@ export function breakage(m, id, axis, tol) {
   // rectangle, and not scrollHeight, which leaves out the block-end padding in Firefox.)
   if (b.text) worst = Math.max(worst, axis === 'inline' ? b.text.over : b.text.overBlock);
   // A grid whose tracks and gaps are longer than its content box.
-  if (b.lines) { const l = axis === 'inline' ? b.lines.columns : b.lines.rows; worst = Math.max(worst, l.at(-1) - (axis === 'inline' ? b.content.right : b.content.bottom), b.lines.columns[0] - l[0]); }
+  if (b.lines) { const l = axis === 'inline' ? b.lines.columns : b.lines.rows; worst = Math.max(worst, l.at(-1) - (axis === 'inline' ? b.content.right : b.content.bottom), (axis === 'inline' ? b.content.left : b.content.top) - l[0]); }
   // A box whose padding and border do not fit its size: the browser draws the edges, the content box is empty.
   const size = axis === 'inline' ? b.rect[2] : b.rect[3];
   if (b.edges[axis] > 0 && size - b.edges[axis] <= tol) worst = Math.max(worst, b.edges[axis]);
