@@ -18,6 +18,9 @@ veriss が判定できる形で書くための規約である。エンジンが�
   - flex は `flex-direction: row | column`、`flex-wrap: nowrap`(row なら `wrap` も可)、すべての item で `order: 0`。
 - grid の列は、px か `minmax(0, Nfr)` にする。
   - 素の `1fr` は、中身による最小幅を持つ。veriss がそれを判定できるのは、中身の最小幅が定数で分かる場合だけで、それ以外は Unknown になる。確実に判定させるには `minmax(0, 1fr)` と書く。
+- grid の item を `justify-self: start | center | end` で寄せるなら、px の `width` を書く(`max-width` / `min-width` も書くなら px)。
+  - 領域より広い item は、寄せても領域からはみ出す(`E_LAYOUT_ITEM_SIZE`。ブラウザーは unsafe に寄せるので、center なら両側に出る)。
+  - `max-width` / `min-width` が px でない(`%` など)と Unknown になる。寄せる位置は、それで抑えたあとの幅で決まるため。
 - `float` と段組(`columns`)は使わない(`Unsupported layout property: clear` / `columns`)。
 - `position: absolute` / `fixed` の箱には、両方の軸に inset を書く(`top` か `bottom`、`left` か `right`)のが確実。
   - 書かない軸は静的位置(流れの中にあったときの位置)に置かれる。
@@ -26,6 +29,10 @@ veriss が判定できる形で書くための規約である。エンジンが�
     - block の container の中。
     - flex の container の中で、container が始点に揃えるとき。ltr で、`justify-content`・`align-content`・item の `align-self`(stretch は flex-start 扱い)が始点のもので、始点の margin がないとき。
   - flex で中央揃えなどにしていると、その軸は Unknown になる。
+  - flex の container(row の flex の item として高さが伸ばされるもの)の中の absolute の箱で、`bottom` か `%` の `top` / `height` を
+    書くと、伸ばされた高さが 0 になりうる所では Unknown になる。WebKit だけが、高さ 0 に伸ばされた flex の container の中の
+    absolute の箱を、伸ばす前の中身の高さに対して置く(Chromium と Firefox は 0 に対して)。`top` と px の `height` で置くか、
+    container に高さか padding を持たせる。
   - absolute の箱の containing block(`position: relative` の箱)は、スクロールする祖先や `overflow: hidden` の祖先の中にあってよい。
     箱と containing block の間に clip する祖先を挟まない(その祖先は箱を clip しないので、判定が難しくなる)。
 - flex の item には、主軸の大きさを書く(px か % の `width` / `flex-basis`、または `flex: 1` のように basis 0 で伸ばす)。
@@ -47,6 +54,8 @@ veriss が判定できる形で書くための規約である。エンジンが�
 ## 2. 寸法
 
 - 長さは px、%、viewport 単位、`rem` / `em`(既定のフォントサイズで解決する)、`calc()`(演算子の両側に空白)。
+- `margin: 0 auto` などの auto の margin で寄せる箱の padding と border は px で書く(`%` は Unknown)。border-box で padding と border の和が
+  幅より大きい箱は、その和の幅として寄せる(`E_LAYOUT_BOX_EDGES` も出る)。
 - `box-sizing: border-box` を推奨する。content-box の `width: 100%` は、padding と border の分だけはみ出す(`W_LAYOUT_CONTENT_BOX_FULL`)。
 - 画像と動画には、`max-width: 100%` と、`aspect-ratio` か `width` / `height` 属性を付ける。
 - 中身で高さの決まる block の容器(開閉する区画、スクロールする一覧)の `max-height` は px で書く。高さは min(中身, max-height) で判定する。
@@ -155,4 +164,5 @@ veriss が新しい書き方を判定できるようになったら、その項�
 - [static-check-checklist.md](static-check-checklist.md) の対応する項目
 - Unknown のメッセージ
 
-3 ブラウザーでの実測が前提である。
+3 ブラウザーでの実測が前提である。§1〜§3 の書き方は、seed つきの生成器が作るページで 3 ブラウザーと照合し続けている
+(`e2e/layout-fuzz-safe-subset.spec.mjs`、[チェックリスト I27](static-check-checklist.md))。
